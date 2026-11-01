@@ -53,7 +53,7 @@ export function MarkPanel() {
             >Cả đội</button>
             {players.map((p) => (
               <button key={p.id} className={clip.playerIds.includes(p.id) ? 'chip on' : 'chip'} onClick={() => togglePlayer(p.id)} title={p.name}>
-                {p.number}
+                <b>{p.number}</b> {p.name}
               </button>
             ))}
           </div>

@@ -78,7 +78,7 @@ kbd { background: #000; border: 1px solid #333; border-bottom-width: 2px; border
 .jersey { display: inline-block; min-width: 26px; text-align: center; background: var(--accent); color: #000; border-radius: 4px; padding: 0 4px; margin-right: 4px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.chip { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 999px; min-width: 34px; padding: 3px 9px; cursor: pointer; font: inherit; }
+.chip { white-space: nowrap; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 999px; min-width: 34px; padding: 3px 9px; cursor: pointer; font: inherit; }
 .chip:hover { border-color: var(--accent); }
 .chip.on { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
 

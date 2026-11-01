@@ -32,7 +32,7 @@ export function ClipList() {
     yt.play()
   }
   const label = (ids: string[]) =>
-    ids.map((id) => allPlayers.find((p) => p.id === id)?.number).filter((n) => n !== undefined).map((n) => '#' + n).join(' ')
+    ids.map((id) => allPlayers.find((p) => p.id === id)).filter((p) => !!p).map((p) => `#${p!.number} ${p!.name}`).join(', ')
 
   return (
     <Panel
@@ -56,7 +56,7 @@ export function ClipList() {
         </select>
         <div className="chips">
           {players.map((p) => (
-            <button key={p.id} className={filter.playerIds.includes(p.id) ? 'chip on' : 'chip'} onClick={() => togglePlayer(p.id)} title={p.name}>{p.number}</button>
+            <button key={p.id} className={filter.playerIds.includes(p.id) ? 'chip on' : 'chip'} onClick={() => togglePlayer(p.id)} title={p.name}><b>{p.number}</b> {p.name}</button>
           ))}
         </div>
         {active && <button className="btn sm" onClick={() => set({ filter: { side: null, playerIds: [], playType: '' } })}>Xoá lọc</button>}
