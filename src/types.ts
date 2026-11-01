@@ -43,3 +43,12 @@ export const PLAY_TYPES = [
   'Ném 3 điểm',
   'Ném phạt',
 ]
+
+export interface Playlist {
+  id: string
+  gameId: string
+  name: string
+  side: Side | null
+  playType: string
+  playerIds: string[]
+}

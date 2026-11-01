@@ -14,13 +14,14 @@ export function useFilteredClips() {
 }
 
 export function ClipList() {
-  const { gameId, clipId, filter, squadId, playlist, set } = useUi()
+  const { gameId, clipId, filter, squadId, playlist, playlistId, set } = useUi()
+  const { playlists, addPlaylist, removePlaylist } = useData()
   const players = useData((s) => s.players).filter((p) => p.squadId === squadId).sort((a, b) => a.number - b.number)
   const allPlayers = useData((s) => s.players)
   const total = useData((s) => s.clips).filter((c) => c.gameId === gameId).length
   const list = useFilteredClips()
 
-  const setFilter = (p: Partial<typeof filter>) => set({ filter: { ...filter, ...p }, playlist: false })
+  const setFilter = (p: Partial<typeof filter>) => set({ filter: { ...filter, ...p }, playlist: false, playlistId: '' })
   const togglePlayer = (id: string) =>
     setFilter({ playerIds: filter.playerIds.includes(id) ? filter.playerIds.filter((x) => x !== id) : [...filter.playerIds, id] })
   const active = !!(filter.side || filter.playType || filter.playerIds.length)
@@ -45,6 +46,36 @@ export function ClipList() {
       }
     >
       <div className="filters">
+        {playlists.length > 0 && (
+          <div className="row">
+            <select
+              value={playlistId}
+              onChange={(e) => {
+                const pl = playlists.find((x) => x.id === e.target.value)
+                if (pl) set({ filter: { side: pl.side, playerIds: pl.playerIds, playType: pl.playType }, playlistId: pl.id, playlist: false })
+                else set({ playlistId: '' })
+              }}
+            >
+              <option value="">Playlist đã lưu ({playlists.length})</option>
+              {playlists.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+            <button
+              className="btn sm"
+              title="Copy link chia sẻ"
+              disabled={!playlistId}
+              onClick={() => {
+                const url = `${location.origin}${location.pathname}#g=${gameId}&p=${playlistId}`
+                navigator.clipboard?.writeText(url).then(() => alert('Đã copy link. HLV cùng tuyến đăng nhập là mở được.'))
+              }}
+            >🔗</button>
+            <button
+              className="btn sm"
+              title="Xoá playlist"
+              disabled={!playlistId}
+              onClick={() => { if (confirm('Xoá playlist này?')) { removePlaylist(playlistId); set({ playlistId: '' }) } }}
+            >×</button>
+          </div>
+        )}
         <div className="seg-toggle">
           <button className={!filter.side ? 'on' : ''} onClick={() => setFilter({ side: null })}>Tất cả</button>
           <button className={filter.side === 'ATK' ? 'on atk' : ''} onClick={() => setFilter({ side: 'ATK' })}>Tấn công</button>
@@ -59,7 +90,19 @@ export function ClipList() {
             <button key={p.id} className={filter.playerIds.includes(p.id) ? 'chip on' : 'chip'} onClick={() => togglePlayer(p.id)} title={p.name}><b>{p.number}</b> {p.name}</button>
           ))}
         </div>
-        {active && <button className="btn sm" onClick={() => set({ filter: { side: null, playerIds: [], playType: '' } })}>Xoá lọc</button>}
+        {active && (
+          <div className="row">
+            <button className="btn sm" onClick={() => set({ filter: { side: null, playerIds: [], playType: '' }, playlist: false, playlistId: '' })}>Xoá lọc</button>
+            <button
+              className="btn sm primary"
+              disabled={!gameId}
+              onClick={() => {
+                const name = prompt('Tên playlist (vd: Phòng thủ pick&roll)')?.trim()
+                if (name && gameId) set({ playlistId: addPlaylist(gameId, name, filter) })
+              }}
+            >💾 Lưu playlist</button>
+          </div>
+        )}
       </div>
 
       <ul className="list clips">

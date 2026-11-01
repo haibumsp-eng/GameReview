@@ -190,3 +190,25 @@ do $$ begin
   begin alter publication supabase_realtime add table games;        exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table players;      exception when duplicate_object then null; end;
 end $$;
+
+-- ---------- Playlist đã lưu (bộ lọc có tên) ----------
+create table if not exists playlists (
+  id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games on delete cascade,
+  name text not null,
+  side text check (side in ('ATK','DEF')),
+  play_type text not null default '',
+  player_ids uuid[] not null default '{}',
+  author uuid default auth.uid() references auth.users on delete set null,
+  created_at timestamptz default now()
+);
+create index if not exists playlists_game_idx on playlists (game_id);
+alter table playlists enable row level security;
+drop policy if exists playlists_read  on playlists;
+drop policy if exists playlists_write on playlists;
+create policy playlists_read  on playlists for select to authenticated using (is_member(squad_of_game(game_id)));
+create policy playlists_write on playlists for all to authenticated
+  using (is_editor(squad_of_game(game_id))) with check (is_editor(squad_of_game(game_id)));
+do $$ begin
+  begin alter publication supabase_realtime add table playlists; exception when duplicate_object then null; end;
+end $$;

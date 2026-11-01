@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useData, useUi } from './store'
 import { yt } from './youtube'
 import { Library } from './components/Library'
@@ -54,7 +54,7 @@ function PlaylistRunner() {
 }
 
 export default function App() {
-  const { ready, session, error, squads, init, signOut, loadGame, profiles } = useData()
+  const { ready, session, error, squads, games, playlists, init, signOut, loadGame, profiles } = useData()
   const { squadId, gameId, set } = useUi()
 
   useEffect(() => { init() }, [init])
@@ -63,6 +63,19 @@ export default function App() {
     if (squads.length && !squads.some((s) => s.id === squadId)) set({ squadId: squads[0].id, gameId: null, clipId: null })
   }, [squads, squadId, set])
   useEffect(() => { loadGame(gameId) }, [gameId, loadGame])
+
+  // Link chia sẻ: #g=<gameId>&p=<playlistId>
+  const deep = useRef(new URLSearchParams(location.hash.slice(1)))
+  useEffect(() => {
+    const g = deep.current.get('g')
+    const game = g ? games.find((x) => x.id === g) : undefined
+    if (game) { set({ squadId: game.squadId, gameId: game.id }); deep.current.delete('g') }
+  }, [games, set])
+  useEffect(() => {
+    const p = deep.current.get('p')
+    const pl = p ? playlists.find((x) => x.id === p) : undefined
+    if (pl) { set({ filter: { side: pl.side, playerIds: pl.playerIds, playType: pl.playType }, playlistId: pl.id }); deep.current.delete('p') }
+  }, [playlists, set])
 
   if (!ready) return <div className="login muted">Đang tải…</div>
   if (!session) return <Login />

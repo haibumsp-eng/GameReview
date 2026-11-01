@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import type { Clip, Comment, Game, Player, Side, Squad } from './types'
+import type { Clip, Comment, Game, Player, Playlist, Side, Squad } from './types'
 import { uid } from './util'
 
 /* ---------- Dữ liệu (Supabase) ---------- */
@@ -13,6 +13,7 @@ interface DataState {
   games: Game[]
   clips: Clip[] // chỉ của trận đang mở
   comments: Comment[] // chỉ của trận đang mở
+  playlists: Playlist[] // chỉ của trận đang mở
   profiles: Record<string, string>
   error: string
   init: () => void
@@ -32,6 +33,8 @@ interface DataState {
   updateClip: (id: string, patch: Partial<Clip>) => void
   removeClip: (id: string) => void
   addComment: (clipId: string, text: string) => void
+  addPlaylist: (gameId: string, name: string, f: Filter) => string
+  removePlaylist: (id: string) => void
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -75,7 +78,7 @@ export const useData = create<DataState>((set, get) => {
   return {
     ready: false,
     session: null,
-    squads: [], players: [], games: [], clips: [], comments: [],
+    squads: [], players: [], games: [], clips: [], comments: [], playlists: [],
     profiles: {},
     error: '',
 
@@ -123,7 +126,7 @@ export const useData = create<DataState>((set, get) => {
     },
 
     loadGame: async (gameId) => {
-      if (!gameId) return set({ clips: [], comments: [] })
+      if (!gameId) return set({ clips: [], comments: [], playlists: [] })
       const { data: cl, error } = await supabase
         .from('clips').select('*, clip_players(player_id)').eq('game_id', gameId).limit(5000)
       if (fail(error)) return
@@ -139,7 +142,13 @@ export const useData = create<DataState>((set, get) => {
         playType: r.play_type ?? '', note: r.note ?? '', author: r.author ?? '',
         ...pending.get(r.id),
       }))
+      const { data: pl, error: e3 } = await supabase.from('playlists').select('*').eq('game_id', gameId).order('created_at')
+      if (fail(e3)) return
       set({
+        playlists: (pl ?? []).map((r: any) => ({
+          id: r.id, gameId: r.game_id, name: r.name, side: r.side,
+          playType: r.play_type ?? '', playerIds: r.player_ids ?? [],
+        })),
         clips,
         comments: (cm ?? []).map((r: any) => ({ id: r.id, clipId: r.clip_id, author: r.author ?? '', text: r.body, createdAt: new Date(r.created_at).getTime() })),
       })
@@ -209,6 +218,19 @@ export const useData = create<DataState>((set, get) => {
       set((s) => ({ clips: s.clips.filter((c) => c.id !== id), comments: s.comments.filter((c) => c.clipId !== id) }))
       supabase.from('clips').delete().eq('id', id).then(({ error }) => fail(error))
     },
+    addPlaylist: (gameId, name, f) => {
+      const id = uid()
+      const row: Playlist = { id, gameId, name, side: f.side, playType: f.playType, playerIds: f.playerIds }
+      set((s) => ({ playlists: [...s.playlists, row] }))
+      supabase.from('playlists').insert({
+        id, game_id: gameId, name, side: f.side, play_type: f.playType, player_ids: f.playerIds,
+      }).then(({ error }) => { if (fail(error)) get().loadGame(gameId) })
+      return id
+    },
+    removePlaylist: (id) => {
+      set((s) => ({ playlists: s.playlists.filter((p) => p.id !== id) }))
+      supabase.from('playlists').delete().eq('id', id).then(({ error }) => fail(error))
+    },
     addComment: (clipId, text) => {
       const id = uid()
       const author = get().session?.user.id ?? ''
@@ -232,6 +254,7 @@ interface UiState {
   duration: number
   playing: boolean
   playlist: boolean
+  playlistId: string
   set: (p: Partial<UiState>) => void
 }
 export const useUi = create<UiState>((set) => ({
@@ -245,6 +268,7 @@ export const useUi = create<UiState>((set) => ({
   duration: 0,
   playing: false,
   playlist: false,
+  playlistId: '',
   set: (p) => set(p),
 }))
 
