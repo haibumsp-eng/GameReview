@@ -24,6 +24,7 @@ interface DataState {
   addSquad: (name: string) => string
   addMember: (squadId: string, email: string, role: string) => Promise<string | null>
   addPlayer: (squadId: string, number: number, name: string) => void
+  addPlayers: (squadId: string, list: { number: number; name: string }[]) => void
   removePlayer: (id: string) => void
   addGame: (g: Omit<Game, 'id'>) => string
   removeGame: (id: string) => void
@@ -158,6 +159,12 @@ export const useData = create<DataState>((set, get) => {
       const id = uid()
       set((s) => ({ players: [...s.players, { id, squadId, number, name }] }))
       supabase.from('players').insert({ id, squad_id: squadId, number, name }).then(({ error }) => { if (fail(error)) get().loadBase() })
+    },
+    addPlayers: (squadId, list) => {
+      const rows = list.map((p) => ({ id: uid(), squadId, number: p.number, name: p.name }))
+      set((s) => ({ players: [...s.players, ...rows] }))
+      supabase.from('players').insert(rows.map((r) => ({ id: r.id, squad_id: squadId, number: r.number, name: r.name })))
+        .then(({ error }) => { if (fail(error)) get().loadBase() })
     },
     removePlayer: (id) => {
       set((s) => ({
