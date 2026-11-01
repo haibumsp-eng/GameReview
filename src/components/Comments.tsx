@@ -4,18 +4,12 @@ import { Panel } from './Panel'
 
 export function Comments() {
   const clipId = useUi((s) => s.clipId)
-  const { comments, addComment, user, setUser } = useData()
+  const { comments, addComment, profiles } = useData()
   const [text, setText] = useState('')
   const list = comments.filter((c) => c.clipId === clipId).sort((a, b) => a.createdAt - b.createdAt)
 
   const send = () => {
     if (!clipId || !text.trim()) return
-    let name = user
-    if (!name) {
-      name = (prompt('Tên của bạn (HLV)?') ?? '').trim()
-      if (!name) return
-      setUser(name)
-    }
     addComment(clipId, text.trim())
     setText('')
   }
@@ -30,7 +24,7 @@ export function Comments() {
             {list.length === 0 && <li className="empty">Chưa có bình luận.</li>}
             {list.map((c) => (
               <li key={c.id} className="cmt">
-                <div className="cmt-h"><b>{c.author || 'Ẩn danh'}</b> <span className="muted">{new Date(c.createdAt).toLocaleString('vi-VN')}</span></div>
+                <div className="cmt-h"><b>{profiles[c.author] || 'Ẩn danh'}</b> <span className="muted">{new Date(c.createdAt).toLocaleString('vi-VN')}</span></div>
                 <div>{c.text}</div>
               </li>
             ))}

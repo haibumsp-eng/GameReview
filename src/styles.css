@@ -122,3 +122,6 @@ kbd { background: #000; border: 1px solid #333; border-bottom-width: 2px; border
 .cmt-h { font-size: 11px; margin-bottom: 2px; }
 .comments { flex: 1; overflow: auto; }
 ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+.login { height: 100vh; display: grid; place-items: center; }
+.login-card { width: 340px; padding: 20px; }
+.banner { background: #3a1a14; color: var(--def); border: 1px solid #5a2a20; border-radius: 6px; padding: 2px 8px; font-size: 12px; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }

@@ -8,6 +8,7 @@ import { Timeline } from './components/Timeline'
 import { MarkPanel, markNow } from './components/MarkPanel'
 import { ClipList, useFilteredClips } from './components/ClipList'
 import { Comments } from './components/Comments'
+import { Login } from './components/Login'
 
 function Hotkeys() {
   useEffect(() => {
@@ -53,8 +54,20 @@ function PlaylistRunner() {
 }
 
 export default function App() {
-  const user = useData((s) => s.user)
-  const setUser = useData((s) => s.setUser)
+  const { ready, session, error, squads, init, signOut, loadGame, profiles } = useData()
+  const { squadId, gameId, set } = useUi()
+
+  useEffect(() => { init() }, [init])
+  // Chọn tuyến đội đầu tiên khi chưa có / không còn tồn tại.
+  useEffect(() => {
+    if (squads.length && !squads.some((s) => s.id === squadId)) set({ squadId: squads[0].id, gameId: null, clipId: null })
+  }, [squads, squadId, set])
+  useEffect(() => { loadGame(gameId) }, [gameId, loadGame])
+
+  if (!ready) return <div className="login muted">Đang tải…</div>
+  if (!session) return <Login />
+
+  const me = profiles[session.user.id] || session.user.email || ''
   return (
     <div className="app">
       <Hotkeys />
@@ -62,10 +75,10 @@ export default function App() {
       <header className="topbar" style={{ gridArea: 'top' }}>
         <div className="logo"><span className="dot" />GAME<b>REVIEW</b></div>
         <span className="spacer" />
+        {error && <span className="banner" title="Bấm để ẩn" onClick={() => useData.setState({ error: '' })}>{error}</span>}
         <span className="hint"><kbd>Space</kbd> phát/dừng · <kbd>J</kbd><kbd>L</kbd> ±5s · <kbd>A</kbd> tấn công · <kbd>D</kbd> phòng thủ</span>
-        <button className="btn sm" onClick={() => { const n = prompt('Tên của bạn?', user); if (n !== null) setUser(n.trim()) }}>
-          {user || 'Đặt tên'}
-        </button>
+        <span>{me}</span>
+        <button className="btn sm" onClick={signOut}>Đăng xuất</button>
       </header>
       <Library />
       <PlayerPanel />

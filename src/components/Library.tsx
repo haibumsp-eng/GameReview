@@ -4,7 +4,7 @@ import { parseYouTubeId } from '../util'
 import { Panel } from './Panel'
 
 export function Library() {
-  const { squads, games, addSquad, addGame, removeGame } = useData()
+  const { squads, games, addSquad, addGame, removeGame, addMember } = useData()
   const { squadId, gameId, set } = useUi()
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
@@ -26,7 +26,7 @@ export function Library() {
     <Panel
       title="Thư viện"
       area="lib"
-      actions={<button className="btn sm" onClick={() => setAdding((v) => !v)}>+ Trận</button>}
+      actions={<button className="btn sm" disabled={!squadId} onClick={() => setAdding((v) => !v)}>+ Trận</button>}
     >
       <label className="field-label">Tuyến đội</label>
       <div className="row">
@@ -36,6 +36,18 @@ export function Library() {
         >
           {squads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+        <button
+          className="btn sm"
+          title="Mời HLV vào tuyến này (theo email)"
+          disabled={!squadId}
+          onClick={async () => {
+            const email = prompt('Email của HLV (người đó phải đăng ký tài khoản trước):')
+            if (!email?.trim()) return
+            const role = prompt('Vai trò: coach (sửa được) hoặc viewer (chỉ xem)', 'coach') || 'coach'
+            const err = await addMember(squadId, email.trim(), role.trim())
+            alert(err ?? 'Đã thêm thành viên.')
+          }}
+        >👤</button>
         <button
           className="btn sm"
           title="Thêm tuyến đội"
