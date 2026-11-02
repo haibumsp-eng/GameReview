@@ -24,13 +24,20 @@ body { background: var(--bg); color: var(--text); font: 14px/1.4 'Clash Grotesk'
 .slot.grow { flex: 1; }
 .slot > .panel { flex: 1; }
 .split > .slot { flex: 1 1 0; }
-.gutter { flex: none; position: relative; z-index: 5; }
-.gutter.col { width: 6px; cursor: col-resize; }
-.gutter.row { height: 6px; cursor: row-resize; }
-.gutter::after { content: ''; position: absolute; border-radius: 2px; background: transparent; transition: background .15s; }
-.gutter.col::after { left: 2px; right: 2px; top: 0; bottom: 0; }
-.gutter.row::after { top: 2px; bottom: 2px; left: 0; right: 0; }
-.gutter:hover::after, body.dragging .gutter:active::after { background: var(--accent); }
+.gutter { flex: none; position: relative; z-index: 5; touch-action: none; }
+.gutter.col { width: 8px; cursor: col-resize; }
+.gutter.row { height: 8px; cursor: row-resize; }
+/* Vùng bấm rộng hơn phần nhìn thấy, để dễ kéo trúng. */
+.gutter::before { content: ''; position: absolute; }
+.gutter.col::before { top: 0; bottom: 0; left: -6px; right: -6px; }
+.gutter.row::before { left: 0; right: 0; top: -6px; bottom: -6px; }
+/* Vạch nhỏ luôn hiện, sáng xanh khi rê chuột / đang kéo. */
+.gutter::after { content: ''; position: absolute; border-radius: 3px; background: #3a3a3a; transition: background .15s; }
+.gutter.col::after { left: 3px; width: 2px; top: calc(50% - 22px); height: 44px; }
+.gutter.row::after { top: 3px; height: 2px; left: calc(50% - 22px); width: 44px; }
+.gutter:hover::after, body.dragging .gutter:active::after { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.gutter.col:hover::after { width: 4px; left: 2px; }
+.gutter.row:hover::after { height: 4px; top: 2px; }
 body.dragging { user-select: none; }
 body.dragging iframe { pointer-events: none; }
 body.dragging .gutter.col, body.dragging .gutter.row { }
