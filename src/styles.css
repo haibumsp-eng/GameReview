@@ -13,7 +13,7 @@
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--text); font: 14px/1.4 'Clash Grotesk', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 '1FTV Clash Grotesk', 'Clash Grotesk', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
 
 .app { height: 100vh; min-height: 560px; display: flex; flex-direction: column; gap: 6px; padding: 6px; }
 .workspace { flex: 1; min-height: 0; display: flex; }
