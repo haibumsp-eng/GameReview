@@ -9,6 +9,8 @@ import { MarkPanel, markNow } from './components/MarkPanel'
 import { ClipList, useFilteredClips } from './components/ClipList'
 import { Comments } from './components/Comments'
 import { Login } from './components/Login'
+import { Gutter, SplitV } from './components/Gutter'
+import { useLayout, clamp } from './layout'
 
 function Hotkeys() {
   useEffect(() => {
@@ -56,6 +58,7 @@ function PlaylistRunner() {
 export default function App() {
   const { ready, session, error, squads, games, playlists, init, signOut, loadGame, profiles } = useData()
   const { squadId, gameId, set } = useUi()
+  const L = useLayout()
 
   useEffect(() => { init() }, [init])
   // Chọn tuyến đội đầu tiên khi chưa có / không còn tồn tại.
@@ -85,21 +88,34 @@ export default function App() {
     <div className="app">
       <Hotkeys />
       <PlaylistRunner />
-      <header className="topbar" style={{ gridArea: 'top' }}>
+      <header className="topbar">
         <div className="logo"><span className="dot" />GAME<b>REVIEW</b></div>
         <span className="spacer" />
         {error && <span className="banner" title="Bấm để ẩn" onClick={() => useData.setState({ error: '' })}>{error}</span>}
         <span className="hint"><kbd>Space</kbd> phát/dừng · <kbd>J</kbd><kbd>L</kbd> ±5s · <kbd>A</kbd> tấn công · <kbd>D</kbd> phòng thủ</span>
+        <button className="btn sm" title="Đưa các module về kích thước mặc định" onClick={L.reset}>Đặt lại bố cục</button>
         <span>{me}</span>
         <button className="btn sm" onClick={signOut}>Đăng xuất</button>
       </header>
-      <Library />
-      <PlayerPanel />
-      <Timeline />
-      <MarkPanel />
-      <Roster />
-      <ClipList />
-      <Comments />
+      <div className="workspace">
+        <div className="col" style={{ width: L.left }}>
+          <SplitV frac={L.leftSplit} setFrac={(f) => L.set({ leftSplit: f })} top={<Library />} bottom={<Roster />} />
+        </div>
+        <Gutter dir="col" begin={() => L.left} move={(s, dx) => L.set({ left: clamp(s + dx, 200, 520) })} />
+
+        <div className="col center">
+          <div className="slot grow"><PlayerPanel /></div>
+          <Gutter dir="row" begin={() => L.tlH} move={(s, _dx, dy) => L.set({ tlH: clamp(s - dy, 70, 400) })} />
+          <div className="slot" style={{ height: L.tlH }}><Timeline /></div>
+          <Gutter dir="row" begin={() => L.clipsH} move={(s, _dx, dy) => L.set({ clipsH: clamp(s - dy, 120, 700) })} />
+          <div className="slot" style={{ height: L.clipsH }}><ClipList /></div>
+        </div>
+
+        <Gutter dir="col" begin={() => L.right} move={(s, dx) => L.set({ right: clamp(s - dx, 260, 700) })} />
+        <div className="col" style={{ width: L.right }}>
+          <SplitV frac={L.rightSplit} setFrac={(f) => L.set({ rightSplit: f })} top={<MarkPanel />} bottom={<Comments />} />
+        </div>
+      </div>
     </div>
   )
 }

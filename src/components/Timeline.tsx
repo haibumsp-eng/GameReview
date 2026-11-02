@@ -18,7 +18,7 @@ export function Timeline() {
   const pct = (t: number) => (duration ? `${(t / duration) * 100}%` : '0%')
 
   return (
-    <Panel title="Timeline" area="timeline">
+    <Panel title="Timeline">
       <div className="tl">
         <div className="tl-labels"><span>ATK</span><span>DEF</span></div>
         <div className="tl-bar" ref={bar} onClick={seekFromEvent}>

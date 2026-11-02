@@ -27,7 +27,7 @@ export function MarkPanel() {
     })
 
   return (
-    <Panel title="Đánh dấu" area="mark">
+    <Panel title="Đánh dấu">
       <div className="row">
         <button className="btn atk big" disabled={!gameId} onClick={() => markNow('ATK')}>Tấn công <kbd>A</kbd></button>
         <button className="btn def big" disabled={!gameId} onClick={() => markNow('DEF')}>Phòng thủ <kbd>D</kbd></button>

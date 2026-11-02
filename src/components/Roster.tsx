@@ -37,7 +37,7 @@ export function Roster() {
   return (
     <Panel
       title="Cầu thủ"
-      area="roster"
+
       actions={<button className="btn sm" onClick={() => setBulk((v) => !v)}>Nhập danh sách</button>}
     >
       {bulk && (

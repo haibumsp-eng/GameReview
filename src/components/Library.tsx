@@ -25,7 +25,7 @@ export function Library() {
   return (
     <Panel
       title="Thư viện"
-      area="lib"
+
       actions={<button className="btn sm" disabled={!squadId} onClick={() => setAdding((v) => !v)}>+ Trận</button>}
     >
       <label className="field-label">Tuyến đội</label>

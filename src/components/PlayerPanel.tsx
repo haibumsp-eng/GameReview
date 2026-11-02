@@ -30,7 +30,7 @@ export function PlayerPanel() {
   return (
     <Panel
       title={game ? game.title : 'Player'}
-      area="player"
+
       className="player-panel"
       actions={
         <div className="row tight">

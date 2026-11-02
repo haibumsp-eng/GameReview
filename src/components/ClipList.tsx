@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useData, useUi, matches } from '../store'
+import { ExportModal } from './ExportModal'
 import { PLAY_TYPES } from '../types'
 import { yt } from '../youtube'
 import { fmt } from '../util'
@@ -20,6 +22,8 @@ export function ClipList() {
   const allPlayers = useData((s) => s.players)
   const total = useData((s) => s.clips).filter((c) => c.gameId === gameId).length
   const list = useFilteredClips()
+  const [exporting, setExporting] = useState(false)
+  const plName = playlists.find((x) => x.id === playlistId)?.name
 
   const setFilter = (p: Partial<typeof filter>) => set({ filter: { ...filter, ...p }, playlist: false, playlistId: '' })
   const togglePlayer = (id: string) =>
@@ -38,13 +42,17 @@ export function ClipList() {
   return (
     <Panel
       title={`Tình huống (${list.length}${active ? ` / ${total}` : ''})`}
-      area="clips"
+
       actions={
-        playlist
+        <>
+        <button className="btn sm" disabled={!list.length} onClick={() => setExporting(true)} title="Cắt video từ file gốc ngay trên máy bạn">⬇ Tải video</button>
+        {playlist
           ? <button className="btn sm" onClick={() => { set({ playlist: false }); yt.pause() }}>■ Dừng playlist</button>
-          : <button className="btn sm primary" disabled={!list.length} onClick={startPlaylist}>▶ Phát {active ? 'danh sách lọc' : 'tất cả'}</button>
+          : <button className="btn sm primary" disabled={!list.length} onClick={startPlaylist}>▶ Phát {active ? 'danh sách lọc' : 'tất cả'}</button>}
+        </>
       }
     >
+      {exporting && <ExportModal clips={list} title={plName ?? (active ? 'Tình huống đã lọc' : 'Tất cả tình huống')} onClose={() => setExporting(false)} />}
       <div className="filters">
         {playlists.length > 0 && (
           <div className="row">
