@@ -29,7 +29,6 @@ export function Library() {
       actions={
         <>
           <button className="btn sm" onClick={() => set({ overview: true })} title="Danh sách tất cả trận, có tìm kiếm">Tất cả trận</button>
-          <button className="btn sm" disabled={!squadId} onClick={() => setAdding((v) => !v)}>+ Trận</button>
         </>
       }
     >
@@ -63,28 +62,9 @@ export function Library() {
         >+</button>
       </div>
 
-      {adding && (
-        <div className="card stack">
-          <input placeholder="Tên trận (vd: vs Hà Nội, vòng 3)" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <label className="field-label">Link YouTube của các hiệp: mỗi dòng một link</label>
-          <textarea
-            rows={5}
-            placeholder={'Hiệp 1: https://youtu.be/…\nHiệp 2: https://youtu.be/…\nHiệp 3: https://youtu.be/…\nHiệp 4: https://youtu.be/…\n(thêm dòng cho OT nếu có)'}
-            value={links}
-            onChange={(e) => setLinks(e.target.value)}
-          />
-          <div className="muted">
-            {parsed.videos.length ? `Nhận ${parsed.videos.length} video: ${parsed.videos.map((v) => v.label).join(', ')}` : 'Chỉ có 1 video cho cả trận thì dán 1 link.'}
-          </div>
-          {err && <div className="err">{err}</div>}
-          <button className="btn primary" onClick={submit}>Thêm trận</button>
-        </div>
-      )}
-
       <label className="field-label">Trận đấu ({squadGames.length})</label>
       <ul className="list">
-        {squadGames.length === 0 && <li className="empty">Chưa có trận. Bấm “+ Trận” và dán link YouTube.</li>}
+        {squadGames.length === 0 && <li className="empty">Chưa có trận. Bấm nút xanh “+ Thêm trận” bên dưới.</li>}
         {squadGames.map((g) => {
           const n = videos.filter((v) => v.gameId === g.id).length
           return (
@@ -112,6 +92,31 @@ export function Library() {
           )
         })}
       </ul>
+      {adding && (
+        <div className="card stack" ref={(el) => el?.scrollIntoView({ block: 'nearest' })}>
+          <input placeholder="Tên trận (vd: vs Hà Nội, vòng 3)" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <label className="field-label">Link YouTube của các hiệp: mỗi dòng một link</label>
+          <textarea
+            rows={5}
+            placeholder={'Hiệp 1: https://youtu.be/…\nHiệp 2: https://youtu.be/…\nHiệp 3: https://youtu.be/…\nHiệp 4: https://youtu.be/…\n(thêm dòng cho OT nếu có)'}
+            value={links}
+            onChange={(e) => setLinks(e.target.value)}
+          />
+          <div className="muted">
+            {parsed.videos.length ? `Nhận ${parsed.videos.length} video: ${parsed.videos.map((v) => v.label).join(', ')}` : 'Chỉ có 1 video cho cả trận thì dán 1 link.'}
+          </div>
+          {err && <div className="err">{err}</div>}
+          <div className="row">
+            <button className="btn" onClick={() => { setAdding(false); setErr('') }}>Huỷ</button>
+            <button className="btn primary grow-btn" onClick={submit}>Lưu trận</button>
+          </div>
+        </div>
+      )}
+
+      {!adding && squadId && (
+        <button className="btn add-game" onClick={() => setAdding(true)}>+ Thêm trận</button>
+      )}
     </Panel>
   )
 }
