@@ -149,6 +149,7 @@ export async function runRecording(stream: MediaStream, clips: Clip[], title: st
     if (rec.state !== 'inactive') rec.stop()
     stream.getTracks().forEach((t) => t.stop())
     setRec({ phase: 'error', msg: e instanceof Error ? e.message : String(e) })
+    ui().set({ clipId: null })
     return
   }
 
@@ -156,6 +157,7 @@ export async function runRecording(stream: MediaStream, clips: Clip[], title: st
   if (rec.state !== 'inactive') rec.stop()
   await stopped
   stream.getTracks().forEach((t) => t.stop())
+  ui().set({ clipId: null }) // bỏ chọn tình huống tạm dùng khi quay
   if (cancelled) return ui().set({ rec: null })
   const blob = new Blob(chunks, { type: rec.mimeType || mime || 'video/webm' })
   setRec({

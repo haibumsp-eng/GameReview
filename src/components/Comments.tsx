@@ -13,18 +13,18 @@ export function Comments() {
   const list = comments.filter((c) => c.clipId === clipId).sort((a, b) => a.createdAt - b.createdAt)
 
   const send = () => {
-    if (!clipId || !text.trim()) return
-    addComment(clipId, text.trim())
+    if (!clip || !text.trim()) return
+    addComment(clip.id, text.trim())
     setText('')
   }
 
   return (
     <Panel title="Bình luận">
-      {!clipId ? (
+      {!clip ? (
         <div className="placeholder small">Chọn một tình huống để xem và thêm bình luận.</div>
       ) : (
         <>
-          {clip && (
+          {(
             <div className="card stack clip-sum">
               <div className="row">
                 <span className={`badge ${clip.side}`}>{clip.side === 'ATK' ? 'TẤN CÔNG' : 'PHÒNG THỦ'}</span>
@@ -37,11 +37,11 @@ export function Comments() {
                   : <span className="muted">Chưa gắn cầu thủ</span>}
               </div>
               {clip.note && <div className="clip-note">{clip.note}</div>}
-              <div className="muted">Bình luận của {profiles[clip.author] || 'HLV'}</div>
+              <div className="muted">Đánh dấu bởi {profiles[clip.author] || 'HLV'}</div>
             </div>
           )}
           <ul className="list comments">
-            {list.length === 0 && <li className="empty">Chưa có bình luận.</li>}
+            {list.length === 0 && <li className="empty">Chưa có bình luận. Các HLV trao đổi về tình huống này ở đây.</li>}
             {list.map((c) => (
               <li key={c.id} className="cmt">
                 <div className="cmt-h"><b>{profiles[c.author] || 'Ẩn danh'}</b> <span className="muted">{new Date(c.createdAt).toLocaleString('vi-VN')}</span></div>
@@ -49,7 +49,7 @@ export function Comments() {
               </li>
             ))}
           </ul>
-          <div className="row">
+          <div className="row cmt-input">
             <AutoTextarea
               minRows={1}
               maxHeight={140}
