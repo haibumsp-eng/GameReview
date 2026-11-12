@@ -6,7 +6,7 @@ interface Row { game_id: string; squad_id: string; squad_name: string; title: st
 
 /** Màn hình tổng quan: toàn bộ trận bạn được xem, có tìm kiếm theo từ khoá và lọc theo tuyến đội. */
 export function Overview() {
-  const { isSuper, session, squads } = useData()
+  const { isSuper, session, squads: mySquads } = useData()
   const who = session?.user.email ?? ''
   const [rows, setRows] = useState<Row[] | null>(null)
   const [q, setQ] = useState('')
@@ -58,7 +58,7 @@ export function Overview() {
             {squads.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
           </select>
         </div>
-        <div className="muted">Đang đăng nhập: <b>{who}</b> · {isSuper ? 'quyền ADMIN (xem tất cả)' : `coach, thuộc ${squads.length} tuyến đội`}</div>
+        <div className="muted">Đang đăng nhập: <b>{who}</b> · {isSuper ? 'quyền ADMIN (xem tất cả)' : `coach, thuộc ${mySquads.length} tuyến đội`}</div>
         {err && <div className="err">{err}</div>}
         {rows && rows.length === 0 && (
           <div className="card stack">
