@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import type { Clip, Comment, Game, GameVideo, Player, Playlist, Side, Squad } from './types'
+import type { Clip, Comment, Game, GameVideo, Org, OrgMember, Player, Playlist, Side, Squad } from './types'
 import { toLoginEmail, uid } from './util'
 
 /* ---------- Dữ liệu (Supabase) ---------- */
@@ -12,7 +12,10 @@ interface DataState {
   players: Player[]
   games: Game[]
   videos: GameVideo[]
-  isSuper: boolean // tài khoản quản trị: xem được mọi tuyến đội
+  isSuper: boolean // quản trị hệ thống: xem được mọi trung tâm
+  orgs: Org[]
+  orgMembers: OrgMember[]
+  baseLoaded: boolean
   clips: Clip[] // chỉ của trận đang mở
   comments: Comment[] // chỉ của trận đang mở
   playlists: Playlist[] // chỉ của trận đang mở
@@ -24,7 +27,12 @@ interface DataState {
   signOut: () => Promise<void>
   loadBase: () => Promise<void>
   loadGame: (gameId: string | null) => Promise<void>
-  addSquad: (name: string) => string
+  addSquad: (name: string, orgId: string) => string
+  createOrg: (name: string, ownerLogin: string, plan: string, maxSquads: number | null, expiresOn: string | null) => Promise<string | null>
+  updateOrg: (id: string, patch: Partial<Org>) => Promise<string | null>
+  addOrgMember: (orgId: string, login: string, role: string) => Promise<string | null>
+  setOrgRole: (orgId: string, userId: string, role: string) => void
+  removeOrgMember: (orgId: string, userId: string) => void
   addMember: (squadId: string, email: string, role: string) => Promise<string | null>
   addPlayer: (squadId: string, number: number, name: string) => void
   addPlayers: (squadId: string, list: { number: number; name: string }[]) => void
@@ -88,7 +96,7 @@ export const useData = create<DataState>((set, get) => {
   return {
     ready: false,
     session: null,
-    squads: [], players: [], games: [], videos: [], isSuper: false, clips: [], comments: [], playlists: [],
+    squads: [], players: [], games: [], videos: [], isSuper: false, orgs: [], orgMembers: [], baseLoaded: false, clips: [], comments: [], playlists: [],
     profiles: {},
     error: '',
 
@@ -100,7 +108,7 @@ export const useData = create<DataState>((set, get) => {
       supabase.auth.onAuthStateChange((_e, session) => {
         set({ session })
         if (session) get().loadBase()
-        else set({ squads: [], players: [], games: [], videos: [], isSuper: false, clips: [], comments: [], playlists: [] })
+        else set({ squads: [], players: [], games: [], videos: [], isSuper: false, orgs: [], orgMembers: [], baseLoaded: false, clips: [], comments: [], playlists: [] })
       })
       supabase
         .channel('gamereview')
@@ -121,17 +129,22 @@ export const useData = create<DataState>((set, get) => {
 
     loadBase: async () => {
       const uidNow = get().session?.user.id
-      const [sq, pl, ga, pr, gv, ad] = await Promise.all([
+      const [sq, pl, ga, pr, gv, ad, og, om] = await Promise.all([
         supabase.from('squads').select('*').order('created_at'),
         supabase.from('players').select('*'),
         supabase.from('games').select('*').order('played_on', { ascending: false }),
         supabase.from('profiles').select('*'),
         supabase.from('game_videos').select('*').order('position'),
         uidNow ? supabase.from('app_admins').select('user_id').eq('user_id', uidNow) : Promise.resolve({ data: [], error: null }),
+        supabase.from('orgs').select('*').order('name'),
+        supabase.from('org_members').select('*'),
       ])
-      if (fail(sq.error) || fail(pl.error) || fail(ga.error) || fail(pr.error) || fail(gv.error) || fail(ad.error)) return
+      if ([sq, pl, ga, pr, gv, ad, og, om].some((r) => fail(r.error))) return
       set({
-        squads: (sq.data ?? []).map((r: any) => ({ id: r.id, name: r.name })),
+        squads: (sq.data ?? []).map((r: any) => ({ id: r.id, name: r.name, orgId: r.org_id })),
+        orgs: (og.data ?? []).map((r: any) => ({ id: r.id, name: r.name, plan: r.plan, maxSquads: r.max_squads, expiresOn: r.expires_on })),
+        orgMembers: (om.data ?? []).map((r: any) => ({ orgId: r.org_id, userId: r.user_id, role: r.role })),
+        baseLoaded: true,
         players: (pl.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, number: r.number, name: r.name })),
         games: (ga.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, title: r.title, date: r.played_on ?? '' })),
         videos: (gv.data ?? []).map((r: any) => ({ id: r.id, gameId: r.game_id, label: r.label, youtubeId: r.youtube_id, position: r.position })),
@@ -169,11 +182,39 @@ export const useData = create<DataState>((set, get) => {
       })
     },
 
-    addSquad: (name) => {
+    addSquad: (name, orgId) => {
       const id = uid()
-      set((s) => ({ squads: [...s.squads, { id, name }] }))
-      supabase.rpc('create_squad', { p_id: id, p_name: name }).then(({ error }) => { if (fail(error)) get().loadBase() })
+      set((s) => ({ squads: [...s.squads, { id, name, orgId }] }))
+      supabase.rpc('create_squad', { p_id: id, p_name: name, p_org: orgId }).then(({ error }) => { if (fail(error)) get().loadBase() })
       return id
+    },
+    createOrg: async (name, ownerLogin, plan, maxSquads, expiresOn) => {
+      const { error } = await supabase.rpc('create_org', { p_name: name, p_owner_email: toLoginEmail(ownerLogin), p_plan: plan, p_max_squads: maxSquads, p_expires: expiresOn })
+      if (!error) get().loadBase()
+      return error?.message ?? null
+    },
+    updateOrg: async (id, p) => {
+      const row: Record<string, unknown> = {}
+      if (p.name !== undefined) row.name = p.name
+      if (p.plan !== undefined) row.plan = p.plan
+      if (p.maxSquads !== undefined) row.max_squads = p.maxSquads
+      if (p.expiresOn !== undefined) row.expires_on = p.expiresOn
+      const { error } = await supabase.from('orgs').update(row).eq('id', id)
+      if (!error) get().loadBase()
+      return error?.message ?? null
+    },
+    addOrgMember: async (orgId, login, role) => {
+      const { error } = await supabase.rpc('add_org_member', { p_org: orgId, p_email: toLoginEmail(login), p_role: role })
+      if (!error) get().loadBase()
+      return error?.message ?? null
+    },
+    setOrgRole: (orgId, userId, role) => {
+      set((s) => ({ orgMembers: s.orgMembers.map((m) => (m.orgId === orgId && m.userId === userId ? { ...m, role: role as OrgMember['role'] } : m)) }))
+      supabase.from('org_members').update({ role }).eq('org_id', orgId).eq('user_id', userId).then(({ error }) => { if (fail(error)) get().loadBase() })
+    },
+    removeOrgMember: (orgId, userId) => {
+      set((s) => ({ orgMembers: s.orgMembers.filter((m) => !(m.orgId === orgId && m.userId === userId)) }))
+      supabase.from('org_members').delete().eq('org_id', orgId).eq('user_id', userId).then(({ error }) => { if (fail(error)) get().loadBase() })
     },
     addMember: async (squadId, email, role) => {
       const { error } = await supabase.rpc('add_member', { p_squad: squadId, p_email: email, p_role: role })
@@ -291,6 +332,7 @@ export interface RecState {
 }
 export interface Filter { side: Side | null; playerIds: string[]; playType: string }
 interface UiState {
+  orgId: string // trung tâm đang xem (quản trị hệ thống chọn được)
   squadId: string
   gameId: string | null
   videoId: string | null // video (hiệp) đang xem
@@ -313,6 +355,7 @@ interface UiState {
   set: (p: Partial<UiState>) => void
 }
 export const useUi = create<UiState>((set) => ({
+  orgId: '',
   squadId: '',
   gameId: null,
   videoId: null,
@@ -362,4 +405,14 @@ export function toast(msg: string) {
   useUi.getState().set({ toast: msg })
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => useUi.getState().set({ toast: '' }), 2500)
+}
+
+/** Vai trò của tôi trong trung tâm (owner / coach / viewer), hoặc null. */
+export function myOrgRole(orgId: string): OrgMember['role'] | null {
+  const d = useData.getState()
+  const me = d.session?.user.id
+  return d.orgMembers.find((m) => m.orgId === orgId && m.userId === me)?.role ?? null
+}
+export function orgExpired(o: Org | undefined): boolean {
+  return !!o?.expiresOn && o.expiresOn < new Date().toISOString().slice(0, 10)
 }

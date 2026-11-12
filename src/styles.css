@@ -313,3 +313,14 @@ a.btn { text-decoration: none; text-align: center; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #2c2c32; border-radius: 6px; border: 2px solid var(--panel); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* Trung tâm */
+.org-row { grid-template-columns: 1fr 150px 110px 150px 60px 64px; }
+.org-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.org-form .btn { grid-column: span 2; }
+.org-pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line-2); font-weight: 600; white-space: nowrap; }
+.org-pill .role { color: var(--muted); font-weight: 400; font-size: 12px; }
+.org-select { width: 200px; }
+.expired-bar { background: #2a110c; color: #ffb4a3; border: 1px solid #5a2a20; border-radius: 10px; padding: 8px 14px; font-weight: 500; flex: none; }
+.no-org { height: 100vh; display: grid; place-items: center; }
+.no-org .card { width: 440px; padding: 24px; gap: 12px; }

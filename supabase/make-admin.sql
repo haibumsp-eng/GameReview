@@ -1,14 +1,13 @@
--- Cấp quyền QUẢN TRỊ (xem tất cả tuyến đội / trận đấu) cho 2 tài khoản.
--- Bước 1: các tài khoản này phải ĐĂNG KÝ trong app trước (tên đăng nhập: admin và admin2).
--- Bước 2: chạy file này trong Supabase → SQL Editor → Run.
--- Đổi tên tài khoản ở dòng dưới nếu bạn dùng tên khác. Chạy lại nhiều lần không sao.
+-- Cấp quyền QUẢN TRỊ HỆ THỐNG (xem mọi trung tâm, tạo trung tâm mới, đặt gói cước).
+-- Chỉ dành cho người vận hành app (bạn), KHÔNG cấp cho nhân viên của một trung tâm.
+-- Bước 1: tài khoản phải ĐĂNG KÝ trong app trước.
+-- Bước 2: sửa email ở dòng dưới thành email (hoặc tên đăng nhập@vercel.app) của bạn, rồi Run.
 insert into app_admins (user_id)
 select id from auth.users
 where lower(email) in (
-  'admin@vercel.app',
-  'admin2@vercel.app'
+  'email-cua-ban@vidu.com'
 )
 on conflict do nothing;
 
--- Kiểm tra: hiện ra các tài khoản đã là quản trị.
+-- Kiểm tra: hiện ra các tài khoản đang là quản trị hệ thống.
 select u.email from app_admins a join auth.users u on u.id = a.user_id;

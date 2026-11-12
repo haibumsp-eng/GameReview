@@ -1,12 +1,14 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useState } from 'react'
-import { useData, useUi, selectGame } from '../store'
+import { useData, useUi, selectGame, myOrgRole } from '../store'
 import { defaultLabel, parseYouTubeId, toLoginEmail } from '../util'
 import { Panel } from './Panel'
 
 export function Library() {
   const { squads, games, videos, addSquad, addGame, removeGame, addMember } = useData()
-  const { squadId, gameId, set } = useUi(useShallow((s) => ({ squadId: s.squadId, gameId: s.gameId, set: s.set })))
+  const { orgId, squadId, gameId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, set: s.set })))
+  const isOwner = useData((s) => s.isSuper) || myOrgRole(orgId) === 'owner'
+  const orgSquads = squads.filter((s) => s.orgId === orgId)
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
   const [links, setLinks] = useState<string[]>(['', '', '', ''])
@@ -42,7 +44,8 @@ export function Library() {
           value={squadId}
           onChange={(e) => { set({ squadId: e.target.value }); selectGame(null) }}
         >
-          {squads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {orgSquads.length === 0 && <option value="">— chưa có tuyến đội —</option>}
+          {orgSquads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <button
           className="btn sm"
@@ -56,16 +59,24 @@ export function Library() {
             alert(err ?? 'Đã thêm thành viên.')
           }}
         >👤</button>
-        <button
-          className="btn sm"
-          title="Thêm tuyến đội"
-          onClick={() => {
-            const n = prompt('Tên tuyến đội (vd: U14 Nữ)')
-            if (n?.trim()) { set({ squadId: addSquad(n.trim()) }); selectGame(null) }
-          }}
-        >+</button>
+        {isOwner && (
+          <button
+            className="btn sm"
+            title="Thêm tuyến đội (chủ trung tâm)"
+            onClick={() => {
+              const n = prompt('Tên tuyến đội (vd: U14 Nữ)')
+              if (n?.trim() && orgId) { set({ squadId: addSquad(n.trim(), orgId) }); selectGame(null) }
+            }}
+          >+</button>
+        )}
       </div>
 
+      {orgSquads.length === 0 && (
+        <div className="card muted">
+          {isOwner ? 'Trung tâm chưa có tuyến đội. Bấm nút + bên cạnh ô Tuyến đội để tạo tuyến đầu tiên (vd: U12, U14 Nữ).'
+                   : 'Bạn chưa được mời vào tuyến đội nào. Hãy nhờ chủ trung tâm mời bạn bằng nút 👤.'}
+        </div>
+      )}
       <label className="field-label">Trận đấu ({squadGames.length})</label>
       <ul className="list">
         {squadGames.length === 0 && <li className="empty">Chưa có trận. Bấm nút xanh “+ Thêm trận” bên dưới.</li>}

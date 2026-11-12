@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabase'
 import { useData, useUi, selectGame } from '../store'
 
-interface Row { game_id: string; squad_id: string; squad_name: string; title: string; played_on: string | null; videos: number; clips: number }
+interface Row { game_id: string; squad_id: string; squad_name: string; org_id: string; org_name: string | null; title: string; played_on: string | null; videos: number; clips: number }
 
 /** Màn hình tổng quan: toàn bộ trận bạn được xem, có tìm kiếm theo từ khoá và lọc theo tuyến đội. */
 export function Overview() {
@@ -24,7 +24,7 @@ export function Overview() {
 
   const squads = useMemo(() => {
     const m = new Map<string, string>()
-    rows?.forEach((r) => m.set(r.squad_id, r.squad_name))
+    rows?.forEach((r) => m.set(r.squad_id, isSuper && r.org_name ? `${r.org_name} · ${r.squad_name}` : r.squad_name))
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
   }, [rows])
 
@@ -32,14 +32,14 @@ export function Overview() {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean)
     return (rows ?? []).filter((r) => {
       if (squad && r.squad_id !== squad) return false
-      const hay = `${r.title} ${r.squad_name} ${r.played_on ?? ''}`.toLowerCase()
+      const hay = `${r.title} ${r.squad_name} ${r.org_name ?? ''} ${r.played_on ?? ''}`.toLowerCase()
       return words.every((w) => hay.includes(w))
     })
   }, [rows, q, squad])
 
   const close = () => useUi.getState().set({ overview: false })
   const open = (r: Row) => {
-    useUi.getState().set({ squadId: r.squad_id })
+    useUi.getState().set({ orgId: r.org_id, squadId: r.squad_id })
     selectGame(r.game_id)
     close()
   }
@@ -83,7 +83,7 @@ export function Overview() {
                 <div key={r.game_id} className="ov-row ov-item" onClick={() => open(r)}>
                   <span className="muted">{r.played_on ?? ''}</span>
                   <span className="item-title">{r.title}</span>
-                  <span>{r.squad_name}</span>
+                  <span>{isSuper && r.org_name ? <><span className="muted">{r.org_name} · </span>{r.squad_name}</> : r.squad_name}</span>
                   <span>{r.videos}</span>
                   <span>{r.clips}</span>
                   <span className="btn sm">Mở</span>

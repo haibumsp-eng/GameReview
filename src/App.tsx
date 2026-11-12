@@ -1,6 +1,7 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useEffect, useRef } from 'react'
-import { useData, useUi, selectGame } from './store'
+import { useEffect, useRef, useState } from 'react'
+import { useData, useUi, selectGame, myOrgRole, orgExpired } from './store'
+import { OrgAdminModal, OrgMembersModal } from './components/Orgs'
 import { goToClip } from './nav'
 import { yt } from './youtube'
 import { Library } from './components/Library'
@@ -78,16 +79,28 @@ function PlaylistRunner() {
 }
 
 export default function App() {
-  const { ready, session, error, squads, games, playlists, isSuper, init, signOut, loadGame, profiles } = useData()
-  const { squadId, gameId, overview, inPoint, toastMsg, set } = useUi(useShallow((s) => ({ squadId: s.squadId, gameId: s.gameId, overview: s.overview, inPoint: s.inPoint, toastMsg: s.toast, set: s.set })))
+  const { ready, session, error, squads, games, playlists, isSuper, orgs, orgMembers, baseLoaded, init, signOut, loadGame, profiles } = useData()
+  const { orgId, squadId, gameId, overview, inPoint, toastMsg, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, overview: s.overview, inPoint: s.inPoint, toastMsg: s.toast, set: s.set })))
+  const [modal, setModal] = useState<'' | 'members' | 'orgs'>('')
   const landed = useRef(false)
   const L = useLayout()
 
   useEffect(() => { init() }, [init])
-  // Chọn tuyến đội đầu tiên khi chưa có / không còn tồn tại.
+  // Trung tâm đang xem: HLV/chủ trung tâm luôn là trung tâm của mình; quản trị hệ thống chọn được.
+  const myOrgId = orgMembers.find((m) => m.userId === session?.user.id)?.orgId ?? ''
   useEffect(() => {
-    if (squads.length && !squads.some((s) => s.id === squadId)) { set({ squadId: squads[0].id }); selectGame(null) }
-  }, [squads, squadId, set])
+    if (!isSuper) { if (myOrgId !== orgId) set({ orgId: myOrgId }) }
+    else if (orgs.length && !orgs.some((o) => o.id === orgId)) {
+      let saved = ''
+      try { saved = localStorage.getItem('gr-org') ?? '' } catch { /* trình duyệt chặn lưu */ }
+      set({ orgId: orgs.some((o) => o.id === saved) ? saved : orgs[0].id })
+    }
+  }, [isSuper, myOrgId, orgs, orgId, set])
+  // Chọn tuyến đội đầu tiên của trung tâm khi chưa có / không còn tồn tại.
+  useEffect(() => {
+    const mine = squads.filter((s) => s.orgId === orgId)
+    if (!mine.some((s) => s.id === squadId)) { set({ squadId: mine[0]?.id ?? '' }); selectGame(null) }
+  }, [squads, orgId, squadId, set])
   useEffect(() => { loadGame(gameId) }, [gameId, loadGame])
 
   // Link chia sẻ: #g=<gameId>&p=<playlistId>
@@ -95,8 +108,9 @@ export default function App() {
   useEffect(() => {
     const g = deep.current.get('g')
     const game = g ? games.find((x) => x.id === g) : undefined
-    if (game) { set({ squadId: game.squadId }); selectGame(game.id); deep.current.delete('g') }
-  }, [games, set])
+    const sq = game && squads.find((s) => s.id === game.squadId)
+    if (game && sq) { set({ orgId: sq.orgId, squadId: game.squadId }); selectGame(game.id); deep.current.delete('g') }
+  }, [games, squads, set])
   // Tài khoản quản trị: mở thẳng màn hình tổng quan để chọn trận.
   useEffect(() => {
     if (isSuper && !landed.current && !deep.current.get('g')) { landed.current = true; set({ overview: true }) }
@@ -111,12 +125,39 @@ export default function App() {
   if (!session) return <Login />
 
   const me = profiles[session.user.id] || session.user.email || ''
+  const org = orgs.find((o) => o.id === orgId)
+  const role = isSuper ? 'owner' : myOrgRole(orgId)
+  const ROLE: Record<string, string> = { owner: 'Chủ trung tâm', coach: 'HLV', viewer: 'Chỉ xem' }
+
+  // Tài khoản chưa thuộc trung tâm nào.
+  if (baseLoaded && !isSuper && !myOrgId) {
+    return (
+      <div className="no-org">
+        <div className="card stack">
+          <div className="logo"><span className="dot" />GAME<b>REVIEW</b></div>
+          <b>Tài khoản “{me}” chưa thuộc trung tâm nào.</b>
+          <div className="muted">Hãy gửi tên đăng nhập của bạn cho chủ trung tâm / CLB để được thêm vào. Sau đó tải lại trang.</div>
+          <div className="row">
+            <button className="btn primary" onClick={() => location.reload()}>Tải lại</button>
+            <button className="btn ghost" onClick={signOut}>Đăng xuất</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="app">
       <Hotkeys />
       <PlaylistRunner />
       <header className="topbar">
         <div className="logo"><span className="dot" />GAME<b>REVIEW</b></div>
+        {isSuper ? (
+          <select className="org-select" value={orgId} onChange={(e) => { set({ orgId: e.target.value }); try { localStorage.setItem('gr-org', e.target.value) } catch { /* bỏ qua */ } }}>
+            {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        ) : org && <span className="org-pill">{org.name}<span className="role">{ROLE[role ?? ''] ?? ''}</span></span>}
+        {isSuper && <button className="btn sm ghost" onClick={() => setModal('orgs')}>Quản lý trung tâm</button>}
+        {(role === 'owner') && <button className="btn sm ghost" onClick={() => setModal('members')}>Thành viên</button>}
         <span className="spacer" />
         {error && <span className="banner" title="Bấm để ẩn" onClick={() => useData.setState({ error: '' })}>{error}</span>}
         <div className="keys-help">
@@ -138,6 +179,9 @@ export default function App() {
         <button className="btn sm ghost" onClick={signOut}>Đăng xuất</button>
       </header>
       {overview && <Overview />}
+      {modal === 'members' && <OrgMembersModal onClose={() => setModal('')} />}
+      {modal === 'orgs' && <OrgAdminModal onClose={() => setModal('')} />}
+      {orgExpired(org) && <div className="expired-bar">Gói của {org?.name} đã hết hạn ngày {org?.expiresOn}: bạn vẫn xem được nhưng không thêm/sửa được. Liên hệ để gia hạn.</div>}
       <RecordHud />
       {toastMsg && inPoint == null && <div className="toast">{toastMsg}</div>}
       {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}

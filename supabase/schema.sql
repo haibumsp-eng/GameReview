@@ -12,11 +12,31 @@ create table if not exists profiles (
 create table if not exists app_admins (
   user_id uuid primary key references auth.users on delete cascade
 );
+-- Trung tâm / CLB: mỗi khách hàng là một trung tâm, dữ liệu tách riêng.
+create table if not exists orgs (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  plan text not null default 'trial',     -- trial | team | club | custom
+  max_squads int,                          -- null = không giới hạn
+  expires_on date,                         -- null = không hết hạn
+  created_at timestamptz default now()
+);
+create table if not exists org_members (
+  org_id uuid references orgs on delete cascade,
+  user_id uuid references auth.users on delete cascade,
+  role text not null default 'coach' check (role in ('owner','coach','viewer')),
+  primary key (org_id, user_id)
+);
+-- Mỗi tài khoản chỉ thuộc MỘT trung tâm.
+drop index if exists org_members_user_idx;
+create unique index if not exists org_members_one_org on org_members (user_id);
 create table if not exists squads (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   created_at timestamptz default now()
 );
+alter table squads add column if not exists org_id uuid references orgs on delete cascade;
+create index if not exists squads_org_idx on squads (org_id);
 create table if not exists members (
   squad_id uuid references squads on delete cascade,
   user_id uuid references auth.users on delete cascade,
@@ -83,22 +103,71 @@ update clips c set video_id = (select v.id from game_videos v where v.game_id = 
   where c.video_id is null;
 create index if not exists clips_video_idx on clips (video_id);
 
+-- Lần đầu có trung tâm: mọi tuyến đội, HLV và admin hiện có thuộc về Junsport.
+-- Admin cũ trở thành CHỦ TRUNG TÂM Junsport (không còn xem được trung tâm khác).
+do $$
+declare j uuid := '6a756e73-706f-7274-0000-000000000001';
+begin
+  if not exists (select 1 from orgs where id = j) then
+    insert into orgs (id, name, plan) values (j, 'Junsport', 'club');
+    update squads set org_id = j where org_id is null;
+    insert into org_members (org_id, user_id, role)
+      select distinct j, user_id, 'coach' from members on conflict do nothing;
+    insert into org_members (org_id, user_id, role)
+      select j, user_id, 'owner' from app_admins
+      on conflict (org_id, user_id) do update set role = 'owner';
+    delete from app_admins;
+  end if;
+end $$;
+alter table squads alter column org_id set not null;
+
 -- ---------- Hàm trợ giúp cho RLS ----------
 create or replace function is_super() returns boolean
 language sql security definer stable set search_path = public as $$
   select exists (select 1 from app_admins where user_id = auth.uid())
 $$;
+create or replace function org_of_squad(sid uuid) returns uuid
+language sql security definer stable set search_path = public as $$
+  select org_id from squads where id = sid
+$$;
+create or replace function is_org_member(oid uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select is_super() or exists (select 1 from org_members where org_id = oid and user_id = auth.uid())
+$$;
+create or replace function is_org_owner(oid uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select is_super() or exists (select 1 from org_members where org_id = oid and user_id = auth.uid() and role = 'owner')
+$$;
+-- Gói còn hạn? Hết hạn thì vẫn xem được nhưng không sửa được.
+create or replace function org_active(oid uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (select 1 from orgs where id = oid and (expires_on is null or expires_on >= current_date))
+$$;
+-- Hai người có chung trung tâm không (để xem tên nhau).
+create or replace function shares_org(uid uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (select 1 from org_members a join org_members b on a.org_id = b.org_id
+                 where a.user_id = auth.uid() and b.user_id = uid)
+$$;
+-- Xem tuyến: thành viên tuyến, chủ trung tâm của tuyến, hoặc quản trị hệ thống.
 create or replace function is_member(sid uuid) returns boolean
 language sql security definer stable set search_path = public as $$
-  select is_super() or exists (select 1 from members where squad_id = sid and user_id = auth.uid())
+  select is_super()
+      or exists (select 1 from members where squad_id = sid and user_id = auth.uid())
+      or is_org_owner(org_of_squad(sid))
 $$;
+-- Sửa trong tuyến: HLV/admin tuyến hoặc chủ trung tâm, và gói còn hạn.
 create or replace function is_editor(sid uuid) returns boolean
 language sql security definer stable set search_path = public as $$
-  select is_super() or exists (select 1 from members where squad_id = sid and user_id = auth.uid() and role in ('admin','coach'))
+  select is_super() or (
+    (exists (select 1 from members where squad_id = sid and user_id = auth.uid() and role in ('admin','coach'))
+       or is_org_owner(org_of_squad(sid)))
+    and org_active(org_of_squad(sid)))
 $$;
 create or replace function is_admin(sid uuid) returns boolean
 language sql security definer stable set search_path = public as $$
   select exists (select 1 from members where squad_id = sid and user_id = auth.uid() and role = 'admin')
+      or is_org_owner(org_of_squad(sid))
 $$;
 create or replace function squad_of_game(gid uuid) returns uuid
 language sql security definer stable set search_path = public as $$
@@ -120,10 +189,13 @@ alter table clip_players enable row level security;
 alter table comments     enable row level security;
 alter table app_admins   enable row level security;
 alter table game_videos  enable row level security;
+alter table orgs         enable row level security;
+alter table org_members  enable row level security;
 
 drop policy if exists profiles_read   on profiles;
 drop policy if exists profiles_update on profiles;
-create policy profiles_read   on profiles for select to authenticated using (true);
+-- Chỉ xem được tên của người cùng trung tâm (không lộ người dùng giữa các khách hàng).
+create policy profiles_read   on profiles for select to authenticated using (id = auth.uid() or is_super() or shares_org(id));
 create policy profiles_update on profiles for update to authenticated using (id = auth.uid());
 
 drop policy if exists squads_read   on squads;
@@ -149,6 +221,18 @@ drop policy if exists games_read  on games;
 drop policy if exists games_write on games;
 create policy games_read  on games for select to authenticated using (is_member(squad_id));
 create policy games_write on games for all to authenticated using (is_editor(squad_id)) with check (is_editor(squad_id));
+
+drop policy if exists orgs_read   on orgs;
+drop policy if exists orgs_write  on orgs;
+create policy orgs_read  on orgs for select to authenticated using (is_org_member(id));
+create policy orgs_write on orgs for update to authenticated using (is_super()) with check (is_super());
+
+drop policy if exists org_members_read   on org_members;
+drop policy if exists org_members_update on org_members;
+drop policy if exists org_members_delete on org_members;
+create policy org_members_read   on org_members for select to authenticated using (is_org_member(org_id));
+create policy org_members_update on org_members for update to authenticated using (is_org_owner(org_id)) with check (is_org_owner(org_id));
+create policy org_members_delete on org_members for delete to authenticated using (is_org_owner(org_id) and user_id <> auth.uid());
 
 drop policy if exists app_admins_self on app_admins;
 create policy app_admins_self on app_admins for select to authenticated using (user_id = auth.uid());
@@ -180,14 +264,55 @@ create policy comments_insert on comments for insert to authenticated
 create policy comments_delete on comments for delete to authenticated using (author = auth.uid());
 
 -- ---------- RPC ----------
--- Tạo tuyến đội và tự thêm người tạo làm admin.
-create or replace function create_squad(p_id uuid, p_name text) returns uuid
+-- Tạo tuyến đội trong một trung tâm (chủ trung tâm hoặc quản trị). Kiểm tra gói cước.
+drop function if exists create_squad(uuid, text);
+create or replace function create_squad(p_id uuid, p_name text, p_org uuid) returns uuid
 language plpgsql security definer set search_path = public as $$
+declare lim int; n int;
 begin
-  if auth.uid() is null then raise exception 'not authenticated'; end if;
-  insert into squads (id, name) values (p_id, p_name);
+  if not is_org_owner(p_org) then raise exception 'Chỉ chủ trung tâm mới tạo được tuyến đội.'; end if;
+  if not (org_active(p_org) or is_super()) then raise exception 'Gói của trung tâm đã hết hạn. Liên hệ để gia hạn.'; end if;
+  select max_squads into lim from orgs where id = p_org;
+  select count(*) into n from squads where org_id = p_org;
+  if lim is not null and n >= lim and not is_super() then
+    raise exception 'Gói hiện tại cho tối đa % tuyến đội. Liên hệ để nâng gói.', lim;
+  end if;
+  insert into squads (id, name, org_id) values (p_id, p_name, p_org);
   insert into members (squad_id, user_id, role) values (p_id, auth.uid(), 'admin');
   return p_id;
+end $$;
+
+-- Quản trị hệ thống tạo trung tâm mới và chỉ định chủ trung tâm (người đó phải đã đăng ký).
+create or replace function create_org(p_name text, p_owner_email text, p_plan text default 'trial',
+                                      p_max_squads int default null, p_expires date default null) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare oid uuid; uid uuid;
+begin
+  if not is_super() then raise exception 'Chỉ quản trị hệ thống mới tạo được trung tâm.'; end if;
+  select id into uid from auth.users where lower(email) = lower(trim(p_owner_email));
+  if uid is null then raise exception 'Chủ trung tâm chưa có tài khoản. Hãy nhờ họ đăng ký trước.'; end if;
+  if exists (select 1 from org_members where user_id = uid) then
+    raise exception 'Tài khoản này đã thuộc một trung tâm khác. Hãy dùng tài khoản khác làm chủ trung tâm.';
+  end if;
+  insert into orgs (name, plan, max_squads, expires_on) values (p_name, p_plan, p_max_squads, p_expires) returning id into oid;
+  insert into org_members (org_id, user_id, role) values (oid, uid, 'owner');
+  return oid;
+end $$;
+
+-- Chủ trung tâm thêm người vào trung tâm (owner / coach / viewer).
+create or replace function add_org_member(p_org uuid, p_email text, p_role text default 'coach') returns void
+language plpgsql security definer set search_path = public as $$
+declare uid uuid;
+begin
+  if not is_org_owner(p_org) then raise exception 'Chỉ chủ trung tâm mới thêm được thành viên.'; end if;
+  if p_role not in ('owner','coach','viewer') then raise exception 'Vai trò không hợp lệ'; end if;
+  select id into uid from auth.users where lower(email) = lower(trim(p_email));
+  if uid is null then raise exception 'Chưa có tài khoản này. Hãy nhờ họ đăng ký trước.'; end if;
+  if exists (select 1 from org_members where user_id = uid and org_id <> p_org) then
+    raise exception 'Tài khoản này đã thuộc một trung tâm khác. Mỗi HLV chỉ thuộc một trung tâm.';
+  end if;
+  insert into org_members (org_id, user_id, role) values (p_org, uid, p_role)
+    on conflict (org_id, user_id) do update set role = excluded.role;
 end $$;
 
 -- Admin thêm thành viên theo email (người đó phải đã đăng ký).
@@ -195,12 +320,18 @@ create or replace function add_member(p_squad uuid, p_email text, p_role text de
 language plpgsql security definer set search_path = public as $$
 declare uid uuid;
 begin
-  if not (is_admin(p_squad) or is_super()) then raise exception 'chỉ admin mới thêm được thành viên'; end if;
+  if not (is_admin(p_squad) or is_super()) then raise exception 'Chỉ admin tuyến hoặc chủ trung tâm mới thêm được thành viên.'; end if;
   if p_role not in ('admin','coach','viewer') then raise exception 'role không hợp lệ'; end if;
   select id into uid from auth.users where lower(email) = lower(trim(p_email));
   if uid is null then raise exception 'Chưa có tài khoản với email này. Hãy nhờ họ đăng ký trước.'; end if;
+  if exists (select 1 from org_members where user_id = uid and org_id <> org_of_squad(p_squad)) then
+    raise exception 'Tài khoản này đã thuộc một trung tâm khác. Mỗi HLV chỉ thuộc một trung tâm.';
+  end if;
   insert into members (squad_id, user_id, role) values (p_squad, uid, p_role)
     on conflict (squad_id, user_id) do update set role = excluded.role;
+  -- Người được mời vào tuyến cũng thành thành viên của trung tâm đó.
+  insert into org_members (org_id, user_id, role) values (org_of_squad(p_squad), uid, case when p_role = 'viewer' then 'viewer' else 'coach' end)
+    on conflict (org_id, user_id) do nothing;
 end $$;
 
 -- Tự tạo profile khi có người đăng ký.
@@ -228,6 +359,8 @@ do $$ begin
   begin alter publication supabase_realtime add table games;        exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table players;      exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table game_videos;  exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table orgs;         exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table org_members;  exception when duplicate_object then null; end;
 end $$;
 
 -- ---------- Playlist đã lưu (bộ lọc có tên) ----------
@@ -254,13 +387,14 @@ end $$;
 
 -- ---------- Tổng quan trận đấu (cho màn hình chọn trận / tìm kiếm) ----------
 -- security invoker: RLS vẫn áp dụng, coach chỉ thấy trận của tuyến mình, quản trị thấy tất cả.
+drop function if exists game_overview();
 create or replace function game_overview()
-returns table (game_id uuid, squad_id uuid, squad_name text, title text, played_on date, videos int, clips int)
+returns table (game_id uuid, squad_id uuid, squad_name text, org_id uuid, org_name text, title text, played_on date, videos int, clips int)
 language sql stable security invoker set search_path = public as $$
-  select g.id, g.squad_id, s.name, g.title, g.played_on,
+  select g.id, g.squad_id, s.name, s.org_id, o.name, g.title, g.played_on,
          (select count(*)::int from game_videos v where v.game_id = g.id),
          (select count(*)::int from clips c where c.game_id = g.id)
-  from games g join squads s on s.id = g.squad_id
+  from games g join squads s on s.id = g.squad_id left join orgs o on o.id = s.org_id
   order by g.played_on desc nulls last, g.title
 $$;
 
