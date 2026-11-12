@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useState } from 'react'
 import { useData, useUi, selectGame } from '../store'
 import { defaultLabel, parseYouTubeId, toLoginEmail } from '../util'
@@ -5,7 +6,7 @@ import { Panel } from './Panel'
 
 export function Library() {
   const { squads, games, videos, addSquad, addGame, removeGame, addMember } = useData()
-  const { squadId, gameId, set } = useUi()
+  const { squadId, gameId, set } = useUi(useShallow((s) => ({ squadId: s.squadId, gameId: s.gameId, set: s.set })))
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
   const [links, setLinks] = useState<string[]>(['', '', '', ''])

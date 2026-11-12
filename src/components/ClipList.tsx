@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useState } from 'react'
 import { useData, useUi, matches } from '../store'
 import { ExportModal } from './ExportModal'
@@ -20,7 +21,7 @@ export function useFilteredClips() {
 }
 
 export function ClipList() {
-  const { gameId, clipId, filter, squadId, playlist, playlistId, set } = useUi()
+  const { gameId, clipId, filter, squadId, playlist, playlistId, set } = useUi(useShallow((s) => ({ gameId: s.gameId, clipId: s.clipId, filter: s.filter, squadId: s.squadId, playlist: s.playlist, playlistId: s.playlistId, set: s.set })))
   const { playlists, addPlaylist, removePlaylist } = useData()
   const players = useData((s) => s.players).filter((p) => p.squadId === squadId).sort((a, b) => a.number - b.number)
   const allPlayers = useData((s) => s.players)

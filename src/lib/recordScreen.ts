@@ -29,7 +29,7 @@ export async function startCapture(videoEl: HTMLElement): Promise<MediaStream> {
   let stream: MediaStream
   try {
     stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: { ideal: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      video: { frameRate: { ideal: 30, max: 30 }, height: { max: 1080 } },
       audio: true,
       preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude',
       systemAudio: 'exclude', monitorTypeSurfaces: 'exclude',
@@ -56,6 +56,7 @@ export async function startCapture(videoEl: HTMLElement): Promise<MediaStream> {
       throw new Error('Bạn đã chọn sai tab. Hãy bấm lại và chọn đúng tab GameReview đang mở.')
     }
   }
+  await track.applyConstraints?.({ frameRate: { max: 30 } }).catch(() => {})
   return stream
 }
 
@@ -66,8 +67,13 @@ export function cancelRecording() { cancelled = true }
 export async function runRecording(stream: MediaStream, clips: Clip[], title: string) {
   cancelled = false
   const ui = useUi.getState
-  const setRec = (p: Partial<NonNullable<ReturnType<typeof ui>['rec']>>) =>
-    ui().set({ rec: { phase: 'recording', index: 0, total: clips.length, remain: 0, msg: '', ...ui().rec, ...p } })
+  const setRec = (p: Partial<NonNullable<ReturnType<typeof ui>['rec']>>) => {
+    const cur = ui().rec
+    const next = { phase: 'recording' as const, index: 0, total: clips.length, remain: 0, msg: '', ...cur, ...p }
+    if (p.remain !== undefined) next.remain = Math.ceil(p.remain)
+    if (cur && cur.phase === next.phase && cur.index === next.index && cur.msg === next.msg && cur.remain === next.remain && !p.url) return
+    ui().set({ rec: next })
+  }
   const remainFrom = (i: number, t: number) =>
     clips.slice(i).reduce((a, c, j) => a + (j === 0 ? Math.max(0, c.end - Math.max(t, c.start)) : c.end - c.start), 0)
 
@@ -87,20 +93,30 @@ export async function runRecording(stream: MediaStream, clips: Clip[], title: st
     for (let i = 0; i < clips.length && !cancelled && !userStopped; i++) {
       const c = clips[i]
       setRec({ phase: 'waiting', index: i + 1, remain: remainFrom(i, c.start), msg: 'Đang tua tới đoạn tiếp theo…' })
-      goToClip(c, true)
-      // Chờ video (có thể là hiệp khác) tải xong, tua đúng chỗ và bắt đầu chạy.
+      const pre = Math.max(0, c.start - 1) // tua lùi 1 giây để YouTube kịp hiện hình trước khi ghi
+      goToClip({ ...c, start: pre }, true)
       const t0 = Date.now()
+      let lastT = -1
+      let lastSeek = performance.now()
+      let lastPlay = 0
       while (!cancelled && !userStopped) {
         const u = ui()
-        if (!u.pending && u.videoId === c.videoId && yt.ready() && yt.state() === 1 && Math.abs(yt.time() - c.start) < 2) break
-        if (yt.ready() && !u.pending && u.videoId === c.videoId && yt.state() !== 1 && yt.state() !== 3) {
-          if (Math.abs(yt.time() - c.start) >= 2) yt.seek(c.start)
-          yt.play()
+        const here = !u.pending && u.videoId === c.videoId && yt.ready()
+        if (here) {
+          const t = yt.time()
+          const moving = yt.state() === 1 && lastT >= 0 && t > lastT + 0.01 // thời gian thật sự tăng = hình đang chạy
+          if (moving && t >= c.start) break
+          const now = performance.now()
+          // Lệch chỗ thì tua lại, nhưng chờ ít nhất 1,5 giây sau lần tua trước (YouTube cần thời gian để tua xong).
+          if ((t < pre - 0.5 || t > c.end) && now - lastSeek > 1500) { yt.seek(pre); lastSeek = now }
+          if (yt.state() !== 1 && yt.state() !== 3 && now - lastPlay > 500) { yt.play(); lastPlay = now }
+          lastT = t
         }
         if (Date.now() - t0 > 30000) throw new Error('Video không chạy được. Kiểm tra mạng rồi thử lại.')
-        await sleep(100)
+        await sleep(40)
       }
       // Ghi tới hết đoạn.
+      let lastMove = performance.now()
       while (!cancelled && !userStopped) {
         if (document.hidden) {
           pauseRec(); yt.pause()
@@ -108,19 +124,23 @@ export async function runRecording(stream: MediaStream, clips: Clip[], title: st
           while (document.hidden && !cancelled) await sleep(300)
           await sleep(800)
           yt.play()
+          lastMove = 0 // chỉ ghi tiếp khi hình chạy lại thật sự
           continue
         }
         const t = yt.time()
         if (t >= c.end) break
-        if (yt.state() === 1) {
+        if (t > lastT + 0.005) lastMove = performance.now()
+        lastT = t
+        const stalled = performance.now() - lastMove > 120 // hình đứng hơn 0,12 giây (≈3 khung) thì ngừng ghi
+        if (yt.state() === 1 && !stalled) {
           resumeRec()
           setRec({ phase: 'recording', remain: remainFrom(i, t), msg: '' })
         } else {
           pauseRec()
-          if (yt.state() === 3) setRec({ phase: 'waiting', msg: 'Mạng chậm, đang chờ YouTube tải… (phần này không bị ghi vào video)' })
-          else yt.play()
+          if (yt.state() === 3 || stalled) setRec({ phase: 'waiting', msg: 'Mạng chậm, đang chờ YouTube tải… (phần này không bị ghi vào video)' })
+          if (yt.state() !== 1 && yt.state() !== 3 && performance.now() - lastMove > 500) yt.play()
         }
-        await sleep(50)
+        await sleep(25)
       }
       pauseRec()
     }

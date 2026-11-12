@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useEffect, useRef } from 'react'
 import { useData, useUi, selectGame } from './store'
 import { goToClip } from './nav'
@@ -57,7 +58,7 @@ function Hotkeys() {
 
 /** Phát lần lượt các đoạn đã lọc (qua nhiều hiệp), không cắt file thật. */
 function PlaylistRunner() {
-  const { playlist, clipId, videoId, time, pending, set } = useUi()
+  const { playlist, clipId, videoId, time, pending, set } = useUi(useShallow((s) => ({ playlist: s.playlist, clipId: s.clipId, videoId: s.videoId, time: s.time, pending: s.pending, set: s.set })))
   const list = useFilteredClips()
   useEffect(() => {
     if (!playlist || pending) return // đang chờ video hiệp khác tải xong
@@ -78,7 +79,7 @@ function PlaylistRunner() {
 
 export default function App() {
   const { ready, session, error, squads, games, playlists, isSuper, init, signOut, loadGame, profiles } = useData()
-  const { squadId, gameId, overview, inPoint, toast: toastMsg, set } = useUi()
+  const { squadId, gameId, overview, inPoint, toastMsg, set } = useUi(useShallow((s) => ({ squadId: s.squadId, gameId: s.gameId, overview: s.overview, inPoint: s.inPoint, toastMsg: s.toast, set: s.set })))
   const landed = useRef(false)
   const L = useLayout()
 

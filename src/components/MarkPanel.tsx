@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useData, useUi, toast } from '../store'
 import { PLAY_TYPES } from '../types'
 import { yt } from '../youtube'
@@ -55,7 +56,7 @@ export function setSelectedOut() {
 }
 
 export function MarkPanel() {
-  const { gameId, clipId, squadId, inPoint, set } = useUi()
+  const { gameId, clipId, squadId, inPoint, set } = useUi(useShallow((s) => ({ gameId: s.gameId, clipId: s.clipId, squadId: s.squadId, inPoint: s.inPoint, set: s.set })))
   const clip = useData((s) => s.clips.find((c) => c.id === clipId))
   const allClips = useData((s) => s.clips)
   const players = useData((s) => s.players).filter((p) => p.squadId === squadId).sort((a, b) => a.number - b.number)
