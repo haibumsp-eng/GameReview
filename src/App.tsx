@@ -137,9 +137,10 @@ export default function App() {
         <div className="card stack">
           <Logo />
           <b>Tài khoản “{me}” chưa thuộc trung tâm nào.</b>
-          <div className="muted">Hãy gửi tên đăng nhập của bạn cho chủ trung tâm / CLB để được thêm vào. Sau đó tải lại trang.</div>
+          <JoinByCode />
+          <div className="muted small-note">Chưa có mã? Hỏi chủ trung tâm / CLB. Nếu bạn là chủ trung tâm mới, hãy liên hệ để được tạo trung tâm.</div>
           <div className="row">
-            <button className="btn primary" onClick={() => location.reload()}>Tải lại</button>
+            <button className="btn ghost" onClick={() => location.reload()}>Tải lại</button>
             <button className="btn ghost" onClick={signOut}>Đăng xuất</button>
           </div>
         </div>
@@ -205,6 +206,31 @@ export default function App() {
           <SplitV frac={L.rightSplit} setFrac={(f) => L.set({ rightSplit: f })} top={<MarkPanel />} bottom={<Comments />} />
         </div>
       </div>
+    </div>
+  )
+}
+
+/** Ô nhập mã 6 số để vào trung tâm. */
+function JoinByCode() {
+  const joinOrg = useData((s) => s.joinOrg)
+  const [code, setCode] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const go = async () => {
+    if (!/^\d{6}$/.test(code)) return setMsg('Mã gồm 6 chữ số.')
+    setBusy(true); setMsg('')
+    const err = await joinOrg(code)
+    setBusy(false)
+    if (err) setMsg(err)
+  }
+  return (
+    <div className="stack">
+      <div className="row">
+        <input inputMode="numeric" maxLength={6} placeholder="Mã trung tâm (6 số)" className="code-input" value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} onKeyDown={(e) => e.key === 'Enter' && go()} />
+        <button className="btn primary" disabled={busy} onClick={go}>Tham gia</button>
+      </div>
+      {msg && <div className="err">{msg}</div>}
     </div>
   )
 }

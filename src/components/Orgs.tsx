@@ -8,7 +8,8 @@ const PLAN_LABEL: Record<string, string> = { trial: 'Dùng thử', team: 'Đội
 /** Chủ trung tâm: xem và quản lý thành viên của trung tâm mình. */
 export function OrgMembersModal(props: { onClose: () => void }) {
   const orgId = useUi((s) => s.orgId)
-  const { orgs, orgMembers, profiles, session, addOrgMember, setOrgRole, removeOrgMember } = useData()
+  const { orgs, orgMembers, profiles, session, addOrgMember, setOrgRole, removeOrgMember, regenCode } = useData()
+  const [copied, setCopied] = useState(false)
   const org = orgs.find((o) => o.id === orgId)
   const isOwner = myOrgRole(orgId) === 'owner' || useData.getState().isSuper
   const members = orgMembers.filter((m) => m.orgId === orgId)
@@ -29,6 +30,19 @@ export function OrgMembersModal(props: { onClose: () => void }) {
       <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
         <div className="row"><b className="grow">Thành viên · {org?.name}</b><button className="icon-btn" onClick={props.onClose}>×</button></div>
         <div className="muted">Mỗi tài khoản chỉ thuộc một trung tâm. Chủ trung tâm thấy mọi tuyến đội; HLV chỉ thấy tuyến được mời vào.</div>
+        {isOwner && org && (
+          <div className="card join-code-card">
+            <div className="stack" style={{ gap: 2 }}>
+              <span className="field-label">Mã tham gia trung tâm</span>
+              <span className="join-code">{org.joinCode || '——'}</span>
+              <span className="muted small-note">Gửi mã này cho HLV mới: khi đăng ký nhập mã là vào thẳng {org.name}. Họ chưa thấy tuyến nào cho tới khi bạn mời vào tuyến bằng nút 👤.</span>
+            </div>
+            <div className="stack">
+              <button className="btn sm" onClick={() => { navigator.clipboard?.writeText(org.joinCode).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }) }}>{copied ? '✓ Đã copy' : 'Copy mã'}</button>
+              <button className="btn sm ghost" onClick={async () => { if (confirm('Đổi mã mới? Mã cũ sẽ không dùng được nữa.')) { const e = await regenCode(org.id); if (e) alert(e) } }}>Đổi mã</button>
+            </div>
+          </div>
+        )}
         <ul className="list">
           {members.map((m) => (
             <li key={m.userId} className="item" style={{ cursor: 'default' }}>
@@ -80,7 +94,7 @@ export function OrgAdminModal(props: { onClose: () => void }) {
       <div className="overview card stack" onClick={(e) => e.stopPropagation()}>
         <div className="row"><b className="grow">Quản lý trung tâm <span className="pill live">ADMIN HỆ THỐNG</span></b><button className="icon-btn" onClick={props.onClose}>×</button></div>
         <div className="ov-table">
-          <div className="ov-row org-row ov-head"><span>Trung tâm</span><span>Gói</span><span>Tuyến tối đa</span><span>Hết hạn</span><span>Tuyến</span><span /></div>
+          <div className="ov-row org-row ov-head"><span>Trung tâm · mã</span><span>Gói</span><span>Tuyến tối đa</span><span>Hết hạn</span><span>Tuyến</span><span /></div>
           {orgs.map((o) => <OrgRow key={o.id} org={o} squads={squads.filter((s) => s.orgId === o.id).length} />)}
         </div>
         <div className="card stack">
@@ -113,7 +127,7 @@ function OrgRow({ org, squads }: { org: Org; squads: number }) {
   }
   return (
     <div className="ov-row org-row">
-      <span className="item-title">{org.name} {orgExpired(org) && <span className="badge DEF">Hết hạn</span>}</span>
+      <span className="item-title">{org.name} <span className="tag">{org.joinCode}</span> {orgExpired(org) && <span className="badge DEF">Hết hạn</span>}</span>
       <select value={v.plan} onChange={(e) => setV({ ...v, plan: e.target.value })}>
         {Object.entries(PLAN_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
       </select>

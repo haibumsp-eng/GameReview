@@ -23,7 +23,9 @@ interface DataState {
   error: string
   init: () => void
   signIn: (login: string, password: string) => Promise<string | null>
-  signUp: (login: string, password: string, name: string) => Promise<string | null>
+  signUp: (login: string, password: string, name: string, joinCode?: string) => Promise<string | null>
+  joinOrg: (code: string) => Promise<string | null>
+  regenCode: (orgId: string) => Promise<string | null>
   signOut: () => Promise<void>
   loadBase: () => Promise<void>
   loadGame: (gameId: string | null) => Promise<void>
@@ -54,6 +56,7 @@ interface DataState {
 const pending = new Map<string, Partial<Clip>>()
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 let reloadTimer: ReturnType<typeof setTimeout> | undefined
+let autoJoinTried = false
 
 export const useData = create<DataState>((set, get) => {
   const fail = (e: { message: string } | null) => {
@@ -120,10 +123,40 @@ export const useData = create<DataState>((set, get) => {
       const { error } = await supabase.auth.signInWithPassword({ email: toLoginEmail(login), password })
       return error?.message ?? null
     },
-    signUp: async (login, password, name) => {
-      const { data, error } = await supabase.auth.signUp({ email: toLoginEmail(login), password, options: { data: { name: name || login.split('@')[0] } } })
+    signUp: async (login, password, name, joinCode) => {
+      const code = joinCode?.trim() || undefined
+      const { data, error } = await supabase.auth.signUp({
+        email: toLoginEmail(login), password,
+        // Lưu mã vào hồ sơ để tự vào trung tâm khi đăng nhập lần đầu (kể cả khi cần xác nhận email).
+        options: { data: { name: name || login.split('@')[0], ...(code ? { join_code: code } : {}) } },
+      })
       if (error) return error.message
-      return data.session ? null : 'Đã gửi email xác nhận. Hãy bấm link trong email rồi đăng nhập.'
+      if (!data.session) return 'Đã gửi email xác nhận. Hãy bấm link trong email rồi đăng nhập.'
+      if (code) {
+        autoJoinTried = true // tránh tự vào lần nữa khi tải dữ liệu
+        const err = await get().joinOrg(code)
+        if (err) return `Đã tạo tài khoản, nhưng chưa vào được trung tâm: ${err}`
+      }
+      return null
+    },
+    joinOrg: async (code) => {
+      const { data, error } = await supabase.rpc('join_org_by_code', { p_code: code.trim() })
+      if (error) return error.message
+      const msg: Record<string, string | null> = {
+        ok: null,
+        already: 'Tài khoản này đã thuộc một trung tâm.',
+        bad_code: 'Mã trung tâm không đúng. Hãy hỏi lại chủ trung tâm.',
+        too_many: 'Nhập sai quá nhiều lần. Hãy thử lại sau 1 giờ.',
+        auth: 'Bạn cần đăng nhập trước.',
+      }
+      const res = msg[data as string] ?? 'Không vào được trung tâm.'
+      if (!res) await get().loadBase()
+      return res
+    },
+    regenCode: async (orgId) => {
+      const { error } = await supabase.rpc('regen_join_code', { p_org: orgId })
+      if (!error) await get().loadBase()
+      return error?.message ?? null
     },
     signOut: async () => { await supabase.auth.signOut() },
 
@@ -142,7 +175,7 @@ export const useData = create<DataState>((set, get) => {
       if ([sq, pl, ga, pr, gv, ad, og, om].some((r) => fail(r.error))) return
       set({
         squads: (sq.data ?? []).map((r: any) => ({ id: r.id, name: r.name, orgId: r.org_id })),
-        orgs: (og.data ?? []).map((r: any) => ({ id: r.id, name: r.name, plan: r.plan, maxSquads: r.max_squads, expiresOn: r.expires_on })),
+        orgs: (og.data ?? []).map((r: any) => ({ id: r.id, name: r.name, plan: r.plan, maxSquads: r.max_squads, expiresOn: r.expires_on, joinCode: r.join_code ?? '' })),
         orgMembers: (om.data ?? []).map((r: any) => ({ orgId: r.org_id, userId: r.user_id, role: r.role })),
         baseLoaded: true,
         players: (pl.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, number: r.number, name: r.name })),
@@ -151,6 +184,13 @@ export const useData = create<DataState>((set, get) => {
         isSuper: (ad.data ?? []).length > 0,
         profiles: Object.fromEntries((pr.data ?? []).map((r: any) => [r.id, r.name])),
       })
+      const st = get(), me = st.session?.user
+      const pendingCode = me?.user_metadata?.join_code as string | undefined
+      if (me && pendingCode && !st.isSuper && !st.orgMembers.some((m) => m.userId === me.id) && !autoJoinTried) {
+        autoJoinTried = true
+        const err = await get().joinOrg(pendingCode)
+        if (err && !err.startsWith('Tài khoản này đã thuộc')) set({ error: err })
+      }
     },
 
     loadGame: async (gameId) => {

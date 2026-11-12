@@ -352,3 +352,9 @@ a.btn { text-decoration: none; text-align: center; }
 .expired-bar { background: #2a110c; color: #ffb4a3; border: 1px solid #5a2a20; border-radius: 10px; padding: 8px 14px; font-weight: 500; flex: none; }
 .no-org { height: 100vh; display: grid; place-items: center; }
 .no-org .card { width: 440px; padding: 24px; gap: 12px; }
+
+/* Mã tham gia trung tâm */
+.code-input { font-family: var(--font-display); font-stretch: 112%; font-weight: 700; letter-spacing: .35em; font-size: 16px; }
+.code-input::placeholder { letter-spacing: 0; font-family: var(--font-ui); font-weight: 400; font-size: 14px; }
+.join-code-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.join-code { font-family: var(--font-display); font-stretch: 112%; font-weight: 800; font-size: 30px; letter-spacing: .25em; color: var(--accent); }

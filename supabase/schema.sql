@@ -27,6 +27,28 @@ create table if not exists org_members (
   role text not null default 'coach' check (role in ('owner','coach','viewer')),
   primary key (org_id, user_id)
 );
+-- Mã tham gia 6 số: HLV mới nhập mã khi đăng ký để vào đúng trung tâm.
+create or replace function gen_join_code() returns text
+language plpgsql volatile set search_path = public as $$
+declare c text;
+begin
+  loop
+    c := lpad(floor(random() * 1000000)::int::text, 6, '0');
+    exit when not exists (select 1 from orgs where join_code = c);
+  end loop;
+  return c;
+end $$;
+alter table orgs add column if not exists join_code text;
+update orgs set join_code = gen_join_code() where join_code is null;
+alter table orgs alter column join_code set default gen_join_code();
+create unique index if not exists orgs_join_code_idx on orgs (join_code);
+-- Ghi lại lần nhập mã sai để chặn dò mã.
+create table if not exists join_attempts (
+  user_id uuid references auth.users on delete cascade,
+  at timestamptz not null default now()
+);
+create index if not exists join_attempts_user_idx on join_attempts (user_id, at);
+
 -- Mỗi tài khoản chỉ thuộc MỘT trung tâm.
 drop index if exists org_members_user_idx;
 create unique index if not exists org_members_one_org on org_members (user_id);
@@ -191,6 +213,7 @@ alter table app_admins   enable row level security;
 alter table game_videos  enable row level security;
 alter table orgs         enable row level security;
 alter table org_members  enable row level security;
+alter table join_attempts enable row level security; -- không có policy: chỉ hàm hệ thống ghi
 
 drop policy if exists profiles_read   on profiles;
 drop policy if exists profiles_update on profiles;
@@ -297,6 +320,35 @@ begin
   insert into orgs (name, plan, max_squads, expires_on) values (p_name, p_plan, p_max_squads, p_expires) returning id into oid;
   insert into org_members (org_id, user_id, role) values (oid, uid, 'owner');
   return oid;
+end $$;
+
+-- HLV tự vào trung tâm bằng mã 6 số. Trả về: ok | already | bad_code | too_many | auth.
+-- Vào trung tâm chỉ thành HLV CHƯA thuộc tuyến nào: chưa xem được dữ liệu cho tới khi được mời vào tuyến.
+create or replace function join_org_by_code(p_code text) returns text
+language plpgsql security definer set search_path = public as $$
+declare oid uuid; n int;
+begin
+  if auth.uid() is null then return 'auth'; end if;
+  if exists (select 1 from org_members where user_id = auth.uid()) then return 'already'; end if;
+  select count(*) into n from join_attempts where user_id = auth.uid() and at > now() - interval '1 hour';
+  if n >= 10 then return 'too_many'; end if;
+  select id into oid from orgs where join_code = trim(p_code);
+  if oid is null then
+    insert into join_attempts (user_id) values (auth.uid());
+    return 'bad_code';
+  end if;
+  insert into org_members (org_id, user_id, role) values (oid, auth.uid(), 'coach');
+  return 'ok';
+end $$;
+
+-- Chủ trung tâm đổi mã mới (khi lỡ lộ mã).
+create or replace function regen_join_code(p_org uuid) returns text
+language plpgsql security definer set search_path = public as $$
+declare c text;
+begin
+  if not is_org_owner(p_org) then raise exception 'Chỉ chủ trung tâm mới đổi được mã.'; end if;
+  update orgs set join_code = gen_join_code() where id = p_org returning join_code into c;
+  return c;
 end $$;
 
 -- Chủ trung tâm thêm người vào trung tâm (owner / coach / viewer).
