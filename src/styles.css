@@ -310,8 +310,32 @@ a.btn { text-decoration: none; text-align: center; }
 /* Đăng nhập */
 .login { height: 100vh; display: grid; place-items: center; background: radial-gradient(800px 400px at 50% 0%, #bedf0014, transparent), var(--bg); }
 .login-card { width: 360px; padding: 24px; gap: 12px; }
-.login-card .logo { justify-content: center; margin: 4px 0 10px; }
-.login-card .logo-word { font-size: 30px; }
+/* Màn hình đăng nhập có ảnh nền: ảnh bên phải, vùng tối bên trái chứa giới thiệu + khung đăng nhập */
+.login-hero {
+  place-items: center start; padding: 0 clamp(16px, 7vw, 120px);
+  background:
+    linear-gradient(90deg, #080809 0%, #080809f0 26%, #080809b3 46%, #08080933 72%, #08080900 100%),
+    linear-gradient(0deg, #080809 0%, #08080900 30%),
+    url('/login-bg.webp') right center / cover no-repeat,
+    var(--bg);
+}
+.login-side { display: flex; flex-direction: column; gap: 28px; max-width: 480px; width: 100%; }
+.login-side .login-card { max-width: 420px; }
+.login-intro .logo-word { font-size: 30px; }
+.login-intro h1 {
+  margin: 22px 0 10px; font-family: var(--font-display); font-stretch: 100%; font-weight: 800; font-size: clamp(24px, 2.5vw, 36px); white-space: nowrap;
+  line-height: 1.1; letter-spacing: -.01em; text-transform: uppercase;
+}
+.login-intro h1 span { color: var(--accent); }
+.login-intro p { margin: 0; color: var(--text-2); font-size: 15px; line-height: 1.6; max-width: 400px; }
+.login-hero .login-card { width: 100%; background: #121214d9; backdrop-filter: blur(10px); border-color: var(--line-2); box-shadow: 0 20px 60px #000a; }
+.login-title { font-family: var(--font-display); font-stretch: 112%; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); }
+@media (max-width: 900px) {
+  .login-hero { place-items: center; background: linear-gradient(0deg, #080809f2, #080809b3), url('/login-bg-960.webp') 70% center / cover no-repeat, var(--bg); }
+  .login-intro p { display: none; }
+  .login-intro h1 { white-space: normal; font-size: 26px; }
+  .login-side { gap: 18px; }
+}
 .no-org .logo-word { font-size: 24px; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
