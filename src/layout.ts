@@ -12,12 +12,12 @@ export interface LayoutState {
   reset: () => void
 }
 
-const defaults = { left: 270, right: 360, leftSplit: 0.62, rightSplit: 0.6, tlH: 100, clipsH: 290 }
+const defaults = { left: 270, right: 360, leftSplit: 0.62, rightSplit: 0.6, tlH: 132, clipsH: 300 }
 
 export const useLayout = create<LayoutState>()(
   persist(
     (set) => ({ ...defaults, set: (p) => set(p), reset: () => set(defaults) }),
-    { name: 'gamereview-layout-v1' },
+    { name: 'gamereview-layout-v2' },
   ),
 )
 

@@ -119,12 +119,23 @@ export default function App() {
         <div className="logo"><span className="dot" />GAME<b>REVIEW</b></div>
         <span className="spacer" />
         {error && <span className="banner" title="Bấm để ẩn" onClick={() => useData.setState({ error: '' })}>{error}</span>}
-        <span className="hint"><kbd>Space</kbd> phát/dừng · <kbd>J</kbd><kbd>L</kbd> ±5s · <kbd>I</kbd> vào · <kbd>O</kbd> ra · <kbd>A</kbd> tấn công · <kbd>D</kbd> phòng thủ</span>
+        <div className="keys-help">
+          <button className="btn sm ghost">⌨ Phím tắt</button>
+          <div className="keys-pop">
+            <div><kbd>Space</kbd> Phát / dừng</div>
+            <div><kbd>J</kbd> <kbd>L</kbd> Lùi / tới 5 giây</div>
+            <div><kbd>A</kbd> Đánh dấu tấn công</div>
+            <div><kbd>D</kbd> Đánh dấu phòng thủ</div>
+            <div><kbd>I</kbd> Điểm vào · <kbd>O</kbd> Điểm ra</div>
+            <div><kbd>⇧I</kbd> <kbd>⇧O</kbd> Sửa vào/ra tình huống đang chọn</div>
+            <div><kbd>Esc</kbd> Huỷ / thoát ô nhập · <kbd>Del</kbd> Xoá mark</div>
+          </div>
+        </div>
         <button className="btn sm primary" onClick={() => set({ overview: true })}>Tất cả trận</button>
-        <button className="btn sm" title="Đưa các module về kích thước mặc định" onClick={L.reset}>Đặt lại bố cục</button>
-        <span>{me}</span>
+        <button className="btn sm ghost" title="Đưa các module về kích thước mặc định" onClick={L.reset}>Đặt lại bố cục</button>
+        <span className="me">{me}</span>
         {isSuper && <span className="pill live">ADMIN</span>}
-        <button className="btn sm" onClick={signOut}>Đăng xuất</button>
+        <button className="btn sm ghost" onClick={signOut}>Đăng xuất</button>
       </header>
       {overview && <Overview />}
       <RecordHud />

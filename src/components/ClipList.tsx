@@ -91,6 +91,7 @@ export function ClipList() {
             >×</button>
           </div>
         )}
+        <div className="filter-row">
         <div className="seg-toggle">
           <button className={!filter.side ? 'on' : ''} onClick={() => setFilter({ side: null })}>Tất cả</button>
           <button className={filter.side === 'ATK' ? 'on atk' : ''} onClick={() => setFilter({ side: 'ATK' })}>Tấn công</button>
@@ -100,6 +101,7 @@ export function ClipList() {
           <option value="">Mọi loại</option>
           {typeOptions.map((t) => <option key={t}>{t}</option>)}
         </select>
+        </div>
         <div className="chips">
           {players.map((p) => (
             <button key={p.id} className={filter.playerIds.includes(p.id) ? 'chip on' : 'chip'} onClick={() => togglePlayer(p.id)} title={p.name}><b>{p.number}</b> {p.name}</button>
@@ -128,14 +130,17 @@ export function ClipList() {
             className={c.id === clipId ? 'item active' : 'item'}
             onClick={() => { set({ playlist: false }); goToClip(c) }}
           >
-            <span className={`badge ${c.side}`}>{c.side === 'ATK' ? 'ATK' : 'DEF'}</span>
-            {videos.length > 1 && <span className="tag">{videos.find((v) => v.id === c.videoId)?.label ?? '?'}</span>}
-            <span className="mono">{fmt(c.start)}–{fmt(c.end)}</span>
-            <span className="grow">
-              {c.teamWide ? <b>Cả đội </b> : <b>{label(c.playerIds)} </b>}
-              {c.playType && <span className="tag">{c.playType}</span>}
-              <span className="muted"> {c.note}</span>
-            </span>
+            <span className={`side-bar ${c.side}`} />
+            <div className="clip-main">
+              <div className="clip-line">
+                <span className={`badge ${c.side}`}>{c.side === 'ATK' ? 'Tấn công' : 'Phòng thủ'}</span>
+                <span className="clip-time">{fmt(c.start)}–{fmt(c.end)}</span>
+                {videos.length > 1 && <span className="tag">{videos.find((v) => v.id === c.videoId)?.label ?? '?'}</span>}
+                <span className="clip-who">{c.teamWide ? 'Cả đội' : label(c.playerIds) || <span className="muted">Chưa gắn cầu thủ</span>}</span>
+                {c.playType && <span className="tag accent">{c.playType}</span>}
+              </div>
+              {c.note && <div className="clip-note-line">{c.note}</div>}
+            </div>
           </li>
         ))}
       </ul>

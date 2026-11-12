@@ -77,8 +77,8 @@ export function MarkPanel() {
   return (
     <Panel title="Đánh dấu">
       <div className="row">
-        <button className="btn atk big" disabled={!gameId} onClick={() => markNow('ATK')}>Tấn công <kbd>A</kbd></button>
-        <button className="btn def big" disabled={!gameId} onClick={() => markNow('DEF')}>Phòng thủ <kbd>D</kbd></button>
+        <button className="btn atk big" disabled={!gameId} onClick={() => markNow('ATK')}><span>Tấn công</span><kbd>A</kbd></button>
+        <button className="btn def big" disabled={!gameId} onClick={() => markNow('DEF')}><span>Phòng thủ</span><kbd>D</kbd></button>
       </div>
 
       <div className="inout">
@@ -102,7 +102,11 @@ export function MarkPanel() {
           rồi gắn cầu thủ và ghi chú ở đây.
         </div>
       ) : (
-        <div className="stack">
+        <div className="stack edit-card">
+          <div className="edit-head">
+            <span className="edit-title">Tình huống đang chọn</span>
+            <button className="timebtn" onClick={() => yt.seek(clip.start)}>{fmt(clip.start)}–{fmt(clip.end)}</button>
+          </div>
           <div className="seg-toggle">
             <button className={clip.side === 'ATK' ? 'on atk' : ''} onClick={() => { updateClip(clip.id, { side: 'ATK' }); set({ lastSide: 'ATK' }) }}>Tấn công</button>
             <button className={clip.side === 'DEF' ? 'on def' : ''} onClick={() => { updateClip(clip.id, { side: 'DEF' }); set({ lastSide: 'DEF' }) }}>Phòng thủ</button>
@@ -121,16 +125,16 @@ export function MarkPanel() {
             ))}
           </div>
 
-          <label className="field-label">Tình huống (tự gõ hoặc chọn gợi ý, có thể để trống)</label>
+          <label className="field-label">Loại tình huống</label>
           <input
             list="playtypes"
-            placeholder="vd: Pick & Roll, Zone press…"
+            placeholder="Tự gõ hoặc chọn gợi ý (có thể để trống)"
             value={clip.playType}
             onChange={(e) => updateClip(clip.id, { playType: e.target.value })}
           />
           <datalist id="playtypes">{suggestions.map((t) => <option key={t} value={t} />)}</datalist>
 
-          <label className="field-label">Đoạn clip: {fmt(clip.start)} → {fmt(clip.end)}</label>
+          <label className="field-label">Điểm vào → điểm ra</label>
           <div className="range">
             <div>
               <button className="btn sm" onClick={() => nudge('start', -1)}>−1</button>
@@ -149,7 +153,7 @@ export function MarkPanel() {
             <button className="btn sm" onClick={setSelectedOut}>Ra = hiện tại <kbd>⇧O</kbd></button>
           </div>
 
-          <label className="field-label">Nhận xét (không giới hạn độ dài)</label>
+          <label className="field-label">Nhận xét</label>
           <AutoTextarea minRows={4} placeholder="Ghi chú tình huống…" value={clip.note} onChange={(e) => updateClip(clip.id, { note: e.target.value })} />
 
           <button className="btn danger" onClick={() => { removeClip(clip.id); set({ clipId: null }) }}>Xoá mark <kbd>Del</kbd></button>
