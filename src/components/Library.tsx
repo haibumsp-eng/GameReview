@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useData, useUi, selectGame } from '../store'
-import { parseVideoLines, toLoginEmail } from '../util'
+import { defaultLabel, parseYouTubeId, toLoginEmail } from '../util'
 import { Panel } from './Panel'
 
 export function Library() {
@@ -8,19 +8,22 @@ export function Library() {
   const { squadId, gameId, set } = useUi()
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
-  const [links, setLinks] = useState('')
+  const [links, setLinks] = useState<string[]>(['', '', '', ''])
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [err, setErr] = useState('')
 
   const squadGames = games.filter((g) => g.squadId === squadId)
-  const parsed = parseVideoLines(links)
+  // Mỗi ô một hiệp; ô để trống thì bỏ qua.
+  const slots = links.map((l, i) => ({ label: defaultLabel(i + 1), raw: l.trim(), id: parseYouTubeId(l) }))
+  const filled = slots.filter((x) => x.raw)
+  const bad = filled.filter((x) => !x.id)
 
   const submit = () => {
-    if (!parsed.videos.length) return setErr('Hãy dán ít nhất một link YouTube.')
-    if (parsed.bad.length) return setErr(`Dòng ${parsed.bad.join(', ')} không phải link YouTube hợp lệ.`)
-    const { gameId: gid } = addGame({ squadId, title: title.trim() || 'Trận mới', date }, parsed.videos)
+    if (!filled.length) return setErr('Hãy dán ít nhất một link YouTube (ô Hiệp 1).')
+    if (bad.length) return setErr(`Link ở ô ${bad.map((x) => x.label).join(', ')} không phải link YouTube hợp lệ.`)
+    const { gameId: gid } = addGame({ squadId, title: title.trim() || 'Trận mới', date }, filled.map((x) => ({ label: x.label, youtubeId: x.id! })))
     selectGame(gid)
-    setAdding(false); setTitle(''); setLinks(''); setErr('')
+    setAdding(false); setTitle(''); setLinks(['', '', '', '']); setErr('')
   }
 
   return (
@@ -96,15 +99,21 @@ export function Library() {
         <div className="card stack" ref={(el) => el?.scrollIntoView({ block: 'nearest' })}>
           <input placeholder="Tên trận (vd: vs Hà Nội, vòng 3)" value={title} onChange={(e) => setTitle(e.target.value)} />
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <label className="field-label">Link YouTube của các hiệp: mỗi dòng một link</label>
-          <textarea
-            rows={5}
-            placeholder={'Hiệp 1: https://youtu.be/…\nHiệp 2: https://youtu.be/…\nHiệp 3: https://youtu.be/…\nHiệp 4: https://youtu.be/…\n(thêm dòng cho OT nếu có)'}
-            value={links}
-            onChange={(e) => setLinks(e.target.value)}
-          />
-          <div className="muted">
-            {parsed.videos.length ? `Nhận ${parsed.videos.length} video: ${parsed.videos.map((v) => v.label).join(', ')}` : 'Chỉ có 1 video cho cả trận thì dán 1 link.'}
+          <label className="field-label">Link YouTube từng hiệp (dán vào đúng ô, ô nào không có thì để trống)</label>
+          {slots.map((x, i) => (
+            <div key={i} className="link-row">
+              <span className="link-label">{x.label}</span>
+              <input
+                placeholder={i === 0 ? 'Dán link YouTube… (cả trận 1 video thì chỉ dán ô này)' : 'Dán link YouTube…'}
+                value={links[i]}
+                onChange={(e) => setLinks(links.map((v, j) => (j === i ? e.target.value : v)))}
+              />
+              <span className={`link-ok ${x.raw ? (x.id ? 'ok' : 'bad') : ''}`}>{x.raw ? (x.id ? '✓' : '✗') : ''}</span>
+            </div>
+          ))}
+          <div className="row">
+            <button className="btn sm" onClick={() => setLinks([...links, ''])}>+ Thêm OT</button>
+            {links.length > 4 && <button className="btn sm" onClick={() => setLinks(links.slice(0, -1))}>− Bớt OT</button>}
           </div>
           {err && <div className="err">{err}</div>}
           <div className="row">
