@@ -174,3 +174,5 @@ a.btn { text-decoration: none; text-align: center; }
 .item.active .grow { white-space: normal; overflow: visible; }
 .inpoint-flag { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #000; padding: 6px 14px; border-radius: 999px; font-weight: 500; z-index: 40; box-shadow: 0 4px 20px #000a; }
 .inpoint-flag kbd { background: #0002; border-color: #0004; }
+
+.toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: #111; color: var(--accent); border: 1px solid var(--accent); padding: 8px 16px; border-radius: 999px; z-index: 40; box-shadow: 0 4px 20px #000a; }

@@ -49,7 +49,12 @@ let reloadTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useData = create<DataState>((set, get) => {
   const fail = (e: { message: string } | null) => {
-    if (e) { console.error(e); set({ error: e.message }) }
+    if (e) {
+      console.error(e)
+      set({ error: /row-level security/i.test(e.message)
+        ? 'Tài khoản này chỉ được XEM ở tuyến đội này, không được sửa. Nhờ admin tuyến mời bạn với vai trò coach.'
+        : e.message })
+    }
     return !!e
   }
   const reloadSoon = () => {
@@ -292,6 +297,7 @@ interface UiState {
   pending: { t: number; play: boolean } | null // tua tới đây sau khi video mới tải xong
   overview: boolean // màn hình tổng quan trận đấu
   autoNext: boolean // hết hiệp tự sang hiệp sau
+  toast: string // thông báo xanh ngắn (tự ẩn)
   set: (p: Partial<UiState>) => void
 }
 export const useUi = create<UiState>((set) => ({
@@ -312,6 +318,7 @@ export const useUi = create<UiState>((set) => ({
   pending: null,
   overview: false,
   autoNext: true,
+  toast: '',
   set: (p) => set(p),
 }))
 
@@ -334,4 +341,12 @@ export function selectGame(gameId: string | null) {
     gameId, videoId: videosOf(gameId)[0]?.id ?? null, clipId: null,
     inPoint: null, playlist: false, playlistId: '', pending: null,
   })
+}
+
+let toastTimer: ReturnType<typeof setTimeout> | undefined
+/** Thông báo ngắn ở cuối màn hình, tự ẩn sau 2,5 giây. */
+export function toast(msg: string) {
+  useUi.getState().set({ toast: msg })
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => useUi.getState().set({ toast: '' }), 2500)
 }

@@ -1,4 +1,4 @@
-import { useData, useUi } from '../store'
+import { useData, useUi, toast } from '../store'
 import { PLAY_TYPES } from '../types'
 import { yt } from '../youtube'
 import { fmt } from '../util'
@@ -10,29 +10,37 @@ const warn = (msg: string) => useData.setState({ error: msg })
 /** A / D: đánh dấu nhanh. Nếu đã bấm I trước đó thì lấy đoạn từ điểm Vào tới hiện tại. */
 export function markNow(side: 'ATK' | 'DEF') {
   const { gameId, videoId, pre, post, inPoint, set } = useUi.getState()
-  if (!gameId || !videoId) return
+  if (!gameId || !videoId) return warn('Hãy mở một trận (và một hiệp) trước khi đánh dấu.')
   const t = yt.time()
   const useIn = inPoint != null && t > inPoint
-  const id = useData.getState().addClip(gameId, videoId, useIn ? inPoint! : t - pre, useIn ? t : t + post, side)
+  const start = useIn ? inPoint! : Math.max(0, t - pre)
+  const end = useIn ? t : t + post
+  const id = useData.getState().addClip(gameId, videoId, start, end, side)
   set({ clipId: id, playlist: false, inPoint: null, lastSide: side })
+  toast(`Đã tạo tình huống ${side === 'ATK' ? 'TẤN CÔNG' : 'PHÒNG THỦ'} ${fmt(start)}–${fmt(end)}`)
 }
 
 /** I: bắt đầu một tình huống mới tại vị trí hiện tại. */
 export function markIn() {
   const { gameId, videoId, set } = useUi.getState()
-  if (!gameId || !videoId) return
+  if (!gameId || !videoId) return warn('Hãy mở một trận (và một hiệp) trước khi đánh dấu.')
   set({ inPoint: yt.time() })
 }
 
 /** O: kết thúc tình huống đang chờ. Nếu không có điểm Vào đang chờ thì chỉnh điểm Ra của tình huống đang chọn. */
 export function markOut() {
-  const { gameId, videoId, inPoint, lastSide, set } = useUi.getState()
-  if (!gameId || !videoId) return
+  const { gameId, videoId, inPoint, lastSide, clipId, set } = useUi.getState()
+  if (!gameId || !videoId) return warn('Hãy mở một trận (và một hiệp) trước khi đánh dấu.')
   const t = yt.time()
-  if (inPoint == null) return setSelectedOut()
+  if (inPoint == null) {
+    if (!clipId) return warn('Bấm I ở đầu tình huống trước, rồi mới bấm O ở cuối.')
+    setSelectedOut()
+    return toast(`Đã đặt điểm Ra ${fmt(t)}`)
+  }
   if (t <= inPoint + 0.5) return warn('Điểm Ra phải sau điểm Vào. Hãy chạy video tới chỗ muốn dừng rồi bấm O.')
   const id = useData.getState().addClip(gameId, videoId, inPoint, t, lastSide)
   set({ clipId: id, playlist: false, inPoint: null })
+  toast(`Đã tạo tình huống ${lastSide === 'ATK' ? 'TẤN CÔNG' : 'PHÒNG THỦ'} ${fmt(inPoint)}–${fmt(t)} (đổi ở panel Đánh dấu nếu cần)`)
 }
 
 export function setSelectedIn() {

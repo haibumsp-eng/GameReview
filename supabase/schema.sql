@@ -94,7 +94,7 @@ language sql security definer stable set search_path = public as $$
 $$;
 create or replace function is_editor(sid uuid) returns boolean
 language sql security definer stable set search_path = public as $$
-  select exists (select 1 from members where squad_id = sid and user_id = auth.uid() and role in ('admin','coach'))
+  select is_super() or exists (select 1 from members where squad_id = sid and user_id = auth.uid() and role in ('admin','coach'))
 $$;
 create or replace function is_admin(sid uuid) returns boolean
 language sql security definer stable set search_path = public as $$

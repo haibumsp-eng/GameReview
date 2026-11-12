@@ -18,7 +18,12 @@ function Hotkeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
+      const typing = t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable ||
+        (t.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'range', 'file'].includes((t as HTMLInputElement).type))
+      if (typing) {
+        if (e.key === 'Escape') t.blur() // Esc: thoát ô nhập để dùng phím tắt
+        return
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return
       const k = e.key.toLowerCase()
       if (k === ' ') { e.preventDefault(); yt.toggle() }
@@ -34,8 +39,17 @@ function Hotkeys() {
         if (id) { useData.getState().removeClip(id); useUi.getState().set({ clipId: null }) }
       }
     }
+    // Bấm vào khung YouTube sẽ kéo bàn phím vào trong đó; lấy lại ngay để phím tắt vẫn chạy.
+    // Trình duyệt không phải lúc nào cũng báo sự kiện, nên kiểm tra thêm mỗi 0,1 giây.
+    const reclaim = () => {
+      const el = document.activeElement
+      if (el instanceof HTMLIFrameElement) { el.blur(); window.focus() }
+    }
+    const onBlur = () => setTimeout(reclaim, 0)
+    const iv = setInterval(reclaim, 100)
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('blur', onBlur)
+    return () => { clearInterval(iv); window.removeEventListener('keydown', onKey); window.removeEventListener('blur', onBlur) }
   }, [])
   return null
 }
@@ -63,7 +77,7 @@ function PlaylistRunner() {
 
 export default function App() {
   const { ready, session, error, squads, games, playlists, isSuper, init, signOut, loadGame, profiles } = useData()
-  const { squadId, gameId, overview, inPoint, set } = useUi()
+  const { squadId, gameId, overview, inPoint, toast: toastMsg, set } = useUi()
   const landed = useRef(false)
   const L = useLayout()
 
@@ -111,6 +125,7 @@ export default function App() {
         <button className="btn sm" onClick={signOut}>Đăng xuất</button>
       </header>
       {overview && <Overview />}
+      {toastMsg && inPoint == null && <div className="toast">{toastMsg}</div>}
       {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}
       <div className="workspace">
         <div className="col" style={{ width: L.left }}>
