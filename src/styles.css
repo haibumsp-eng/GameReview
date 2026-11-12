@@ -154,3 +154,23 @@ a.btn { text-decoration: none; text-align: center; }
 .clip-note, .cmt, textarea, .clips .muted { font-weight: 300; }
 .jersey { font-weight: 600; }
 .cmt-h b { font-weight: 500; }
+
+.inout { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; flex: none; }
+.grow-btn { flex: 1; }
+.inout-wait { display: flex; gap: 8px; align-items: center; justify-content: space-between; color: var(--accent); font-size: 12px; }
+.small-note { font-size: 12px; }
+.vtabs { display: flex; gap: 4px; align-items: center; flex: none; flex-wrap: wrap; }
+.vtab { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; font: inherit; font-weight: 400; cursor: pointer; }
+.vtab:hover { border-color: var(--accent); }
+.vtab.on { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; }
+.vtab.add { color: var(--muted); border-style: dashed; }
+.pending-range { position: absolute; top: 0; bottom: 0; background: #bedf0033; border-left: 2px solid var(--accent); pointer-events: none; z-index: 2; }
+.overview { width: min(980px, 94vw); height: min(720px, 90vh); padding: 16px; background: var(--panel); overflow: hidden; }
+.ov-table { flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+.ov-row { display: grid; grid-template-columns: 100px 1fr 180px 60px 60px 60px; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.ov-head { position: sticky; top: 0; background: var(--panel-2); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; z-index: 1; }
+.ov-item { cursor: pointer; }
+.ov-item:hover { background: var(--accent-dim); }
+.item.active .grow { white-space: normal; overflow: visible; }
+.inpoint-flag { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #000; padding: 6px 14px; border-radius: 999px; font-weight: 500; z-index: 40; box-shadow: 0 4px 20px #000a; }
+.inpoint-flag kbd { background: #0002; border-color: #0004; }

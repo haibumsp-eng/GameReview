@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react'
-import { useData, useUi } from './store'
+import { useData, useUi, selectGame } from './store'
+import { goToClip } from './nav'
 import { yt } from './youtube'
 import { Library } from './components/Library'
 import { Roster } from './components/Roster'
 import { PlayerPanel } from './components/PlayerPanel'
 import { Timeline } from './components/Timeline'
-import { MarkPanel, markNow } from './components/MarkPanel'
+import { MarkPanel, markNow, markIn, markOut, setSelectedIn, setSelectedOut } from './components/MarkPanel'
 import { ClipList, useFilteredClips } from './components/ClipList'
 import { Comments } from './components/Comments'
 import { Login } from './components/Login'
+import { Overview } from './components/Overview'
 import { Gutter, SplitV } from './components/Gutter'
 import { useLayout, clamp } from './layout'
 
@@ -24,6 +26,9 @@ function Hotkeys() {
       else if (k === 'l' || k === 'arrowright') yt.seek(yt.time() + 5)
       else if (k === 'a') markNow('ATK')
       else if (k === 'd') markNow('DEF')
+      else if (k === 'i') (e.shiftKey ? setSelectedIn : markIn)()
+      else if (k === 'o') (e.shiftKey ? setSelectedOut : markOut)()
+      else if (k === 'escape') useUi.getState().set({ inPoint: null })
       else if (k === 'delete' || k === 'backspace') {
         const id = useUi.getState().clipId
         if (id) { useData.getState().removeClip(id); useUi.getState().set({ clipId: null }) }
@@ -35,35 +40,37 @@ function Hotkeys() {
   return null
 }
 
-/** Phát lần lượt các đoạn đã lọc, không cắt file thật. */
+/** Phát lần lượt các đoạn đã lọc (qua nhiều hiệp), không cắt file thật. */
 function PlaylistRunner() {
-  const { playlist, clipId, time, set } = useUi()
+  const { playlist, clipId, videoId, time, pending, set } = useUi()
   const list = useFilteredClips()
   useEffect(() => {
-    if (!playlist) return
+    if (!playlist || pending) return // đang chờ video hiệp khác tải xong
     const i = list.findIndex((c) => c.id === clipId)
     if (i < 0) return set({ playlist: false })
     const c = list[i]
+    if (c.videoId !== videoId) return
     if (time >= c.end) {
       const next = list[i + 1]
-      if (next) { set({ clipId: next.id }); yt.seek(next.start) }
+      if (next) goToClip(next, true)
       else { set({ playlist: false }); yt.pause() }
     } else if (time < c.start - 1) {
       yt.seek(c.start)
     }
-  }, [time, playlist, clipId, list, set])
+  }, [time, playlist, clipId, videoId, pending, list, set])
   return null
 }
 
 export default function App() {
-  const { ready, session, error, squads, games, playlists, init, signOut, loadGame, profiles } = useData()
-  const { squadId, gameId, set } = useUi()
+  const { ready, session, error, squads, games, playlists, isSuper, init, signOut, loadGame, profiles } = useData()
+  const { squadId, gameId, overview, inPoint, set } = useUi()
+  const landed = useRef(false)
   const L = useLayout()
 
   useEffect(() => { init() }, [init])
   // Chọn tuyến đội đầu tiên khi chưa có / không còn tồn tại.
   useEffect(() => {
-    if (squads.length && !squads.some((s) => s.id === squadId)) set({ squadId: squads[0].id, gameId: null, clipId: null })
+    if (squads.length && !squads.some((s) => s.id === squadId)) { set({ squadId: squads[0].id }); selectGame(null) }
   }, [squads, squadId, set])
   useEffect(() => { loadGame(gameId) }, [gameId, loadGame])
 
@@ -72,8 +79,12 @@ export default function App() {
   useEffect(() => {
     const g = deep.current.get('g')
     const game = g ? games.find((x) => x.id === g) : undefined
-    if (game) { set({ squadId: game.squadId, gameId: game.id }); deep.current.delete('g') }
+    if (game) { set({ squadId: game.squadId }); selectGame(game.id); deep.current.delete('g') }
   }, [games, set])
+  // Tài khoản quản trị: mở thẳng màn hình tổng quan để chọn trận.
+  useEffect(() => {
+    if (isSuper && !landed.current && !deep.current.get('g')) { landed.current = true; set({ overview: true }) }
+  }, [isSuper, set])
   useEffect(() => {
     const p = deep.current.get('p')
     const pl = p ? playlists.find((x) => x.id === p) : undefined
@@ -92,11 +103,15 @@ export default function App() {
         <div className="logo"><span className="dot" />GAME<b>REVIEW</b></div>
         <span className="spacer" />
         {error && <span className="banner" title="Bấm để ẩn" onClick={() => useData.setState({ error: '' })}>{error}</span>}
-        <span className="hint"><kbd>Space</kbd> phát/dừng · <kbd>J</kbd><kbd>L</kbd> ±5s · <kbd>A</kbd> tấn công · <kbd>D</kbd> phòng thủ</span>
+        <span className="hint"><kbd>Space</kbd> phát/dừng · <kbd>J</kbd><kbd>L</kbd> ±5s · <kbd>I</kbd> vào · <kbd>O</kbd> ra · <kbd>A</kbd> tấn công · <kbd>D</kbd> phòng thủ</span>
+        <button className="btn sm primary" onClick={() => set({ overview: true })}>Tất cả trận</button>
         <button className="btn sm" title="Đưa các module về kích thước mặc định" onClick={L.reset}>Đặt lại bố cục</button>
         <span>{me}</span>
+        {isSuper && <span className="pill live">ADMIN</span>}
         <button className="btn sm" onClick={signOut}>Đăng xuất</button>
       </header>
+      {overview && <Overview />}
+      {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}
       <div className="workspace">
         <div className="col" style={{ width: L.left }}>
           <SplitV frac={L.leftSplit} setFrac={(f) => L.set({ leftSplit: f })} top={<Library />} bottom={<Roster />} />

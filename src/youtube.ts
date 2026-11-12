@@ -39,6 +39,7 @@ export const yt = {
   time: (): number => (yt.ready() ? player.getCurrentTime() : 0),
   duration: (): number => (yt.ready() ? player.getDuration() || 0 : 0),
   playing: (): boolean => yt.ready() && player.getPlayerState() === 1,
+  ended: (): boolean => yt.ready() && player.getPlayerState() === 0,
   seek(t: number) { if (yt.ready()) player.seekTo(Math.max(0, t), true) },
   play() { if (yt.ready()) player.playVideo() },
   pause() { if (yt.ready()) player.pauseVideo() },

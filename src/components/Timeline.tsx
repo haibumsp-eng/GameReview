@@ -1,12 +1,13 @@
 import { useRef } from 'react'
 import { useData, useUi, matches } from '../store'
 import { yt } from '../youtube'
+import { goToClip } from '../nav'
 import { fmt } from '../util'
 import { Panel } from './Panel'
 
 export function Timeline() {
-  const { gameId, clipId, filter, time, duration, set } = useUi()
-  const clips = useData((s) => s.clips).filter((c) => c.gameId === gameId)
+  const { gameId, videoId, clipId, filter, time, duration, inPoint, set } = useUi()
+  const clips = useData((s) => s.clips).filter((c) => c.gameId === gameId && c.videoId === videoId)
   const bar = useRef<HTMLDivElement>(null)
   const filtering = !!(filter.side || filter.playType || filter.playerIds.length)
 
@@ -36,13 +37,16 @@ export function Timeline() {
                   title={`${fmt(c.start)} – ${fmt(c.end)}`}
                   onClick={(e) => {
                     e.stopPropagation()
-                    set({ clipId: c.id, playlist: false })
-                    yt.seek(c.start)
+                    set({ playlist: false })
+                    goToClip(c)
                   }}
                 />
               ))}
             </div>
           ))}
+          {inPoint != null && duration > 0 && (
+            <div className="pending-range" style={{ left: pct(inPoint), width: pct(Math.max(0, time - inPoint)) }} title="Đang chờ điểm Ra (O)" />
+          )}
           <div className="playhead" style={{ left: pct(time) }} />
         </div>
       </div>

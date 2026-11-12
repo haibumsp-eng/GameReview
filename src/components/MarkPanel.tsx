@@ -3,19 +3,58 @@ import { PLAY_TYPES } from '../types'
 import { yt } from '../youtube'
 import { fmt } from '../util'
 import { Panel } from './Panel'
+import { AutoTextarea } from './AutoTextarea'
 
+const warn = (msg: string) => useData.setState({ error: msg })
+
+/** A / D: đánh dấu nhanh. Nếu đã bấm I trước đó thì lấy đoạn từ điểm Vào tới hiện tại. */
 export function markNow(side: 'ATK' | 'DEF') {
-  const { gameId, pre, post, set } = useUi.getState()
-  if (!gameId) return
-  const id = useData.getState().addClip(gameId, yt.time(), side, pre, post)
-  set({ clipId: id, playlist: false })
+  const { gameId, videoId, pre, post, inPoint, set } = useUi.getState()
+  if (!gameId || !videoId) return
+  const t = yt.time()
+  const useIn = inPoint != null && t > inPoint
+  const id = useData.getState().addClip(gameId, videoId, useIn ? inPoint! : t - pre, useIn ? t : t + post, side)
+  set({ clipId: id, playlist: false, inPoint: null, lastSide: side })
+}
+
+/** I: bắt đầu một tình huống mới tại vị trí hiện tại. */
+export function markIn() {
+  const { gameId, videoId, set } = useUi.getState()
+  if (!gameId || !videoId) return
+  set({ inPoint: yt.time() })
+}
+
+/** O: kết thúc tình huống đang chờ. Nếu không có điểm Vào đang chờ thì chỉnh điểm Ra của tình huống đang chọn. */
+export function markOut() {
+  const { gameId, videoId, inPoint, lastSide, set } = useUi.getState()
+  if (!gameId || !videoId) return
+  const t = yt.time()
+  if (inPoint == null) return setSelectedOut()
+  if (t <= inPoint + 0.5) return warn('Điểm Ra phải sau điểm Vào. Hãy chạy video tới chỗ muốn dừng rồi bấm O.')
+  const id = useData.getState().addClip(gameId, videoId, inPoint, t, lastSide)
+  set({ clipId: id, playlist: false, inPoint: null })
+}
+
+export function setSelectedIn() {
+  const { clipId } = useUi.getState()
+  const c = useData.getState().clips.find((x) => x.id === clipId)
+  if (c) useData.getState().updateClip(c.id, { start: Math.min(yt.time(), c.end - 1) })
+}
+export function setSelectedOut() {
+  const { clipId } = useUi.getState()
+  const c = useData.getState().clips.find((x) => x.id === clipId)
+  if (c) useData.getState().updateClip(c.id, { end: Math.max(yt.time(), c.start + 1) })
 }
 
 export function MarkPanel() {
-  const { gameId, clipId, squadId, set } = useUi()
+  const { gameId, clipId, squadId, inPoint, set } = useUi()
   const clip = useData((s) => s.clips.find((c) => c.id === clipId))
+  const allClips = useData((s) => s.clips)
   const players = useData((s) => s.players).filter((p) => p.squadId === squadId).sort((a, b) => a.number - b.number)
   const { updateClip, removeClip } = useData()
+
+  const used = [...new Set(allClips.filter((c) => c.gameId === gameId).map((c) => c.playType).filter(Boolean))]
+  const suggestions = [...new Set([...used, ...PLAY_TYPES])]
 
   const nudge = (k: 'start' | 'end', d: number) =>
     clip && updateClip(clip.id, { [k]: Math.max(0, clip[k] + d) })
@@ -33,16 +72,31 @@ export function MarkPanel() {
         <button className="btn def big" disabled={!gameId} onClick={() => markNow('DEF')}>Phòng thủ <kbd>D</kbd></button>
       </div>
 
+      <div className="inout">
+        <div className="row">
+          <button className="btn grow-btn" disabled={!gameId} onClick={markIn}><kbd>I</kbd> Điểm vào</button>
+          <button className="btn grow-btn" disabled={!gameId} onClick={markOut}><kbd>O</kbd> Điểm ra</button>
+        </div>
+        {inPoint != null ? (
+          <div className="inout-wait">
+            <span>Đã đặt <b>Vào {fmt(inPoint)}</b>. Chạy tới chỗ kết thúc rồi bấm <kbd>O</kbd> (hoặc <kbd>A</kbd>/<kbd>D</kbd> để chọn luôn tấn công/phòng thủ).</span>
+            <button className="btn sm" onClick={() => set({ inPoint: null })}>Huỷ <kbd>Esc</kbd></button>
+          </div>
+        ) : (
+          <div className="muted small-note">Chạy video tới lúc tình huống bắt đầu → bấm <kbd>I</kbd>; tới lúc kết thúc → bấm <kbd>O</kbd>.</div>
+        )}
+      </div>
+
       {!clip ? (
         <div className="placeholder small">
-          Bấm <kbd>A</kbd> / <kbd>D</kbd> khi xem để đánh dấu ngay tình huống,
+          Hoặc bấm <kbd>A</kbd> / <kbd>D</kbd> để đánh dấu nhanh quanh vị trí hiện tại,
           rồi gắn cầu thủ và ghi chú ở đây.
         </div>
       ) : (
         <div className="stack">
           <div className="seg-toggle">
-            <button className={clip.side === 'ATK' ? 'on atk' : ''} onClick={() => updateClip(clip.id, { side: 'ATK' })}>Tấn công</button>
-            <button className={clip.side === 'DEF' ? 'on def' : ''} onClick={() => updateClip(clip.id, { side: 'DEF' })}>Phòng thủ</button>
+            <button className={clip.side === 'ATK' ? 'on atk' : ''} onClick={() => { updateClip(clip.id, { side: 'ATK' }); set({ lastSide: 'ATK' }) }}>Tấn công</button>
+            <button className={clip.side === 'DEF' ? 'on def' : ''} onClick={() => { updateClip(clip.id, { side: 'DEF' }); set({ lastSide: 'DEF' }) }}>Phòng thủ</button>
           </div>
 
           <label className="field-label">Cầu thủ</label>
@@ -58,13 +112,16 @@ export function MarkPanel() {
             ))}
           </div>
 
-          <label className="field-label">Loại tình huống</label>
-          <select value={clip.playType} onChange={(e) => updateClip(clip.id, { playType: e.target.value })}>
-            <option value="">— chưa chọn —</option>
-            {PLAY_TYPES.map((t) => <option key={t}>{t}</option>)}
-          </select>
+          <label className="field-label">Tình huống (tự gõ hoặc chọn gợi ý, có thể để trống)</label>
+          <input
+            list="playtypes"
+            placeholder="vd: Pick & Roll, Zone press…"
+            value={clip.playType}
+            onChange={(e) => updateClip(clip.id, { playType: e.target.value })}
+          />
+          <datalist id="playtypes">{suggestions.map((t) => <option key={t} value={t} />)}</datalist>
 
-          <label className="field-label">Đoạn clip</label>
+          <label className="field-label">Đoạn clip: {fmt(clip.start)} → {fmt(clip.end)}</label>
           <div className="range">
             <div>
               <button className="btn sm" onClick={() => nudge('start', -1)}>−1</button>
@@ -79,12 +136,12 @@ export function MarkPanel() {
             </div>
           </div>
           <div className="row">
-            <button className="btn sm" onClick={() => updateClip(clip.id, { start: Math.min(yt.time(), clip.end - 1) })}>Đặt Vào = hiện tại</button>
-            <button className="btn sm" onClick={() => updateClip(clip.id, { end: Math.max(yt.time(), clip.start + 1) })}>Đặt Ra = hiện tại</button>
+            <button className="btn sm" onClick={setSelectedIn}>Vào = hiện tại <kbd>⇧I</kbd></button>
+            <button className="btn sm" onClick={setSelectedOut}>Ra = hiện tại <kbd>⇧O</kbd></button>
           </div>
 
-          <label className="field-label">Nhận xét</label>
-          <textarea rows={4} placeholder="Ghi chú tình huống…" value={clip.note} onChange={(e) => updateClip(clip.id, { note: e.target.value })} />
+          <label className="field-label">Nhận xét (không giới hạn độ dài)</label>
+          <AutoTextarea minRows={4} placeholder="Ghi chú tình huống…" value={clip.note} onChange={(e) => updateClip(clip.id, { note: e.target.value })} />
 
           <button className="btn danger" onClick={() => { removeClip(clip.id); set({ clipId: null }) }}>Xoá mark <kbd>Del</kbd></button>
         </div>

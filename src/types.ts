@@ -7,11 +7,19 @@ export interface Game {
   squadId: string
   title: string
   date: string
+}
+/** Một video (một hiệp / OT) của trận. Mốc thời gian của mark tính theo video này. */
+export interface GameVideo {
+  id: string
+  gameId: string
+  label: string
   youtubeId: string
+  position: number
 }
 export interface Clip {
   id: string
   gameId: string
+  videoId: string
   start: number
   end: number
   side: Side

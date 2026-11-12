@@ -3,16 +3,20 @@ import { useData, useUi, matches } from '../store'
 import { ExportModal } from './ExportModal'
 import { PLAY_TYPES } from '../types'
 import { yt } from '../youtube'
+import { goToClip } from '../nav'
 import { fmt } from '../util'
 import { Panel } from './Panel'
 
+/** Các tình huống khớp bộ lọc, trong cả trận, xếp theo hiệp rồi theo thời gian. */
 export function useFilteredClips() {
   const gameId = useUi((s) => s.gameId)
   const filter = useUi((s) => s.filter)
   const clips = useData((s) => s.clips)
+  const videos = useData((s) => s.videos)
+  const pos = new Map(videos.map((v) => [v.id, v.position]))
   return clips
     .filter((c) => c.gameId === gameId && matches(c, filter))
-    .sort((a, b) => a.start - b.start)
+    .sort((a, b) => (pos.get(a.videoId) ?? 0) - (pos.get(b.videoId) ?? 0) || a.start - b.start)
 }
 
 export function ClipList() {
@@ -22,6 +26,9 @@ export function ClipList() {
   const allPlayers = useData((s) => s.players)
   const total = useData((s) => s.clips).filter((c) => c.gameId === gameId).length
   const list = useFilteredClips()
+  const videos = useData((s) => s.videos).filter((v) => v.gameId === gameId)
+  const gameClips = useData((s) => s.clips).filter((c) => c.gameId === gameId)
+  const typeOptions = [...new Set([...gameClips.map((c) => c.playType).filter(Boolean), ...PLAY_TYPES])]
   const [exporting, setExporting] = useState(false)
   const plName = playlists.find((x) => x.id === playlistId)?.name
 
@@ -32,9 +39,8 @@ export function ClipList() {
 
   const startPlaylist = () => {
     if (!list.length) return
-    set({ playlist: true, clipId: list[0].id })
-    yt.seek(list[0].start)
-    yt.play()
+    set({ playlist: true })
+    goToClip(list[0], true)
   }
   const label = (ids: string[]) =>
     ids.map((id) => allPlayers.find((p) => p.id === id)).filter((p) => !!p).map((p) => `#${p!.number} ${p!.name}`).join(', ')
@@ -52,7 +58,7 @@ export function ClipList() {
         </>
       }
     >
-      {exporting && <ExportModal clips={list} title={plName ?? (active ? 'Tình huống đã lọc' : 'Tất cả tình huống')} onClose={() => setExporting(false)} />}
+      {exporting && <ExportModal clips={list} videos={videos} title={plName ?? (active ? 'Tình huống đã lọc' : 'Tất cả tình huống')} onClose={() => setExporting(false)} />}
       <div className="filters">
         {playlists.length > 0 && (
           <div className="row">
@@ -91,7 +97,7 @@ export function ClipList() {
         </div>
         <select value={filter.playType} onChange={(e) => setFilter({ playType: e.target.value })}>
           <option value="">Mọi loại</option>
-          {PLAY_TYPES.map((t) => <option key={t}>{t}</option>)}
+          {typeOptions.map((t) => <option key={t}>{t}</option>)}
         </select>
         <div className="chips">
           {players.map((p) => (
@@ -119,9 +125,10 @@ export function ClipList() {
           <li
             key={c.id}
             className={c.id === clipId ? 'item active' : 'item'}
-            onClick={() => { set({ clipId: c.id, playlist: false }); yt.seek(c.start) }}
+            onClick={() => { set({ playlist: false }); goToClip(c) }}
           >
             <span className={`badge ${c.side}`}>{c.side === 'ATK' ? 'ATK' : 'DEF'}</span>
+            {videos.length > 1 && <span className="tag">{videos.find((v) => v.id === c.videoId)?.label ?? '?'}</span>}
             <span className="mono">{fmt(c.start)}–{fmt(c.end)}</span>
             <span className="grow">
               {c.teamWide ? <b>Cả đội </b> : <b>{label(c.playerIds)} </b>}

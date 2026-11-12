@@ -28,3 +28,34 @@ export function parseYouTubeId(input: string): string | null {
   }
   return null
 }
+
+/** Nhãn mặc định cho video thứ n của trận: Hiệp 1..4, rồi OT1, OT2… */
+export function defaultLabel(n: number): string {
+  return n <= 4 ? `Hiệp ${n}` : `OT${n - 4}`
+}
+
+/**
+ * Đọc nhiều dòng link YouTube. Mỗi dòng: một link, hoặc "Tên video + link".
+ * Dòng không có tên sẽ được đặt Hiệp 1, 2, 3, 4, OT1…
+ */
+export function parseVideoLines(text: string, startIndex = 1): { videos: { label: string; youtubeId: string }[]; bad: number[] } {
+  const videos: { label: string; youtubeId: string }[] = []
+  const bad: number[] = []
+  const lines = text.split('\n').map((l) => l.trim())
+  lines.forEach((line, i) => {
+    if (!line) return
+    const url = line.match(/https?:\/\/\S+/)?.[0]
+    const rest = (url ? line.replace(url, '') : '').replace(/[\s:|\-–]+$/g, '').replace(/^[\s:|\-–]+/g, '').trim()
+    const id = parseYouTubeId(url ?? line)
+    if (!id) return void bad.push(i + 1)
+    videos.push({ label: rest || defaultLabel(startIndex + videos.length), youtubeId: id })
+  })
+  return { videos, bad }
+}
+
+/** Tên đăng nhập (không có @) được đổi thành email nội bộ để dùng với Supabase Auth. */
+export const USERNAME_DOMAIN = (import.meta.env.VITE_USERNAME_DOMAIN as string | undefined) || 'vercel.app'
+export function toLoginEmail(input: string): string {
+  const s = input.trim()
+  return s.includes('@') ? s : `${s.toLowerCase()}@${USERNAME_DOMAIN}`
+}

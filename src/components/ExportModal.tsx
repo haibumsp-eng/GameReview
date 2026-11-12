@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { exportVideo, mergeSegs } from '../lib/exportVideo'
 import { fmt } from '../util'
-import type { Clip } from '../types'
+import type { Clip, GameVideo } from '../types'
 
-export function ExportModal(props: { clips: Clip[]; title: string; onClose: () => void }) {
-  const [file, setFile] = useState<File | null>(null)
+export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: string; onClose: () => void }) {
+  const [files, setFiles] = useState<Record<string, File | undefined>>({})
   const [offset, setOffset] = useState(0)
   const [accurate, setAccurate] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -13,14 +13,19 @@ export function ExportModal(props: { clips: Clip[]; title: string; onClose: () =
   const [err, setErr] = useState('')
   const [result, setResult] = useState<{ url: string; size: number } | null>(null)
 
-  const segs = mergeSegs(props.clips.map((c) => ({ start: c.start, end: c.end })))
-  const total = segs.reduce((a, s) => a + (s.end - s.start), 0)
+  // Chỉ cần file cho những hiệp có tình huống được chọn.
+  const groups = [...props.videos]
+    .sort((a, b) => a.position - b.position)
+    .map((v) => ({ video: v, segs: mergeSegs(props.clips.filter((c) => c.videoId === v.id).map((c) => ({ start: c.start, end: c.end }))) }))
+    .filter((g) => g.segs.length)
+  const total = groups.reduce((a, g) => a + g.segs.reduce((x, s) => x + (s.end - s.start), 0), 0)
+  const count = groups.reduce((a, g) => a + g.segs.length, 0)
+  const ready = groups.length > 0 && groups.every((g) => files[g.video.id])
 
   const run = async () => {
-    if (!file) return
     setBusy(true); setErr(''); setResult(null)
     try {
-      const blob = await exportVideo(file, segs, {
+      const blob = await exportVideo(groups.map((g) => ({ file: files[g.video.id]!, segs: g.segs })), {
         offset, accurate,
         onProgress: (m, f) => { setMsg(m); setFrac(f) },
       })
@@ -42,12 +47,17 @@ export function ExportModal(props: { clips: Clip[]; title: string; onClose: () =
           <button className="icon-btn" disabled={busy} onClick={props.onClose}>×</button>
         </div>
         <div className="muted">
-          {segs.length} đoạn, tổng {fmt(total)}. App cắt ngay trên máy bạn từ file video gốc, file không bị upload đi đâu.
+          {count} đoạn, tổng {fmt(total)}. App cắt ngay trên máy bạn từ file video gốc, file không bị upload đi đâu.
         </div>
 
-        <label className="field-label">1. Chọn file video gốc (cùng nội dung với video YouTube của trận)</label>
-        <input type="file" accept="video/*" disabled={busy} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        {file && <div className="muted">{file.name} · {(file.size / 1e6).toFixed(0)} MB</div>}
+        <label className="field-label">1. Chọn file video gốc của từng hiệp (cùng nội dung với video YouTube)</label>
+        {groups.map((g) => (
+          <div key={g.video.id} className="stack">
+            <div className="row"><b>{g.video.label}</b><span className="muted">{g.segs.length} đoạn</span></div>
+            <input type="file" accept="video/*" disabled={busy} onChange={(e) => setFiles({ ...files, [g.video.id]: e.target.files?.[0] })} />
+            {files[g.video.id] && <div className="muted">{files[g.video.id]!.name} · {(files[g.video.id]!.size / 1e6).toFixed(0)} MB</div>}
+          </div>
+        ))}
 
         <label className="field-label">2. Lệch thời gian (giây), nếu file gốc dài/ngắn hơn bản YouTube</label>
         <input type="number" step="0.5" value={offset} disabled={busy} onChange={(e) => setOffset(+e.target.value)} />
@@ -68,7 +78,7 @@ export function ExportModal(props: { clips: Clip[]; title: string; onClose: () =
         {result ? (
           <a className="btn primary" href={result.url} download={`${safe}.mp4`}>⬇ Tải file ({(result.size / 1e6).toFixed(1)} MB)</a>
         ) : (
-          <button className="btn primary" disabled={!file || busy || !segs.length} onClick={run}>{busy ? 'Đang xử lý…' : 'Bắt đầu cắt'}</button>
+          <button className="btn primary" disabled={!ready || busy} onClick={run}>{busy ? 'Đang xử lý…' : 'Bắt đầu cắt'}</button>
         )}
       </div>
     </div>

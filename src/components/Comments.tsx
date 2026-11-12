@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useData, useUi } from '../store'
 import { fmt } from '../util'
-import { yt } from '../youtube'
+import { goToClip } from '../nav'
+import { AutoTextarea } from './AutoTextarea'
 import { Panel } from './Panel'
 
 export function Comments() {
@@ -27,7 +28,7 @@ export function Comments() {
             <div className="card stack clip-sum">
               <div className="row">
                 <span className={`badge ${clip.side}`}>{clip.side === 'ATK' ? 'TẤN CÔNG' : 'PHÒNG THỦ'}</span>
-                <button className="timebtn" onClick={() => yt.seek(clip.start)}>{fmt(clip.start)}–{fmt(clip.end)}</button>
+                <button className="timebtn" onClick={() => goToClip(clip)}>{fmt(clip.start)}–{fmt(clip.end)}</button>
                 {clip.playType && <span className="tag">{clip.playType}</span>}
               </div>
               <div>
@@ -44,16 +45,18 @@ export function Comments() {
             {list.map((c) => (
               <li key={c.id} className="cmt">
                 <div className="cmt-h"><b>{profiles[c.author] || 'Ẩn danh'}</b> <span className="muted">{new Date(c.createdAt).toLocaleString('vi-VN')}</span></div>
-                <div>{c.text}</div>
+                <div style={{ whiteSpace: 'pre-wrap' }}>{c.text}</div>
               </li>
             ))}
           </ul>
           <div className="row">
-            <input
-              placeholder="Viết bình luận…"
+            <AutoTextarea
+              minRows={1}
+              maxHeight={140}
+              placeholder="Viết bình luận… (Enter để gửi, Shift+Enter xuống dòng)"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && send()}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
             />
             <button className="btn primary sm" onClick={send}>Gửi</button>
           </div>

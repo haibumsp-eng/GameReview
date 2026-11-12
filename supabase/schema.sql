@@ -8,6 +8,10 @@ create table if not exists profiles (
   id uuid primary key references auth.users on delete cascade,
   name text not null default ''
 );
+-- Quản trị toàn hệ thống: xem được mọi tuyến đội / trận đấu. Thêm bằng supabase/make-admin.sql.
+create table if not exists app_admins (
+  user_id uuid primary key references auth.users on delete cascade
+);
 create table if not exists squads (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -32,6 +36,16 @@ create table if not exists games (
   played_on date,
   youtube_id text not null
 );
+-- Mỗi trận có nhiều video (Hiệp 1..4, OT...), mỗi video là một link YouTube.
+create table if not exists game_videos (
+  id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games on delete cascade,
+  label text not null default 'Hiệp 1',
+  youtube_id text not null,
+  position int not null default 1
+);
+create index if not exists game_videos_game_idx on game_videos (game_id);
+alter table games alter column youtube_id drop not null;
 create table if not exists clips (
   id uuid primary key default gen_random_uuid(),
   game_id uuid not null references games on delete cascade,
@@ -43,6 +57,7 @@ create table if not exists clips (
   note text not null default '',
   author uuid default auth.uid() references auth.users on delete set null
 );
+alter table clips add column if not exists video_id uuid references game_videos on delete cascade;
 create table if not exists clip_players (
   clip_id uuid references clips on delete cascade,
   player_id uuid references players on delete cascade,
@@ -60,10 +75,22 @@ create index if not exists comments_clip_idx on comments (clip_id);
 create index if not exists players_squad_idx on players (squad_id);
 create index if not exists games_squad_idx on games (squad_id);
 
+-- Chuyển dữ liệu cũ (trận chỉ có 1 link) sang bảng game_videos.
+insert into game_videos (game_id, label, youtube_id, position)
+  select g.id, 'Video 1', g.youtube_id, 1 from games g
+  where g.youtube_id is not null and not exists (select 1 from game_videos v where v.game_id = g.id);
+update clips c set video_id = (select v.id from game_videos v where v.game_id = c.game_id order by v.position limit 1)
+  where c.video_id is null;
+create index if not exists clips_video_idx on clips (video_id);
+
 -- ---------- Hàm trợ giúp cho RLS ----------
+create or replace function is_super() returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (select 1 from app_admins where user_id = auth.uid())
+$$;
 create or replace function is_member(sid uuid) returns boolean
 language sql security definer stable set search_path = public as $$
-  select exists (select 1 from members where squad_id = sid and user_id = auth.uid())
+  select is_super() or exists (select 1 from members where squad_id = sid and user_id = auth.uid())
 $$;
 create or replace function is_editor(sid uuid) returns boolean
 language sql security definer stable set search_path = public as $$
@@ -91,6 +118,8 @@ alter table games        enable row level security;
 alter table clips        enable row level security;
 alter table clip_players enable row level security;
 alter table comments     enable row level security;
+alter table app_admins   enable row level security;
+alter table game_videos  enable row level security;
 
 drop policy if exists profiles_read   on profiles;
 drop policy if exists profiles_update on profiles;
@@ -120,6 +149,15 @@ drop policy if exists games_read  on games;
 drop policy if exists games_write on games;
 create policy games_read  on games for select to authenticated using (is_member(squad_id));
 create policy games_write on games for all to authenticated using (is_editor(squad_id)) with check (is_editor(squad_id));
+
+drop policy if exists app_admins_self on app_admins;
+create policy app_admins_self on app_admins for select to authenticated using (user_id = auth.uid());
+
+drop policy if exists game_videos_read  on game_videos;
+drop policy if exists game_videos_write on game_videos;
+create policy game_videos_read  on game_videos for select to authenticated using (is_member(squad_of_game(game_id)));
+create policy game_videos_write on game_videos for all to authenticated
+  using (is_editor(squad_of_game(game_id))) with check (is_editor(squad_of_game(game_id)));
 
 drop policy if exists clips_read  on clips;
 drop policy if exists clips_write on clips;
@@ -157,7 +195,7 @@ create or replace function add_member(p_squad uuid, p_email text, p_role text de
 language plpgsql security definer set search_path = public as $$
 declare uid uuid;
 begin
-  if not is_admin(p_squad) then raise exception 'chỉ admin mới thêm được thành viên'; end if;
+  if not (is_admin(p_squad) or is_super()) then raise exception 'chỉ admin mới thêm được thành viên'; end if;
   if p_role not in ('admin','coach','viewer') then raise exception 'role không hợp lệ'; end if;
   select id into uid from auth.users where lower(email) = lower(trim(p_email));
   if uid is null then raise exception 'Chưa có tài khoản với email này. Hãy nhờ họ đăng ký trước.'; end if;
@@ -189,6 +227,7 @@ do $$ begin
   begin alter publication supabase_realtime add table comments;     exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table games;        exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table players;      exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table game_videos;  exception when duplicate_object then null; end;
 end $$;
 
 -- ---------- Playlist đã lưu (bộ lọc có tên) ----------
@@ -212,3 +251,15 @@ create policy playlists_write on playlists for all to authenticated
 do $$ begin
   begin alter publication supabase_realtime add table playlists; exception when duplicate_object then null; end;
 end $$;
+
+-- ---------- Tổng quan trận đấu (cho màn hình chọn trận / tìm kiếm) ----------
+-- security invoker: RLS vẫn áp dụng, coach chỉ thấy trận của tuyến mình, quản trị thấy tất cả.
+create or replace function game_overview()
+returns table (game_id uuid, squad_id uuid, squad_name text, title text, played_on date, videos int, clips int)
+language sql stable security invoker set search_path = public as $$
+  select g.id, g.squad_id, s.name, g.title, g.played_on,
+         (select count(*)::int from game_videos v where v.game_id = g.id),
+         (select count(*)::int from clips c where c.game_id = g.id)
+  from games g join squads s on s.id = g.squad_id
+  order by g.played_on desc nulls last, g.title
+$$;

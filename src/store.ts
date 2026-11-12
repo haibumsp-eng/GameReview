@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import type { Clip, Comment, Game, Player, Playlist, Side, Squad } from './types'
-import { uid } from './util'
+import type { Clip, Comment, Game, GameVideo, Player, Playlist, Side, Squad } from './types'
+import { toLoginEmail, uid } from './util'
 
 /* ---------- Dữ liệu (Supabase) ---------- */
 interface DataState {
@@ -11,14 +11,16 @@ interface DataState {
   squads: Squad[]
   players: Player[]
   games: Game[]
+  videos: GameVideo[]
+  isSuper: boolean // tài khoản quản trị: xem được mọi tuyến đội
   clips: Clip[] // chỉ của trận đang mở
   comments: Comment[] // chỉ của trận đang mở
   playlists: Playlist[] // chỉ của trận đang mở
   profiles: Record<string, string>
   error: string
   init: () => void
-  signIn: (email: string, password: string) => Promise<string | null>
-  signUp: (email: string, password: string, name: string) => Promise<string | null>
+  signIn: (login: string, password: string) => Promise<string | null>
+  signUp: (login: string, password: string, name: string) => Promise<string | null>
   signOut: () => Promise<void>
   loadBase: () => Promise<void>
   loadGame: (gameId: string | null) => Promise<void>
@@ -27,9 +29,12 @@ interface DataState {
   addPlayer: (squadId: string, number: number, name: string) => void
   addPlayers: (squadId: string, list: { number: number; name: string }[]) => void
   removePlayer: (id: string) => void
-  addGame: (g: Omit<Game, 'id'>) => string
+  addGame: (g: Omit<Game, 'id'>, videos: { label: string; youtubeId: string }[]) => { gameId: string; videoId: string }
   removeGame: (id: string) => void
-  addClip: (gameId: string, at: number, side: Side, pre: number, post: number) => string
+  addVideo: (gameId: string, label: string, youtubeId: string) => string
+  removeVideo: (id: string) => void
+  renameVideo: (id: string, label: string) => void
+  addClip: (gameId: string, videoId: string, start: number, end: number, side: Side) => string
   updateClip: (id: string, patch: Partial<Clip>) => void
   removeClip: (id: string) => void
   addComment: (clipId: string, text: string) => void
@@ -78,7 +83,7 @@ export const useData = create<DataState>((set, get) => {
   return {
     ready: false,
     session: null,
-    squads: [], players: [], games: [], clips: [], comments: [], playlists: [],
+    squads: [], players: [], games: [], videos: [], isSuper: false, clips: [], comments: [], playlists: [],
     profiles: {},
     error: '',
 
@@ -90,7 +95,7 @@ export const useData = create<DataState>((set, get) => {
       supabase.auth.onAuthStateChange((_e, session) => {
         set({ session })
         if (session) get().loadBase()
-        else set({ squads: [], players: [], games: [], clips: [], comments: [] })
+        else set({ squads: [], players: [], games: [], videos: [], isSuper: false, clips: [], comments: [], playlists: [] })
       })
       supabase
         .channel('gamereview')
@@ -98,29 +103,34 @@ export const useData = create<DataState>((set, get) => {
         .subscribe()
     },
 
-    signIn: async (email, password) => {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+    signIn: async (login, password) => {
+      const { error } = await supabase.auth.signInWithPassword({ email: toLoginEmail(login), password })
       return error?.message ?? null
     },
-    signUp: async (email, password, name) => {
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } })
+    signUp: async (login, password, name) => {
+      const { data, error } = await supabase.auth.signUp({ email: toLoginEmail(login), password, options: { data: { name: name || login.split('@')[0] } } })
       if (error) return error.message
       return data.session ? null : 'Đã gửi email xác nhận. Hãy bấm link trong email rồi đăng nhập.'
     },
     signOut: async () => { await supabase.auth.signOut() },
 
     loadBase: async () => {
-      const [sq, pl, ga, pr] = await Promise.all([
+      const uidNow = get().session?.user.id
+      const [sq, pl, ga, pr, gv, ad] = await Promise.all([
         supabase.from('squads').select('*').order('created_at'),
         supabase.from('players').select('*'),
         supabase.from('games').select('*').order('played_on', { ascending: false }),
         supabase.from('profiles').select('*'),
+        supabase.from('game_videos').select('*').order('position'),
+        uidNow ? supabase.from('app_admins').select('user_id').eq('user_id', uidNow) : Promise.resolve({ data: [], error: null }),
       ])
-      if (fail(sq.error) || fail(pl.error) || fail(ga.error) || fail(pr.error)) return
+      if (fail(sq.error) || fail(pl.error) || fail(ga.error) || fail(pr.error) || fail(gv.error) || fail(ad.error)) return
       set({
         squads: (sq.data ?? []).map((r: any) => ({ id: r.id, name: r.name })),
         players: (pl.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, number: r.number, name: r.name })),
-        games: (ga.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, title: r.title, date: r.played_on ?? '', youtubeId: r.youtube_id })),
+        games: (ga.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, title: r.title, date: r.played_on ?? '' })),
+        videos: (gv.data ?? []).map((r: any) => ({ id: r.id, gameId: r.game_id, label: r.label, youtubeId: r.youtube_id, position: r.position })),
+        isSuper: (ad.data ?? []).length > 0,
         profiles: Object.fromEntries((pr.data ?? []).map((r: any) => [r.id, r.name])),
       })
     },
@@ -137,7 +147,7 @@ export const useData = create<DataState>((set, get) => {
       if (fail(e2)) return
       // Giữ lại thay đổi cục bộ chưa ghi xong.
       const clips: Clip[] = (cl ?? []).map((r: any) => ({
-        id: r.id, gameId: r.game_id, start: r.start_s, end: r.end_s, side: r.side,
+        id: r.id, gameId: r.game_id, videoId: r.video_id ?? '', start: r.start_s, end: r.end_s, side: r.side,
         teamWide: r.team_wide, playerIds: r.clip_players.map((x: any) => x.player_id),
         playType: r.play_type ?? '', note: r.note ?? '', author: r.author ?? '',
         ...pending.get(r.id),
@@ -182,28 +192,49 @@ export const useData = create<DataState>((set, get) => {
       }))
       supabase.from('players').delete().eq('id', id).then(({ error }) => fail(error))
     },
-    addGame: (g) => {
+    addGame: (g, vids) => {
       const id = uid()
-      set((s) => ({ games: [...s.games, { ...g, id }] }))
-      supabase.from('games').insert({ id, squad_id: g.squadId, title: g.title, played_on: g.date || null, youtube_id: g.youtubeId })
+      const rows: GameVideo[] = vids.map((v, i) => ({ id: uid(), gameId: id, label: v.label, youtubeId: v.youtubeId, position: i + 1 }))
+      set((s) => ({ games: [...s.games, { ...g, id }], videos: [...s.videos, ...rows] }))
+      supabase.from('games').insert({ id, squad_id: g.squadId, title: g.title, played_on: g.date || null })
+        .then(async ({ error }) => {
+          if (fail(error)) return get().loadBase()
+          const r2 = await supabase.from('game_videos').insert(rows.map((v) => ({ id: v.id, game_id: id, label: v.label, youtube_id: v.youtubeId, position: v.position })))
+          if (fail(r2.error)) get().loadBase()
+        })
+      return { gameId: id, videoId: rows[0]?.id ?? '' }
+    },
+    addVideo: (gameId, label, youtubeId) => {
+      const id = uid()
+      const position = Math.max(0, ...get().videos.filter((v) => v.gameId === gameId).map((v) => v.position)) + 1
+      set((s) => ({ videos: [...s.videos, { id, gameId, label, youtubeId, position }] }))
+      supabase.from('game_videos').insert({ id, game_id: gameId, label, youtube_id: youtubeId, position })
         .then(({ error }) => { if (fail(error)) get().loadBase() })
       return id
     },
+    removeVideo: (id) => {
+      set((s) => ({ videos: s.videos.filter((v) => v.id !== id), clips: s.clips.filter((c) => c.videoId !== id) }))
+      supabase.from('game_videos').delete().eq('id', id).then(({ error }) => fail(error))
+    },
+    renameVideo: (id, label) => {
+      set((s) => ({ videos: s.videos.map((v) => (v.id === id ? { ...v, label } : v)) }))
+      supabase.from('game_videos').update({ label }).eq('id', id).then(({ error }) => fail(error))
+    },
     removeGame: (id) => {
-      set((s) => ({ games: s.games.filter((g) => g.id !== id), clips: s.clips.filter((c) => c.gameId !== id) }))
+      set((s) => ({ games: s.games.filter((g) => g.id !== id), videos: s.videos.filter((v) => v.gameId !== id), clips: s.clips.filter((c) => c.gameId !== id) }))
       supabase.from('games').delete().eq('id', id).then(({ error }) => fail(error))
     },
-    addClip: (gameId, at, side, pre, post) => {
+    addClip: (gameId, videoId, start, end, side) => {
       const id = uid()
       const clip: Clip = {
-        id, gameId, side,
-        start: Math.max(0, at - pre), end: at + post,
+        id, gameId, videoId, side,
+        start: Math.max(0, start), end: Math.max(start + 1, end),
         teamWide: false, playerIds: [], playType: '', note: '',
         author: get().session?.user.id ?? '',
       }
       set((s) => ({ clips: [...s.clips, clip] }))
       supabase.from('clips').insert({
-        id, game_id: gameId, side, start_s: clip.start, end_s: clip.end,
+        id, game_id: gameId, video_id: videoId, side, start_s: clip.start, end_s: clip.end,
       }).then(({ error }) => { if (fail(error)) get().loadGame(gameId) })
       return id
     },
@@ -246,6 +277,7 @@ export interface Filter { side: Side | null; playerIds: string[]; playType: stri
 interface UiState {
   squadId: string
   gameId: string | null
+  videoId: string | null // video (hiệp) đang xem
   clipId: string | null
   filter: Filter
   pre: number
@@ -255,11 +287,17 @@ interface UiState {
   playing: boolean
   playlist: boolean
   playlistId: string
+  inPoint: number | null // điểm Vào (phím I) đang chờ điểm Ra
+  lastSide: Side
+  pending: { t: number; play: boolean } | null // tua tới đây sau khi video mới tải xong
+  overview: boolean // màn hình tổng quan trận đấu
+  autoNext: boolean // hết hiệp tự sang hiệp sau
   set: (p: Partial<UiState>) => void
 }
 export const useUi = create<UiState>((set) => ({
   squadId: '',
   gameId: null,
+  videoId: null,
   clipId: null,
   filter: { side: null, playerIds: [], playType: '' },
   pre: 5,
@@ -269,6 +307,11 @@ export const useUi = create<UiState>((set) => ({
   playing: false,
   playlist: false,
   playlistId: '',
+  inPoint: null,
+  lastSide: 'ATK',
+  pending: null,
+  overview: false,
+  autoNext: true,
   set: (p) => set(p),
 }))
 
@@ -277,4 +320,18 @@ export function matches(c: Clip, f: Filter): boolean {
   if (f.playType && c.playType !== f.playType) return false
   if (f.playerIds.length && !f.playerIds.some((id) => c.playerIds.includes(id))) return false
   return true
+}
+
+/** Video theo thứ tự hiệp của một trận. */
+export function videosOf(gameId: string | null): GameVideo[] {
+  if (!gameId) return []
+  return useData.getState().videos.filter((v) => v.gameId === gameId).sort((a, b) => a.position - b.position)
+}
+
+/** Mở một trận: chọn video đầu tiên và xoá trạng thái của trận cũ. */
+export function selectGame(gameId: string | null) {
+  useUi.getState().set({
+    gameId, videoId: videosOf(gameId)[0]?.id ?? null, clipId: null,
+    inPoint: null, playlist: false, playlistId: '', pending: null,
+  })
 }
