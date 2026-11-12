@@ -362,24 +362,25 @@ a.btn { text-decoration: none; text-align: center; }
 /* ---------- Thẻ nhận xét trên video (được quay vào file) ---------- */
 .video-wrap { container-type: size; }
 .caption {
-  position: absolute; z-index: 5; pointer-events: none; max-width: 42%;
-  display: flex; flex-direction: column; gap: .4em;
-  padding: .7em .9em; border-radius: .6em;
-  background: #000000c2; border: 1px solid #ffffff1f; backdrop-filter: blur(4px);
-  font-size: clamp(11px, 1.55cqw, 26px); line-height: 1.35; color: #fff;
-  box-shadow: 0 .4em 1.4em #0008;
+  position: absolute; z-index: 5; pointer-events: none; max-width: 36%;
+  display: flex; flex-direction: column; gap: .3em;
+  padding: .45em .65em; border-radius: .5em;
+  background: #0000006b; border: 1px solid #ffffff14;
+  backdrop-filter: blur(8px) saturate(1.2); -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  font-size: clamp(10px, 1.3cqw, 22px); line-height: 1.3; color: #fff;
+  text-shadow: 0 1px 2px #000c;
 }
 .caption-tl { top: 3cqh; left: 2cqw; }
 .caption-tr { top: 3cqh; right: 2cqw; }
 .caption-bl { bottom: 3cqh; left: 2cqw; }
 .caption-br { bottom: 3cqh; right: 2cqw; }
 .caption-head { display: flex; flex-wrap: wrap; align-items: center; gap: .45em; }
-.caption-side { font-family: var(--font-display); font-stretch: 112%; font-weight: 800; font-size: .82em; padding: .15em .5em; border-radius: .35em; letter-spacing: .03em; }
+.caption-side { font-family: var(--font-display); font-stretch: 112%; font-weight: 800; font-size: .75em; padding: .1em .45em; border-radius: .3em; letter-spacing: .03em; text-shadow: none; }
 .caption-side.ATK { background: var(--atk); color: var(--accent-ink); }
 .caption-side.DEF { background: var(--def); color: #1a0500; }
 .caption-who { font-weight: 600; }
-.caption-type { font-size: .85em; color: var(--accent); border: 1px solid var(--accent-line); border-radius: .35em; padding: 0 .45em; }
-.caption-note { font-weight: 400; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; border-left: .2em solid var(--accent); padding-left: .55em; }
+.caption-type { font-size: .82em; color: var(--accent); }
+.caption-note { font-weight: 400; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; border-left: .15em solid var(--accent); padding-left: .5em; }
 
 /* Ô chọn góc trong cửa sổ quay */
 .caption-frame { position: relative; aspect-ratio: 16 / 9; background: repeating-linear-gradient(135deg, #15151a 0 10px, #111114 10px 20px); border: 1px solid var(--line-2); border-radius: 8px; }
