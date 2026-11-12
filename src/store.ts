@@ -359,6 +359,19 @@ export const useData = create<DataState>((set, get) => {
 })
 
 /* ---------- Trạng thái giao diện (không lưu) ---------- */
+export type Corner = 'tl' | 'tr' | 'bl' | 'br'
+export interface Caption { on: boolean; pos: Corner }
+function loadCaption(): Caption {
+  try {
+    const c = JSON.parse(localStorage.getItem('gr-caption') ?? '')
+    if (c && typeof c.on === 'boolean' && ['tl', 'tr', 'bl', 'br'].includes(c.pos)) return c
+  } catch { /* chưa lưu hoặc trình duyệt chặn */ }
+  return { on: true, pos: 'bl' }
+}
+export function setCaption(c: Caption) {
+  useUi.getState().set({ caption: c })
+  try { localStorage.setItem('gr-caption', JSON.stringify(c)) } catch { /* bỏ qua */ }
+}
 export interface RecState {
   phase: 'recording' | 'waiting' | 'hidden' | 'done' | 'error'
   index: number // đoạn đang ghi (bắt đầu từ 1)
@@ -391,6 +404,7 @@ interface UiState {
   overview: boolean // màn hình tổng quan trận đấu
   autoNext: boolean // hết hiệp tự sang hiệp sau
   toast: string // thông báo xanh ngắn (tự ẩn)
+  caption: Caption // thẻ nhận xét trên video khi quay / phát playlist
   rec: RecState | null // trạng thái quay màn hình
   set: (p: Partial<UiState>) => void
 }
@@ -414,6 +428,7 @@ export const useUi = create<UiState>((set) => ({
   overview: false,
   autoNext: true,
   toast: '',
+  caption: loadCaption(),
   rec: null,
   set: (p) => set(p),
 }))

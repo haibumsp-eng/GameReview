@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { exportVideo, mergeSegs } from '../lib/exportVideo'
 import { canRecord, pickFormat, runRecording, startCapture } from '../lib/recordScreen'
-import { useUi } from '../store'
+import { useUi, setCaption, type Corner } from '../store'
 import { fmt } from '../util'
 import type { Clip, GameVideo } from '../types'
 
 export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: string; onClose: () => void }) {
   const [mode, setMode] = useState<'record' | 'file'>(canRecord() ? 'record' : 'file')
+  const caption = useUi((s) => s.caption)
   const [recErr, setRecErr] = useState('')
   const [files, setFiles] = useState<Record<string, File | undefined>>({})
   const [offset, setOffset] = useState(0)
@@ -89,6 +90,25 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
                 <li>Thời gian quay bằng độ dài video: khoảng <b>{fmt(total)}</b>. Nếu bạn chuyển sang tab khác, app <b>tự tạm dừng</b> và ghi tiếp khi bạn quay lại.</li>
               </ol>
               <div className="muted">File sẽ là .{pickFormat().ext}{pickFormat().ext === 'mp4' ? ' (xem được trên điện thoại)' : ' (xem tốt trên máy tính)'}.</div>
+            </div>
+            <div className="card stack">
+              <label className="row tight">
+                <input type="checkbox" checked={caption.on} onChange={(e) => setCaption({ ...caption, on: e.target.checked })} />
+                <b>Hiện nhận xét của HLV trong video</b>
+              </label>
+              {caption.on && (
+                <div className="caption-pick">
+                  <div className="caption-frame">
+                    <span className="caption-frame-hint">Chọn góc không che bảng tỉ số / tình huống</span>
+                    {(['tl', 'tr', 'bl', 'br'] as Corner[]).map((pos) => (
+                      <button key={pos} className={`corner corner-${pos} ${caption.pos === pos ? 'on' : ''}`} onClick={() => setCaption({ ...caption, pos })}>
+                        {caption.pos === pos ? 'Nhận xét ở đây' : ''}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="muted small-note">Mẹo: bấm “▶ Phát” danh sách ở module Tình huống để xem trước vị trí trên video thật.</div>
+                </div>
+              )}
             </div>
             {recErr && <div className="err">{recErr}</div>}
             <button className="btn primary" disabled={!canRecord() || !count} onClick={startRec}>● Bắt đầu quay</button>

@@ -358,3 +358,34 @@ a.btn { text-decoration: none; text-align: center; }
 .code-input::placeholder { letter-spacing: 0; font-family: var(--font-ui); font-weight: 400; font-size: 14px; }
 .join-code-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .join-code { font-family: var(--font-display); font-stretch: 112%; font-weight: 800; font-size: 30px; letter-spacing: .25em; color: var(--accent); }
+
+/* ---------- Thẻ nhận xét trên video (được quay vào file) ---------- */
+.video-wrap { container-type: size; }
+.caption {
+  position: absolute; z-index: 5; pointer-events: none; max-width: 42%;
+  display: flex; flex-direction: column; gap: .4em;
+  padding: .7em .9em; border-radius: .6em;
+  background: #000000c2; border: 1px solid #ffffff1f; backdrop-filter: blur(4px);
+  font-size: clamp(11px, 1.55cqw, 26px); line-height: 1.35; color: #fff;
+  box-shadow: 0 .4em 1.4em #0008;
+}
+.caption-tl { top: 3cqh; left: 2cqw; }
+.caption-tr { top: 3cqh; right: 2cqw; }
+.caption-bl { bottom: 3cqh; left: 2cqw; }
+.caption-br { bottom: 3cqh; right: 2cqw; }
+.caption-head { display: flex; flex-wrap: wrap; align-items: center; gap: .45em; }
+.caption-side { font-family: var(--font-display); font-stretch: 112%; font-weight: 800; font-size: .82em; padding: .15em .5em; border-radius: .35em; letter-spacing: .03em; }
+.caption-side.ATK { background: var(--atk); color: var(--accent-ink); }
+.caption-side.DEF { background: var(--def); color: #1a0500; }
+.caption-who { font-weight: 600; }
+.caption-type { font-size: .85em; color: var(--accent); border: 1px solid var(--accent-line); border-radius: .35em; padding: 0 .45em; }
+.caption-note { font-weight: 400; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; border-left: .2em solid var(--accent); padding-left: .55em; }
+
+/* Ô chọn góc trong cửa sổ quay */
+.caption-frame { position: relative; aspect-ratio: 16 / 9; background: repeating-linear-gradient(135deg, #15151a 0 10px, #111114 10px 20px); border: 1px solid var(--line-2); border-radius: 8px; }
+.caption-frame-hint { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 12px; text-align: center; padding: 0 30%; }
+.corner { position: absolute; width: 38%; height: 30%; background: #ffffff0a; border: 1px dashed var(--line-2); border-radius: 6px; cursor: pointer; color: var(--accent-ink); font-weight: 700; font-size: 12px; }
+.corner:hover { border-color: var(--accent); background: var(--accent-soft); }
+.corner.on { background: var(--accent); border: 1px solid var(--accent); }
+.corner-tl { top: 6%; left: 3%; } .corner-tr { top: 6%; right: 3%; }
+.corner-bl { bottom: 6%; left: 3%; } .corner-br { bottom: 6%; right: 3%; }
