@@ -183,3 +183,11 @@ a.btn { text-decoration: none; text-align: center; }
 .link-ok { font-weight: 600; text-align: center; }
 .link-ok.ok { color: var(--accent); }
 .link-ok.bad { color: var(--def); }
+.video-wrap { isolation: isolate; }
+.rec-hud { position: fixed; top: 6px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 10px; background: #1a0000; color: #fff; border: 1px solid #ff3b30; border-radius: 999px; padding: 6px 8px 6px 14px; box-shadow: 0 4px 20px #000a; }
+.rec-hud.hidden, .rec-hud.waiting { border-color: #ffb020; background: #1a1200; }
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff3b30; animation: recblink 1s infinite; }
+.rec-hud.waiting .rec-dot, .rec-hud.hidden .rec-dot { background: #ffb020; animation: none; }
+@keyframes recblink { 50% { opacity: .2; } }
+.rec-notes ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.rec-preview { width: 100%; max-height: 260px; background: #000; border-radius: 6px; }

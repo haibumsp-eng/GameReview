@@ -278,6 +278,17 @@ export const useData = create<DataState>((set, get) => {
 })
 
 /* ---------- Trạng thái giao diện (không lưu) ---------- */
+export interface RecState {
+  phase: 'recording' | 'waiting' | 'hidden' | 'done' | 'error'
+  index: number // đoạn đang ghi (bắt đầu từ 1)
+  total: number
+  remain: number // số giây còn phải ghi (ước tính)
+  msg: string
+  url?: string
+  size?: number
+  ext?: string
+  title?: string
+}
 export interface Filter { side: Side | null; playerIds: string[]; playType: string }
 interface UiState {
   squadId: string
@@ -298,6 +309,7 @@ interface UiState {
   overview: boolean // màn hình tổng quan trận đấu
   autoNext: boolean // hết hiệp tự sang hiệp sau
   toast: string // thông báo xanh ngắn (tự ẩn)
+  rec: RecState | null // trạng thái quay màn hình
   set: (p: Partial<UiState>) => void
 }
 export const useUi = create<UiState>((set) => ({
@@ -319,6 +331,7 @@ export const useUi = create<UiState>((set) => ({
   overview: false,
   autoNext: true,
   toast: '',
+  rec: null,
   set: (p) => set(p),
 }))
 

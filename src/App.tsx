@@ -11,6 +11,7 @@ import { ClipList, useFilteredClips } from './components/ClipList'
 import { Comments } from './components/Comments'
 import { Login } from './components/Login'
 import { Overview } from './components/Overview'
+import { RecordHud } from './components/RecordHud'
 import { Gutter, SplitV } from './components/Gutter'
 import { useLayout, clamp } from './layout'
 
@@ -125,6 +126,7 @@ export default function App() {
         <button className="btn sm" onClick={signOut}>Đăng xuất</button>
       </header>
       {overview && <Overview />}
+      <RecordHud />
       {toastMsg && inPoint == null && <div className="toast">{toastMsg}</div>}
       {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}
       <div className="workspace">

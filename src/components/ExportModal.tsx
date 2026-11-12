@@ -1,9 +1,13 @@
 import { useState } from 'react'
 import { exportVideo, mergeSegs } from '../lib/exportVideo'
+import { canRecord, pickFormat, runRecording, startCapture } from '../lib/recordScreen'
+import { useUi } from '../store'
 import { fmt } from '../util'
 import type { Clip, GameVideo } from '../types'
 
 export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: string; onClose: () => void }) {
+  const [mode, setMode] = useState<'record' | 'file'>(canRecord() ? 'record' : 'file')
+  const [recErr, setRecErr] = useState('')
   const [files, setFiles] = useState<Record<string, File | undefined>>({})
   const [offset, setOffset] = useState(0)
   const [accurate, setAccurate] = useState(false)
@@ -37,6 +41,23 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
     }
   }
 
+  // Thứ tự quay: theo hiệp rồi theo thời gian; gộp đoạn chồng nhau.
+  const recClips = groups.flatMap((g) => g.segs.map((sg, i) => ({ ...props.clips.find((c) => c.videoId === g.video.id)!, id: `${g.video.id}-${i}`, start: sg.start, end: sg.end })))
+
+  const startRec = async () => {
+    setRecErr('')
+    const el = document.querySelector('.video-wrap') as HTMLElement | null
+    if (!el) return setRecErr('Không tìm thấy khung video. Hãy mở trận trước.')
+    try {
+      const stream = await startCapture(el) // phải gọi ngay trong lần bấm nút
+      useUi.getState().set({ playlist: false, clipId: null, rec: { phase: 'waiting', index: 0, total: recClips.length, remain: total, msg: 'Chuẩn bị…' } })
+      props.onClose() // đóng cửa sổ để không bị quay vào
+      runRecording(stream, recClips, props.title)
+    } catch (e) {
+      setRecErr(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   const safe = props.title.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'playlist'
 
   return (
@@ -50,6 +71,30 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
           {count} đoạn, tổng {fmt(total)}. App cắt ngay trên máy bạn từ file video gốc, file không bị upload đi đâu.
         </div>
 
+        <div className="seg-toggle">
+          <button className={mode === 'record' ? 'on' : ''} onClick={() => setMode('record')}>Quay lại từ YouTube (không cần file)</button>
+          <button className={mode === 'file' ? 'on' : ''} onClick={() => setMode('file')}>Cắt từ file gốc</button>
+        </div>
+
+        {mode === 'record' ? (
+          <div className="stack">
+            {!canRecord() && <div className="err">Trình duyệt này không quay được. Hãy dùng Chrome hoặc Edge trên máy tính.</div>}
+            <div className="card stack rec-notes">
+              <b>Trước khi quay, hãy kiểm tra:</b>
+              <ol>
+                <li><b>Wifi ổn định</b> (tốt nhất cắm dây mạng). Mạng yếu thì YouTube tự giảm độ nét và video quay ra sẽ mờ.</li>
+                <li>Dùng <b>Chrome hoặc Edge trên máy tính</b>.</li>
+                <li>Khi trình duyệt hỏi, chọn <b>đúng tab này</b> và để bật <b>“Chia sẻ âm thanh”</b>.</li>
+                <li><b>Không thu nhỏ cửa sổ</b>, không rê chuột lên video trong lúc quay.</li>
+                <li>Thời gian quay bằng độ dài video: khoảng <b>{fmt(total)}</b>. Nếu bạn chuyển sang tab khác, app <b>tự tạm dừng</b> và ghi tiếp khi bạn quay lại.</li>
+              </ol>
+              <div className="muted">File sẽ là .{pickFormat().ext}{pickFormat().ext === 'mp4' ? ' (xem được trên điện thoại)' : ' (xem tốt trên máy tính)'}.</div>
+            </div>
+            {recErr && <div className="err">{recErr}</div>}
+            <button className="btn primary" disabled={!canRecord() || !count} onClick={startRec}>● Bắt đầu quay</button>
+          </div>
+        ) : (
+          <div className="stack">
         <label className="field-label">1. Chọn file video gốc của từng hiệp (cùng nội dung với video YouTube)</label>
         {groups.map((g) => (
           <div key={g.video.id} className="stack">
@@ -79,6 +124,8 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
           <a className="btn primary" href={result.url} download={`${safe}.mp4`}>⬇ Tải file ({(result.size / 1e6).toFixed(1)} MB)</a>
         ) : (
           <button className="btn primary" disabled={!ready || busy} onClick={run}>{busy ? 'Đang xử lý…' : 'Bắt đầu cắt'}</button>
+        )}
+          </div>
         )}
       </div>
     </div>
