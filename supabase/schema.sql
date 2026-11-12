@@ -263,3 +263,6 @@ language sql stable security invoker set search_path = public as $$
   from games g join squads s on s.id = g.squad_id
   order by g.played_on desc nulls last, g.title
 $$;
+
+-- Báo Supabase nạp lại danh sách bảng ngay (tránh lỗi "schema cache").
+notify pgrst, 'reload schema';
