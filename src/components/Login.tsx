@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Logo } from './Logo'
 import { useData } from '../store'
 
 export function Login() {
@@ -19,7 +20,7 @@ export function Login() {
   return (
     <div className="login">
       <div className="card stack login-card">
-        <div className="logo"><span className="dot" />GAME<b>REVIEW</b></div>
+        <Logo size={46} />
         {mode === 'up' && <input placeholder="Tên của bạn (hiển thị khi bình luận)" value={name} onChange={(e) => setName(e.target.value)} />}
         <input placeholder="Tên đăng nhập hoặc email" autoCapitalize="none" value={login} onChange={(e) => setLogin(e.target.value)} />
         <input type="password" placeholder="Mật khẩu (tối thiểu 6 ký tự)" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />

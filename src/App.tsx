@@ -1,4 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
+import { Logo } from './components/Logo'
 import { useEffect, useRef, useState } from 'react'
 import { useData, useUi, selectGame, myOrgRole, orgExpired } from './store'
 import { OrgAdminModal, OrgMembersModal } from './components/Orgs'
@@ -134,7 +135,7 @@ export default function App() {
     return (
       <div className="no-org">
         <div className="card stack">
-          <div className="logo"><span className="dot" />GAME<b>REVIEW</b></div>
+          <Logo />
           <b>Tài khoản “{me}” chưa thuộc trung tâm nào.</b>
           <div className="muted">Hãy gửi tên đăng nhập của bạn cho chủ trung tâm / CLB để được thêm vào. Sau đó tải lại trang.</div>
           <div className="row">
@@ -150,7 +151,7 @@ export default function App() {
       <Hotkeys />
       <PlaylistRunner />
       <header className="topbar">
-        <div className="logo"><span className="dot" />GAME<b>REVIEW</b></div>
+        <Logo />
         {isSuper ? (
           <select className="org-select" value={orgId} onChange={(e) => { set({ orgId: e.target.value }); try { localStorage.setItem('gr-org', e.target.value) } catch { /* bỏ qua */ } }}>
             {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}

@@ -64,9 +64,11 @@ body.dragging iframe { pointer-events: none; }
   display: flex; align-items: center; gap: 10px; padding: 0 10px 0 16px; height: 52px; flex: none;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
 }
-.logo { font-family: var(--font-display); font-stretch: 125%; font-weight: 300; font-size: 18px; letter-spacing: .04em; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
-.logo b { color: var(--accent); font-weight: 800; }
-.logo .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+.logo { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.logo svg { flex: none; }
+/* Chữ logo hẹp và cao như bản thiết kế: GAME mảnh trắng, REVIEW đậm lime */
+.logo-word { font-family: var(--font-display); font-stretch: 72%; font-weight: 300; font-size: 22px; letter-spacing: .02em; line-height: 1; }
+.logo-word b { color: var(--accent); font-weight: 900; }
 .me { color: var(--text-2); font-weight: 500; white-space: nowrap; }
 .spacer { flex: 1; }
 .hint { color: var(--muted); font-size: 12px; }
@@ -308,7 +310,9 @@ a.btn { text-decoration: none; text-align: center; }
 /* Đăng nhập */
 .login { height: 100vh; display: grid; place-items: center; background: radial-gradient(800px 400px at 50% 0%, #bedf0014, transparent), var(--bg); }
 .login-card { width: 360px; padding: 24px; gap: 12px; }
-.login-card .logo { font-size: 22px; margin-bottom: 6px; }
+.login-card .logo { justify-content: center; margin: 4px 0 10px; }
+.login-card .logo-word { font-size: 30px; }
+.no-org .logo-word { font-size: 24px; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #2c2c32; border-radius: 6px; border: 2px solid var(--panel); }
