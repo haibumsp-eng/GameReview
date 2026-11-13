@@ -676,3 +676,7 @@ a.btn { text-decoration: none; text-align: center; }
 .vp-x:hover { background: #ffffff14; color: var(--text); }
 .vp-chip .st-dot { margin: 0; }
 .vp-alias { font-size: 13px; padding: 6px 8px; resize: vertical; font-family: var(--font-ui); }
+/* Module giọng nói: dưới play-by-play ở cột phải */
+.sp-voice { flex: none; max-height: 55%; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
+.sp-voice .vp { border-top: 0; padding-top: 0; }
+.sp-col-right { gap: 8px; }

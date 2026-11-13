@@ -281,7 +281,6 @@ export function StatsPage() {
               </button>
             ))}
           </div>
-          {game && <VoicePanel gameId={game.id} homeName={homeName} awayName={awayName} players={voicePlayers} canEdit={canEdit} stamp={voiceStamp} onCommit={voiceCommit} />}
         </div>
   )
 
@@ -370,7 +369,10 @@ export function StatsPage() {
               : underBlock}
           </div>
           <Gutter dir="col" begin={() => L.spRight} move={(st, dx) => L.set({ spRight: clamp(st - dx, 220, 560) })} />
-          <div className="col sp-col-right" style={{ width: L.spRight }}>{logEl}</div>
+          <div className="col sp-col-right" style={{ width: L.spRight }}>
+            {logEl}
+            {game && <div className="sp-voice"><VoicePanel gameId={game.id} homeName={homeName} awayName={awayName} players={voicePlayers} canEdit={canEdit} stamp={voiceStamp} onCommit={voiceCommit} /></div>}
+          </div>
         </div>
       )}
     </div>
