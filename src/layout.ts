@@ -15,7 +15,7 @@ export interface LayoutState {
   reset: () => void
 }
 
-const defaults = { left: 270, right: 360, leftSplit: 0.62, rightSplit: 0.6, tlH: 132, clipsH: 300, spLeft: 640, spRight: 300, spSplit: 0.6 }
+const defaults = { left: 270, right: 360, leftSplit: 0.62, rightSplit: 0.6, tlH: 132, clipsH: 300, spLeft: 640, spRight: 300, spSplit: 0.55 }
 
 export const useLayout = create<LayoutState>()(
   persist(

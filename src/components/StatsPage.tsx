@@ -84,16 +84,28 @@ export function StatsPage() {
     const m = v?.trim().match(/^(\d{1,2}):(\d{2})$/)
     if (m) setClock(game.id, { clockRemaining: Math.min(periodLength(period, len), +m[1] * 60 + +m[2]), clockStartedAt: running ? Date.now() : null })
   }
-  // Space: chạy / dừng đồng hồ (khi không gõ chữ).
+  // Phím tắt: Space = đồng hồ thi đấu; K = phát/dừng video; J / L = video lùi / tới 5 giây.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
-      if (e.key !== ' ' || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
-      e.preventDefault(); toggleClock()
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || e.ctrlKey || e.metaKey || e.altKey) return
+      const k = e.key.toLowerCase()
+      if (k === ' ') { e.preventDefault(); toggleClock() }
+      else if (k === 'k') yt.toggle()
+      else if (k === 'j') yt.seek(yt.time() - 5)
+      else if (k === 'l') yt.seek(yt.time() + 5)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
+  // Bấm vào khung YouTube sẽ kéo bàn phím vào trong đó (Space lại thành dừng video): lấy lại ngay.
+  useEffect(() => {
+    const reclaim = () => { const el = document.activeElement; if (el instanceof HTMLIFrameElement) { el.blur(); window.focus() } }
+    const onBlur = () => setTimeout(reclaim, 0)
+    const iv = setInterval(reclaim, 100)
+    window.addEventListener('blur', onBlur)
+    return () => { clearInterval(iv); window.removeEventListener('blur', onBlur) }
+  }, [])
 
   const homeName = game?.homeName || squad?.name || 'HOME'
   const awayName = game?.awayName || 'AWAY'
@@ -227,7 +239,8 @@ export function StatsPage() {
 
   const padBlock = (
         <div className={`sp-pad ${sel ? '' : 'idle'}`}>
-          <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
+          <div className="sp-keys muted"><kbd>Space</kbd> đồng hồ · <kbd>K</kbd> phát/dừng video · <kbd>J</kbd><kbd>L</kbd> video ±5s</div>
+      <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
           <div className="sp-actions">
             {ACTIONS.map((a) => (
               <button key={a.type} className={`sp-act ${a.tone ?? ''}`} disabled={!canEdit} onClick={() => record(a.type)}>
@@ -236,6 +249,36 @@ export function StatsPage() {
             ))}
           </div>
         </div>
+  )
+
+  const underBlock = (
+    <div className="sp-under">
+              <div className="sp-score">
+                <span className="sp-sname">{homeName}</span>
+                <span className="sp-num home">{score('home')}</span>
+                <div className="sp-clock">
+                  <div className="sp-period">
+                    <button className="icon-btn" disabled={period <= 1 || !canEdit} onClick={() => goPeriod(period - 1)}>‹</button>
+                    <b>{periodLabel(period)}</b>
+                    <button className="icon-btn" disabled={!canEdit} onClick={() => goPeriod(period + 1)}>›</button>
+                  </div>
+                  <button className={`sp-time ${running ? 'run' : ''}`} title="Bấm để chỉnh giờ" onClick={editClock}>{mmss(remaining)}</button>
+                  <button className={`btn sm ${running ? '' : 'primary'}`} disabled={!canEdit || (!running && remaining <= 0)} onClick={toggleClock}>
+                    {running ? '❚❚ Dừng' : '▶ Chạy'} <kbd>Space</kbd>
+                  </button>
+                </div>
+                <span className="sp-num away">{score('away')}</span>
+                <span className="sp-sname">{awayName}</span>
+              </div>
+              <div className="sp-deck">{team('home')}{padBlock}{team('away')}</div>
+              {paste && (
+                <div className="card stack">
+                  <label className="field-label">Thêm cầu thủ {paste.side === 'home' ? homeName : awayName}: mỗi dòng “số tên”</label>
+                  <textarea rows={5} autoFocus placeholder={'4 Minh\n7 Nam\n(dán được từ Excel)'} value={paste.text} onChange={(e) => setPaste({ ...paste, text: e.target.value })} />
+                  <div className="row"><button className="btn" onClick={() => setPaste(null)}>Huỷ</button><button className="btn primary grow-btn" onClick={savePaste}>Thêm</button></div>
+                </div>
+              )}
+    </div>
   )
 
   return (
@@ -287,38 +330,10 @@ export function StatsPage() {
         <div className="sp-box"><BoxScoreView onSeek={(vid, t) => { setTab('record'); if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(vid, t, true), 50) }} /></div>
       ) : (
         <div className="sp-work">
-          <div className="col sp-col-left" style={{ width: L.spLeft }}>
+          <div className="col center sp-main-col">
             {showVideo
-              ? <SplitV frac={L.spSplit} setFrac={(f) => L.set({ spSplit: f })} top={<div className="sp-video"><PlayerPanel /></div>} bottom={padBlock} />
-              : padBlock}
-          </div>
-          <Gutter dir="col" begin={() => L.spLeft} move={(st, dx) => L.set({ spLeft: clamp(st + dx, 360, 1100) })} />
-          <div className="col center sp-center">
-            <div className="sp-score">
-              <span className="sp-sname">{homeName}</span>
-              <span className="sp-num home">{score('home')}</span>
-              <div className="sp-clock">
-                <div className="sp-period">
-                  <button className="icon-btn" disabled={period <= 1 || !canEdit} onClick={() => goPeriod(period - 1)}>‹</button>
-                  <b>{periodLabel(period)}</b>
-                  <button className="icon-btn" disabled={!canEdit} onClick={() => goPeriod(period + 1)}>›</button>
-                </div>
-                <button className={`sp-time ${running ? 'run' : ''}`} title="Bấm để chỉnh giờ" onClick={editClock}>{mmss(remaining)}</button>
-                <button className={`btn sm ${running ? '' : 'primary'}`} disabled={!canEdit || (!running && remaining <= 0)} onClick={toggleClock}>
-                  {running ? '❚❚ Dừng' : '▶ Chạy'} <kbd>Space</kbd>
-                </button>
-              </div>
-              <span className="sp-num away">{score('away')}</span>
-              <span className="sp-sname">{awayName}</span>
-            </div>
-            <div className="sp-teams">{team('home')}{team('away')}</div>
-            {paste && (
-              <div className="card stack">
-                <label className="field-label">Thêm cầu thủ {paste.side === 'home' ? homeName : awayName}: mỗi dòng “số tên”</label>
-                <textarea rows={5} autoFocus placeholder={'4 Minh\n7 Nam\n(dán được từ Excel)'} value={paste.text} onChange={(e) => setPaste({ ...paste, text: e.target.value })} />
-                <div className="row"><button className="btn" onClick={() => setPaste(null)}>Huỷ</button><button className="btn primary grow-btn" onClick={savePaste}>Thêm</button></div>
-              </div>
-            )}
+              ? <SplitV frac={L.spSplit} setFrac={(f) => L.set({ spSplit: f })} top={<div className="sp-video"><PlayerPanel /></div>} bottom={underBlock} />
+              : underBlock}
           </div>
           <Gutter dir="col" begin={() => L.spRight} move={(st, dx) => L.set({ spRight: clamp(st - dx, 220, 560) })} />
           <div className="col sp-col-right" style={{ width: L.spRight }}>{logEl}</div>

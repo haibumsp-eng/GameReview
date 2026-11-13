@@ -572,3 +572,35 @@ a.btn { text-decoration: none; text-align: center; }
 .rp-act.miss { color: var(--text-2); }
 .rp-act:active { transform: scale(.97); background: var(--accent-soft); }
 .rp-recent .item { padding: 6px 8px; font-size: 13px; cursor: default; }
+
+/* ---------- Live Stats: video ở trên, tỉ số + 2 đội + bảng điều khiển ở dưới ---------- */
+.sp-main-col { flex: 1; min-width: 0; }
+.sp-main-col > .sp-under { flex: 1; }
+.slot > .sp-under { flex: 1; }
+.sp-under { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
+.sp-under .sp-score { padding: 8px 16px; }
+.sp-under .sp-num { font-size: 44px; }
+.sp-under .sp-time { font-size: 28px; }
+.sp-under .sp-actions { grid-template-columns: repeat(13, minmax(0, 1fr)); }
+.sp-under .sp-act { height: 52px; }
+@media (max-width: 1300px) { .sp-under .sp-actions { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
+.sp-under .sp-roster { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); }
+.sp-keys { font-size: 12px; float: right; }
+
+/* Dưới video: dòng tỉ số gọn + [đội nhà | bảng điều khiển | đội khách] */
+.sp-under .sp-score { grid-template-columns: 1fr auto auto auto 1fr; padding: 6px 14px; gap: 12px; }
+.sp-under .sp-clock { flex-direction: row; gap: 8px; }
+.sp-under .sp-num { font-size: 38px; }
+.sp-under .sp-time { font-size: 26px; padding: 0 12px; }
+.sp-deck { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 0.85fr) minmax(0, 1fr); gap: 8px; align-items: start; }
+.sp-deck .sp-team { padding: 8px; gap: 6px; }
+.sp-deck .sp-roster { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 5px; }
+.sp-deck .sp-player { padding: 5px 8px; column-gap: 6px; }
+.sp-deck .sp-no { font-size: 18px; min-width: 24px; }
+.sp-deck .sp-pname { font-size: 13px; padding-right: 24px; }
+.sp-deck .sp-mini { font-size: 10px; }
+.sp-deck .sp-sub { width: 22px; height: 22px; top: 4px; right: 4px; font-size: 12px; }
+.sp-deck .sp-pad { position: sticky; top: 0; }
+.sp-deck .sp-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.sp-deck .sp-act { height: 50px; font-size: 14px; }
+.sp-deck .sp-keys { float: none; display: block; margin-bottom: 2px; }
