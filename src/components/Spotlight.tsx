@@ -23,6 +23,8 @@ export function SpotlightLayer() {
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [draft, setDraft] = useState<SpotBox | null>(null)
   const start = useRef<{ x: number; y: number } | null>(null)
+  // Kéo để di chuyển / kéo các nút ở góc, cạnh để đổi kích thước khung đã vẽ.
+  const grab = useRef<{ i: number; mode: string; x: number; y: number; box: SpotBox } | null>(null)
 
   useEffect(() => {
     const el = ref.current
@@ -41,6 +43,38 @@ export function SpotlightLayer() {
     const bb = (e.currentTarget as HTMLElement).getBoundingClientRect()
     return { x: Math.min(1, Math.max(0, (e.clientX - bb.left) / bb.width)), y: Math.min(1, Math.max(0, (e.clientY - bb.top) / bb.height)) }
   }
+
+  const toVideo = (e: React.PointerEvent) => {
+    const bb = ref.current!.getBoundingClientRect()
+    return { x: (e.clientX - bb.left - r.x) / r.w, y: (e.clientY - bb.top - r.y) / r.h }
+  }
+  const onGrab = (i: number, mode: string) => (e: React.PointerEvent) => {
+    if (!spotEdit) return
+    e.stopPropagation(); e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const p = toVideo(e)
+    grab.current = { i, mode, x: p.x, y: p.y, box: { ...spotEdit.boxes[i] } }
+  }
+  const onDrag = (e: React.PointerEvent) => {
+    const g = grab.current, ed = useUi.getState().spotEdit
+    if (!g || !ed) return
+    const p = toVideo(e)
+    const dx = p.x - g.x, dy = p.y - g.y
+    const MIN_W = 0.015, MIN_H = 0.02
+    let { x, y, w, h } = g.box
+    if (g.mode === 'move') {
+      x = Math.min(1 - w, Math.max(0, x + dx)); y = Math.min(1 - h, Math.max(0, y + dy))
+    } else {
+      let x2 = x + w, y2 = y + h
+      if (g.mode.includes('w')) x = Math.min(x2 - MIN_W, Math.max(0, x + dx))
+      if (g.mode.includes('e')) x2 = Math.max(x + MIN_W, Math.min(1, x2 + dx))
+      if (g.mode.includes('n')) y = Math.min(y2 - MIN_H, Math.max(0, y + dy))
+      if (g.mode.includes('s')) y2 = Math.max(y + MIN_H, Math.min(1, y2 + dy))
+      w = x2 - x; h = y2 - y
+    }
+    set({ spotEdit: { ...ed, boxes: ed.boxes.map((b, j) => (j === g.i ? { ...b, x, y, w, h } : b)) } })
+  }
+  const endGrab = () => { grab.current = null }
 
   return (
     <div ref={ref} className={`spot-layer ${spotEdit ? 'editing' : ''}`}>
@@ -79,6 +113,18 @@ export function SpotlightLayer() {
           }}
         />
       )}
+      {spotEdit && spotEdit.boxes.map((b, i) => {
+        const p = px(b)
+        return (
+          <div key={i} className="spot-grab" style={{ left: p.x, top: p.y, width: p.w, height: p.h }}
+            onPointerDown={onGrab(i, 'move')} onPointerMove={onDrag} onPointerUp={endGrab} onPointerCancel={endGrab}>
+            <span className="spot-grab-num">{i + 1}</span>
+            {['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map((m) => (
+              <span key={m} className={`spot-h ${m}`} onPointerDown={onGrab(i, m)} onPointerMove={onDrag} onPointerUp={endGrab} onPointerCancel={endGrab} />
+            ))}
+          </div>
+        )
+      })}
     </div>
   )
 }

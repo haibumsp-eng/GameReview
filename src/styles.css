@@ -680,3 +680,14 @@ a.btn { text-decoration: none; text-align: center; }
 .sp-voice { flex: none; max-height: 55%; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
 .sp-voice .vp { border-top: 0; padding-top: 0; }
 .sp-col-right { gap: 8px; }
+
+/* Sửa khung khoanh: kéo để di chuyển, kéo nút góc / cạnh để đổi kích thước */
+.spot-grab { position: absolute; pointer-events: auto; cursor: move; border-radius: 8px; touch-action: none; }
+.spot-grab:hover { background: #bedf0014; }
+.spot-grab-num { position: absolute; left: 0; top: -24px; width: 18px; height: 18px; border-radius: 5px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 800; display: grid; place-items: center; pointer-events: none; }
+.spot-h { position: absolute; width: 12px; height: 12px; background: #0b0b0c; border: 2px solid var(--accent); border-radius: 3px; transform: translate(-50%, -50%); touch-action: none; }
+.spot-h.nw { left: 0; top: 0; cursor: nwse-resize; } .spot-h.se { left: 100%; top: 100%; cursor: nwse-resize; }
+.spot-h.ne { left: 100%; top: 0; cursor: nesw-resize; } .spot-h.sw { left: 0; top: 100%; cursor: nesw-resize; }
+.spot-h.n { left: 50%; top: 0; cursor: ns-resize; } .spot-h.s { left: 50%; top: 100%; cursor: ns-resize; }
+.spot-h.e { left: 100%; top: 50%; cursor: ew-resize; } .spot-h.w { left: 0; top: 50%; cursor: ew-resize; }
+.spot-layer.editing .spot-box { animation: none; }
