@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useData, useUi, myOrgRole, orgExpired } from '../store'
 import type { Org } from '../types'
+import { confirmDialog, alertDialog } from '../lib/dialog'
 
 const ROLE_LABEL: Record<string, string> = { owner: 'Chủ trung tâm', coach: 'HLV', viewer: 'Chỉ xem' }
 const PLAN_LABEL: Record<string, string> = { trial: 'Dùng thử', team: 'Đội', club: 'CLB / Học viện', custom: 'Riêng' }
@@ -39,7 +40,7 @@ export function OrgMembersModal(props: { onClose: () => void }) {
             </div>
             <div className="stack">
               <button className="btn sm" onClick={() => { navigator.clipboard?.writeText(org.joinCode).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }) }}>{copied ? '✓ Đã copy' : 'Copy mã'}</button>
-              <button className="btn sm ghost" onClick={async () => { if (confirm('Đổi mã mới? Mã cũ sẽ không dùng được nữa.')) { const e = await regenCode(org.id); if (e) alert(e) } }}>Đổi mã</button>
+              <button className="btn sm ghost" onClick={async () => { if (await confirmDialog({ title: 'Đổi mã tham gia?', message: 'Mã cũ sẽ không dùng được nữa. HLV mới cần mã mới để vào trung tâm.', okText: 'Đổi mã' })) { const e = await regenCode(org.id); if (e) await alertDialog({ title: 'Không đổi được mã', message: e }) } }}>Đổi mã</button>
             </div>
           </div>
         )}
@@ -52,7 +53,7 @@ export function OrgMembersModal(props: { onClose: () => void }) {
                   <select style={{ width: 140 }} value={m.role} onChange={(e) => setOrgRole(orgId, m.userId, e.target.value)}>
                     {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
-                  <button className="icon-btn" title="Gỡ khỏi trung tâm" onClick={() => confirm(`Gỡ ${profiles[m.userId] || 'người này'} khỏi trung tâm?`) && removeOrgMember(orgId, m.userId)}>×</button>
+                  <button className="icon-btn" title="Gỡ khỏi trung tâm" onClick={async () => { if (await confirmDialog({ title: 'Gỡ thành viên?', message: `Gỡ ${profiles[m.userId] || 'người này'} khỏi trung tâm. Họ sẽ không xem được dữ liệu của trung tâm nữa.`, okText: 'Gỡ', danger: true })) removeOrgMember(orgId, m.userId) }}>×</button>
                 </>
               ) : <span className="tag">{ROLE_LABEL[m.role]}</span>}
             </li>

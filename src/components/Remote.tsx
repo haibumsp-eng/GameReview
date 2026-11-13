@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { supabase } from '../supabase'
 import { Logo } from './Logo'
+import { confirmDialog } from '../lib/dialog'
 
 /* ================= Máy tính: tạo mã QR cho điện thoại ================= */
 export function RemoteModal(props: { gameId: string; onClose: () => void }) {
@@ -23,7 +24,7 @@ export function RemoteModal(props: { gameId: string; onClose: () => void }) {
   useEffect(() => { void make() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const revoke = async () => {
-    if (!confirm('Thu hồi mã? Mọi điện thoại đang dùng mã này sẽ không bấm được nữa.')) return
+    if (!(await confirmDialog({ title: 'Thu hồi mã?', message: 'Mọi điện thoại đang dùng mã này sẽ không bấm được nữa.', okText: 'Thu hồi', danger: true }))) return
     const { error } = await supabase.from('remote_tokens').delete().eq('game_id', props.gameId)
     if (error) return setErr(error.message)
     setQr(''); setUrl(''); setState('revoked')

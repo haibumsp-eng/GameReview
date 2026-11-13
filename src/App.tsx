@@ -1,3 +1,4 @@
+import { dialogOpen } from './lib/dialog'
 import { useShallow } from 'zustand/react/shallow'
 import { Logo } from './components/Logo'
 import { useEffect, useRef, useState } from 'react'
@@ -23,6 +24,7 @@ import { useLayout, clamp } from './layout'
 function Hotkeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (dialogOpen()) return
       const t = e.target as HTMLElement
       const typing = t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable ||
         (t.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'range', 'file'].includes((t as HTMLInputElement).type))

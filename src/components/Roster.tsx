@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useData, useUi } from '../store'
 import { Panel } from './Panel'
+import { confirmDialog } from '../lib/dialog'
 
 export function Roster() {
   const { players, addPlayer, addPlayers, removePlayer } = useData()
@@ -70,7 +71,7 @@ export function Roster() {
         {list.map((p) => (
           <li key={p.id} className="item">
             <span><b className="jersey">{p.number}</b> {p.name}</span>
-            <button className="icon-btn" onClick={() => confirm(`Xoá ${p.name}?`) && removePlayer(p.id)}>×</button>
+            <button className="icon-btn" onClick={async () => { if (await confirmDialog({ title: `Xoá #${p.number} ${p.name}?`, message: 'Cầu thủ sẽ bị gỡ khỏi danh sách của tuyến và khỏi các tình huống đã gắn.', okText: 'Xoá', danger: true })) removePlayer(p.id) }}>×</button>
           </li>
         ))}
       </ul>

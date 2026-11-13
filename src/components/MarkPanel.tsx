@@ -7,6 +7,7 @@ import { Panel } from './Panel'
 import { AutoTextarea } from './AutoTextarea'
 import { useEffect } from 'react'
 import type { Clip } from '../types'
+import { confirmDialog } from '../lib/dialog'
 
 const warn = (msg: string) => useData.setState({ error: msg })
 
@@ -252,7 +253,7 @@ function SpotlightControls({ clip }: { clip: Clip }) {
           <div className="row">
             <button className="btn sm" onClick={preview}>Xem thử</button>
             <button className="btn sm" onClick={edit}>Sửa</button>
-            <button className="icon-btn" title="Bỏ khoanh" onClick={() => confirm('Bỏ khoanh cầu thủ ở tình huống này?') && updateClip(clip.id, { spotlight: null })}>×</button>
+            <button className="icon-btn" title="Bỏ khoanh" onClick={async () => { if (await confirmDialog({ title: 'Bỏ khoanh cầu thủ?', message: 'Tình huống này sẽ không dừng hình và khoanh cầu thủ nữa.', okText: 'Bỏ khoanh', danger: true })) updateClip(clip.id, { spotlight: null }) }}>×</button>
           </div>
         </div>
       ) : (

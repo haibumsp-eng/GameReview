@@ -11,6 +11,7 @@ import { useLayout, clamp } from '../layout'
 import { RemoteModal } from './Remote'
 import { yt } from '../youtube'
 import { seekVideo } from '../nav'
+import { confirmDialog, promptDialog, dialogOpen } from '../lib/dialog'
 
 const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'miss' }[] = [
   { type: '2PM', label: '2PT', pts: '+2', tone: 'made' }, { type: '2PX', label: '2PT', pts: 'miss', tone: 'miss' },
@@ -78,15 +79,17 @@ export function StatsPage() {
     if (!game || p < 1) return
     setClock(game.id, { clockPeriod: p, clockRunning: false, clockRemaining: periodLength(p, len), clockStartedAt: null })
   }
-  const editClock = () => {
+  const editClock = async () => {
     if (!game || !canEdit) return
-    const v = prompt('Chỉnh đồng hồ (phút:giây), ví dụ 7:32', mmss(remaining))
-    const m = v?.trim().match(/^(\d{1,2}):(\d{2})$/)
+    const v = await promptDialog({ title: 'Chỉnh đồng hồ', label: `Thời gian còn lại của ${periodLabel(period)} (phút:giây)`, value: mmss(remaining), placeholder: '7:32', inputMode: 'numeric',
+      validate: (x) => (/^\d{1,2}:\d{2}$/.test(x.trim()) ? null : 'Nhập theo dạng phút:giây, ví dụ 7:32') })
+    const m = v?.match(/^(\d{1,2}):(\d{2})$/)
     if (m) setClock(game.id, { clockRemaining: Math.min(periodLength(period, len), +m[1] * 60 + +m[2]), clockStartedAt: running ? Date.now() : null })
   }
   // Phím tắt: Space = đồng hồ thi đấu; K = phát/dừng video; J / L = video lùi / tới 5 giây.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (dialogOpen()) return
       const t = e.target as HTMLElement
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || e.ctrlKey || e.metaKey || e.altKey) return
       const k = e.key.toLowerCase()
@@ -140,9 +143,10 @@ export function StatsPage() {
     if (ll && (!ls || ll.createdAt > ls.createdAt)) removeLineup(ll.id)
     else if (ls) removeStat(ls.id)
   }
-  const rename = (side: TeamSide) => {
+  const rename = async (side: TeamSide) => {
     if (!game) return
-    const n = prompt(side === 'home' ? 'Tên đội nhà (HOME)' : 'Tên đội khách (AWAY)', side === 'home' ? homeName : awayName)?.trim()
+    const n = await promptDialog({ title: side === 'home' ? 'Tên đội nhà (HOME)' : 'Tên đội khách (AWAY)', value: side === 'home' ? homeName : awayName,
+      validate: (x) => (x.trim() ? null : 'Nhập tên đội') })
     if (n) setTeamNames(game.id, side === 'home' ? n : homeName, side === 'away' ? n : awayName)
   }
   const savePaste = () => {
@@ -162,9 +166,9 @@ export function StatsPage() {
   }
 
   // Shift + click: xoá cầu thủ. Chưa có pha nào thì xoá ngay; đã có thì hỏi lại một lần.
-  const deletePlayer = (p: GamePlayer) => {
+  const deletePlayer = async (p: GamePlayer) => {
     const n = stats.filter((e) => e.gamePlayerId === p.id).length + lineups.filter((e) => e.gamePlayerId === p.id).length
-    if (n && !confirm(`Xoá #${p.number} ${p.name}? ${n} pha / lần thay người của cầu thủ này cũng bị xoá.`)) return
+    if (n && !(await confirmDialog({ title: `Xoá #${p.number} ${p.name}?`, message: `${n} pha / lần thay người của cầu thủ này cũng bị xoá.`, okText: 'Xoá', danger: true }))) return
     if (sel?.id === p.id) setSel(null)
     removeGamePlayer(p.id)
     toast(`Đã xoá #${p.number} ${p.name}`)

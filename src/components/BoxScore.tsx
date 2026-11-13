@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useData, useUi } from '../store'
+import { useData, useUi, toast } from '../store'
 import { lineOf, pct, periodLabel, STAT_LABEL, type Line } from '../lib/boxscore'
 import type { TeamSide } from '../types'
 import { clockNow, mmss, plusMinus, secondsPlayed } from '../lib/minutes'
+import { confirmDialog } from '../lib/dialog'
 
 const COLS: { k: string; label: string; v: (l: Line) => string | number }[] = [
   { k: 'pts', label: 'PTS', v: (l) => l.pts },
@@ -40,21 +41,21 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
   const saveNumber = (id: string, side: TeamSide, raw: string, old: number) => {
     const n = parseInt(raw, 10)
     if (raw.trim() === String(old)) return
-    if (isNaN(n) || n < 0 || n > 99) { alert('Số áo phải từ 0 đến 99.'); return false }
-    if (numberTaken(side, n, id)) { alert(`Số ${n} đã có trong đội.`); return false }
+    if (isNaN(n) || n < 0 || n > 99) { toast('Số áo phải từ 0 đến 99'); return false }
+    if (numberTaken(side, n, id)) { toast(`Số ${n} đã có trong đội`); return false }
     updateGamePlayer(id, { number: n })
   }
   const saveName = (id: string, raw: string, old: string) => { const v = raw.trim(); if (v && v !== old) updateGamePlayer(id, { name: v }) }
   // Chưa có pha nào thì xoá ngay; đã có thì hỏi lại một lần.
-  const remove = (id: string, label: string) => {
+  const remove = async (id: string, label: string) => {
     const n = stats.filter((e) => e.gamePlayerId === id).length + lineups.filter((e) => e.gamePlayerId === id).length
-    if (n && !confirm(`Xoá ${label}? ${n} pha / lần thay người của cầu thủ này cũng bị xoá.`)) return
+    if (n && !(await confirmDialog({ title: `Xoá ${label}?`, message: `${n} pha / lần thay người của cầu thủ này cũng bị xoá.`, okText: 'Xoá', danger: true }))) return
     removeGamePlayer(id)
   }
   const addRow = (side: TeamSide) => {
     const n = parseInt(draft.number, 10)
-    if (isNaN(n) || n < 0 || n > 99) return alert('Nhập số áo từ 0 đến 99.')
-    if (numberTaken(side, n)) return alert(`Số ${n} đã có trong đội.`)
+    if (isNaN(n) || n < 0 || n > 99) return toast('Nhập số áo từ 0 đến 99')
+    if (numberTaken(side, n)) return toast(`Số ${n} đã có trong đội`)
     if (!game) return
     addGamePlayers(game.id, side, [{ number: n, name: draft.name.trim() || `No ${n}` }])
     setDraft({ number: '', name: '' })

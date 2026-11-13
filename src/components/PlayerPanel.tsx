@@ -5,6 +5,7 @@ import { defaultLabel, fmt, parseYouTubeId } from '../util'
 import { Panel } from './Panel'
 import { CaptionOverlay } from './CaptionOverlay'
 import { SpotlightLayer } from './Spotlight'
+import { confirmDialog, promptDialog, formDialog } from '../lib/dialog'
 
 export function PlayerPanel() {
   const { gameId, videoId, time, duration, playing, pre, post, playlist, autoNext, set } = useUi()
@@ -63,14 +64,18 @@ export function PlayerPanel() {
     set({ videoId: id, clipId: null, playlist: false, inPoint: null, pending: null, time: 0 })
   }
 
-  const add = () => {
+  const add = async () => {
     if (!gameId) return
-    const link = prompt('Dán link YouTube của hiệp / video mới:')
-    if (!link) return
-    const id = parseYouTubeId(link)
-    if (!id) return alert('Link YouTube không hợp lệ')
-    const label = prompt('Tên video', defaultLabel(videos.length + 1))?.trim() || defaultLabel(videos.length + 1)
-    pick(addVideo(gameId, label, id))
+    const r = await formDialog({
+      title: 'Thêm video (hiệp / OT)', okText: 'Thêm',
+      fields: [
+        { key: 'link', label: 'Link YouTube', placeholder: 'https://youtu.be/…', inputMode: 'url' },
+        { key: 'label', label: 'Tên video', value: defaultLabel(videos.length + 1) },
+      ],
+      validate: (v) => (parseYouTubeId(v.link ?? '') ? null : 'Link YouTube không hợp lệ. Dán link dạng youtube.com/watch?v=… hoặc youtu.be/…'),
+    })
+    if (!r) return
+    pick(addVideo(gameId, r.label.trim() || defaultLabel(videos.length + 1), parseYouTubeId(r.link)!))
   }
 
   return (
@@ -97,7 +102,7 @@ export function PlayerPanel() {
                 key={v.id}
                 className={v.id === videoId ? 'vtab on' : 'vtab'}
                 onClick={() => pick(v.id)}
-                onDoubleClick={() => { const n = prompt('Đổi tên video', v.label)?.trim(); if (n) renameVideo(v.id, n) }}
+                onDoubleClick={async () => { const n = await promptDialog({ title: 'Đổi tên video', value: v.label, validate: (x) => (x.trim() ? null : 'Nhập tên video') }); if (n) renameVideo(v.id, n) }}
                 title="Bấm đúp để đổi tên"
               >{v.label}</button>
             ))}
@@ -113,7 +118,7 @@ export function PlayerPanel() {
                   <button
                     className="icon-btn"
                     title={`Xoá ${video.label} (và các mark trong đó)`}
-                    onClick={() => { if (confirm(`Xoá “${video.label}” cùng các mark trong hiệp này?`)) removeVideo(video.id) }}
+                    onClick={async () => { if (await confirmDialog({ title: `Xoá “${video.label}”?`, message: 'Video và các mark trong hiệp này sẽ bị xoá.', okText: 'Xoá', danger: true })) removeVideo(video.id) }}
                   >×</button>
                 )}
               </>

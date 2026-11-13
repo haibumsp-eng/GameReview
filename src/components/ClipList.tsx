@@ -1,12 +1,13 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useState } from 'react'
-import { useData, useUi, matches } from '../store'
+import { useData, useUi, matches, toast } from '../store'
 import { ExportModal } from './ExportModal'
 import { PLAY_TYPES } from '../types'
 import { yt } from '../youtube'
 import { goToClip } from '../nav'
 import { fmt } from '../util'
 import { Panel } from './Panel'
+import { confirmDialog, promptDialog } from '../lib/dialog'
 
 /** Các tình huống khớp bộ lọc, trong cả trận, xếp theo hiệp rồi theo thời gian. */
 export function useFilteredClips() {
@@ -80,14 +81,14 @@ export function ClipList() {
               disabled={!playlistId}
               onClick={() => {
                 const url = `${location.origin}${location.pathname}#g=${gameId}&p=${playlistId}`
-                navigator.clipboard?.writeText(url).then(() => alert('Đã copy link. HLV cùng tuyến đăng nhập là mở được.'))
+                navigator.clipboard?.writeText(url).then(() => toast('Đã copy link. HLV cùng tuyến đăng nhập là mở được.'))
               }}
             >🔗</button>
             <button
               className="btn sm"
               title="Xoá playlist"
               disabled={!playlistId}
-              onClick={() => { if (confirm('Xoá playlist này?')) { removePlaylist(playlistId); set({ playlistId: '' }) } }}
+              onClick={async () => { if (await confirmDialog({ title: 'Xoá playlist?', message: 'Chỉ xoá bộ lọc đã lưu, các tình huống vẫn giữ nguyên.', okText: 'Xoá', danger: true })) { removePlaylist(playlistId); set({ playlistId: '' }) } }}
             >×</button>
           </div>
         )}
@@ -113,8 +114,8 @@ export function ClipList() {
             <button
               className="btn sm primary"
               disabled={!gameId}
-              onClick={() => {
-                const name = prompt('Tên playlist (vd: Phòng thủ pick&roll)')?.trim()
+              onClick={async () => {
+                const name = await promptDialog({ title: 'Lưu playlist', label: 'Tên playlist', placeholder: 'vd: Phòng thủ pick & roll', validate: (x) => (x.trim() ? null : 'Nhập tên playlist') })
                 if (name && gameId) set({ playlistId: addPlaylist(gameId, name, filter) })
               }}
             >💾 Lưu playlist</button>

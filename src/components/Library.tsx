@@ -1,8 +1,9 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useState } from 'react'
-import { useData, useUi, selectGame, myOrgRole } from '../store'
+import { useData, useUi, selectGame, myOrgRole, toast } from '../store'
 import { defaultLabel, parseYouTubeId, toLoginEmail } from '../util'
 import { Panel } from './Panel'
+import { confirmDialog, promptDialog, formDialog, alertDialog } from '../lib/dialog'
 
 export function Library() {
   const { squads, games, videos, addSquad, addGame, removeGame, addMember } = useData()
@@ -52,20 +53,27 @@ export function Library() {
           title="Mời HLV vào tuyến này (theo tên đăng nhập hoặc email)"
           disabled={!squadId}
           onClick={async () => {
-            const email = prompt('Tên đăng nhập hoặc email của HLV (người đó phải đăng ký tài khoản trước):')
-            if (!email?.trim()) return
-            const role = prompt('Vai trò: coach (sửa được) hoặc viewer (chỉ xem)', 'coach') || 'coach'
-            const err = await addMember(squadId, toLoginEmail(email), role.trim())
-            alert(err ?? 'Đã thêm thành viên.')
+            const r = await formDialog({
+              title: 'Mời HLV vào tuyến', message: 'Người được mời phải đăng ký tài khoản trước.', okText: 'Mời',
+              fields: [
+                { key: 'login', label: 'Tên đăng nhập hoặc email', placeholder: 'vd: coachminh' },
+                { key: 'role', label: 'Vai trò', options: [{ value: 'coach', label: 'HLV (sửa được)' }, { value: 'viewer', label: 'Chỉ xem' }] },
+              ],
+              validate: (v) => (v.login?.trim() ? null : 'Nhập tên đăng nhập hoặc email'),
+            })
+            if (!r) return
+            const err = await addMember(squadId, toLoginEmail(r.login), r.role)
+            if (err) await alertDialog({ title: 'Chưa mời được', message: err })
+            else toast('Đã thêm thành viên vào tuyến')
           }}
         >👤</button>
         {isOwner && (
           <button
             className="btn sm"
             title="Thêm tuyến đội (chủ trung tâm)"
-            onClick={() => {
-              const n = prompt('Tên tuyến đội (vd: U14 Nữ)')
-              if (n?.trim() && orgId) { set({ squadId: addSquad(n.trim(), orgId) }); selectGame(null) }
+            onClick={async () => {
+              const n = await promptDialog({ title: 'Thêm tuyến đội', label: 'Tên tuyến đội', placeholder: 'vd: U14 Nữ', okText: 'Thêm', validate: (x) => (x.trim() ? null : 'Nhập tên tuyến đội') })
+              if (n && orgId) { set({ squadId: addSquad(n, orgId) }); selectGame(null) }
             }}
           >+</button>
         )}
@@ -95,9 +103,9 @@ export function Library() {
               <button
                 className="icon-btn"
                 title="Xoá trận"
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation()
-                  if (confirm(`Xoá “${g.title}” cùng toàn bộ mark?`)) {
+                  if (await confirmDialog({ title: `Xoá trận “${g.title}”?`, message: 'Toàn bộ video, mark, bình luận và thống kê của trận này sẽ bị xoá. Không khôi phục được.', okText: 'Xoá trận', danger: true })) {
                     removeGame(g.id)
                     if (g.id === gameId) selectGame(null)
                   }
