@@ -13,6 +13,12 @@ export interface Game {
   date: string
   homeName?: string
   awayName?: string
+  /** Đồng hồ thi đấu (trang Live Stats) */
+  periodLen?: number
+  clockPeriod?: number
+  clockRemaining?: number | null
+  clockRunning?: boolean
+  clockStartedAt?: number | null
 }
 /** Một video (một hiệp / OT) của trận. Mốc thời gian của mark tính theo video này. */
 export interface GameVideo {
@@ -87,5 +93,8 @@ export interface StatEvent {
   period: number
   videoId: string | null
   videoT: number | null
+  clockS?: number | null
   createdAt: number
 }
+/** Vào sân / ra sân, ghi theo đồng hồ thi đấu. */
+export interface LineupEvent { id: string; gameId: string; side: TeamSide; gamePlayerId: string; kind: 'in' | 'out'; period: number; clockS: number; createdAt: number }

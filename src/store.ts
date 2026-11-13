@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import type { Clip, Comment, Game, GamePlayer, GameVideo, Org, OrgMember, Player, Playlist, Side, SpotBox, Squad, StatEvent, TeamSide } from './types'
+import type { Clip, Comment, Game, GamePlayer, GameVideo, LineupEvent, Org, OrgMember, Player, Playlist, Side, SpotBox, Squad, StatEvent, TeamSide } from './types'
 import { toLoginEmail, uid } from './util'
 
 /* ---------- Dữ liệu (Supabase) ---------- */
@@ -21,6 +21,7 @@ interface DataState {
   playlists: Playlist[] // chỉ của trận đang mở
   gamePlayers: GamePlayer[] // cầu thủ 2 đội của trận đang mở
   stats: StatEvent[] // các pha thống kê của trận đang mở
+  lineups: LineupEvent[] // vào / ra sân của trận đang mở
   profiles: Record<string, string>
   error: string
   init: () => void
@@ -57,6 +58,9 @@ interface DataState {
   removeGamePlayer: (id: string) => void
   addStat: (e: Omit<StatEvent, 'id' | 'createdAt'>) => string
   removeStat: (id: string) => void
+  setClock: (gameId: string, patch: Partial<Pick<Game, 'periodLen' | 'clockPeriod' | 'clockRemaining' | 'clockRunning' | 'clockStartedAt'>>) => void
+  addLineup: (e: Omit<LineupEvent, 'id' | 'createdAt'>) => void
+  removeLineup: (id: string) => void
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -107,7 +111,7 @@ export const useData = create<DataState>((set, get) => {
   return {
     ready: false,
     session: null,
-    squads: [], players: [], games: [], videos: [], isSuper: false, orgs: [], orgMembers: [], baseLoaded: false, clips: [], comments: [], playlists: [], gamePlayers: [], stats: [],
+    squads: [], players: [], games: [], videos: [], isSuper: false, orgs: [], orgMembers: [], baseLoaded: false, clips: [], comments: [], playlists: [], gamePlayers: [], stats: [], lineups: [],
     profiles: {},
     error: '',
 
@@ -187,7 +191,9 @@ export const useData = create<DataState>((set, get) => {
         orgMembers: (om.data ?? []).map((r: any) => ({ orgId: r.org_id, userId: r.user_id, role: r.role })),
         baseLoaded: true,
         players: (pl.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, number: r.number, name: r.name })),
-        games: (ga.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, title: r.title, date: r.played_on ?? '', homeName: r.home_name ?? '', awayName: r.away_name ?? '' })),
+        games: (ga.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, title: r.title, date: r.played_on ?? '', homeName: r.home_name ?? '', awayName: r.away_name ?? '',
+          periodLen: r.period_len ?? 600, clockPeriod: r.clock_period ?? 1, clockRemaining: r.clock_remaining ?? null,
+          clockRunning: !!r.clock_running, clockStartedAt: r.clock_started_at ? new Date(r.clock_started_at).getTime() : null })),
         videos: (gv.data ?? []).map((r: any) => ({ id: r.id, gameId: r.game_id, label: r.label, youtubeId: r.youtube_id, position: r.position })),
         isSuper: (ad.data ?? []).length > 0,
         profiles: Object.fromEntries((pr.data ?? []).map((r: any) => [r.id, r.name])),
@@ -202,7 +208,7 @@ export const useData = create<DataState>((set, get) => {
     },
 
     loadGame: async (gameId) => {
-      if (!gameId) return set({ clips: [], comments: [], playlists: [], gamePlayers: [], stats: [] })
+      if (!gameId) return set({ clips: [], comments: [], playlists: [], gamePlayers: [], stats: [], lineups: [] })
       const { data: cl, error } = await supabase
         .from('clips').select('*, clip_players(player_id)').eq('game_id', gameId).limit(5000)
       if (fail(error)) return
@@ -218,18 +224,23 @@ export const useData = create<DataState>((set, get) => {
         playType: r.play_type ?? '', note: r.note ?? '', author: r.author ?? '', spotlight: r.spotlight ?? null,
         ...pending.get(r.id),
       }))
-      const [plr, gpr, ser] = await Promise.all([
+      const [plr, gpr, ser, ler] = await Promise.all([
         supabase.from('playlists').select('*').eq('game_id', gameId).order('created_at'),
         supabase.from('game_players').select('*').eq('game_id', gameId),
         supabase.from('stat_events').select('*').eq('game_id', gameId).order('created_at').limit(10000),
+        supabase.from('lineup_events').select('*').eq('game_id', gameId).order('created_at').limit(5000),
       ])
-      if (fail(plr.error) || fail(gpr.error) || fail(ser.error)) return
+      if (fail(plr.error) || fail(gpr.error) || fail(ser.error) || fail(ler.error)) return
       const pl = plr.data
       set({
         gamePlayers: (gpr.data ?? []).map((r: any) => ({ id: r.id, gameId: r.game_id, side: r.side, number: r.number, name: r.name, playerId: r.player_id ?? null })),
         stats: (ser.data ?? []).map((r: any) => ({
           id: r.id, gameId: r.game_id, side: r.side, gamePlayerId: r.game_player_id ?? null, type: r.type, period: r.period,
-          videoId: r.video_id ?? null, videoT: r.video_t ?? null, createdAt: new Date(r.created_at).getTime(),
+          videoId: r.video_id ?? null, videoT: r.video_t ?? null, clockS: r.clock_s ?? null, createdAt: new Date(r.created_at).getTime(),
+        })),
+        lineups: (ler.data ?? []).map((r: any) => ({
+          id: r.id, gameId: r.game_id, side: r.side, gamePlayerId: r.game_player_id, kind: r.kind, period: r.period, clockS: r.clock_s,
+          createdAt: new Date(r.created_at).getTime(),
         })),
         playlists: (pl ?? []).map((r: any) => ({
           id: r.id, gameId: r.game_id, name: r.name, side: r.side,
@@ -373,7 +384,7 @@ export const useData = create<DataState>((set, get) => {
         .then(({ error }) => { if (fail(error)) get().loadGame(gameId) })
     },
     removeGamePlayer: (id) => {
-      set((s) => ({ gamePlayers: s.gamePlayers.filter((p) => p.id !== id), stats: s.stats.filter((e) => e.gamePlayerId !== id) }))
+      set((s) => ({ gamePlayers: s.gamePlayers.filter((p) => p.id !== id), stats: s.stats.filter((e) => e.gamePlayerId !== id), lineups: s.lineups.filter((e) => e.gamePlayerId !== id) }))
       supabase.from('game_players').delete().eq('id', id).then(({ error }) => fail(error))
     },
     addStat: (e) => {
@@ -381,9 +392,29 @@ export const useData = create<DataState>((set, get) => {
       set((s) => ({ stats: [...s.stats, { ...e, id, createdAt: Date.now() }] }))
       supabase.from('stat_events').insert({
         id, game_id: e.gameId, side: e.side, game_player_id: e.gamePlayerId, type: e.type, period: e.period,
-        video_id: e.videoId, video_t: e.videoT,
+        video_id: e.videoId, video_t: e.videoT, clock_s: e.clockS ?? null,
       }).then(({ error }) => { if (fail(error)) get().loadGame(e.gameId) })
       return id
+    },
+    setClock: (gameId, p) => {
+      set((s) => ({ games: s.games.map((g) => (g.id === gameId ? { ...g, ...p } : g)) }))
+      const row: Record<string, unknown> = {}
+      if (p.periodLen !== undefined) row.period_len = p.periodLen
+      if (p.clockPeriod !== undefined) row.clock_period = p.clockPeriod
+      if (p.clockRemaining !== undefined) row.clock_remaining = p.clockRemaining
+      if (p.clockRunning !== undefined) row.clock_running = p.clockRunning
+      if (p.clockStartedAt !== undefined) row.clock_started_at = p.clockStartedAt ? new Date(p.clockStartedAt).toISOString() : null
+      supabase.from('games').update(row).eq('id', gameId).then(({ error }) => fail(error))
+    },
+    addLineup: (e) => {
+      const id = uid()
+      set((s) => ({ lineups: [...s.lineups, { ...e, id, createdAt: Date.now() }] }))
+      supabase.from('lineup_events').insert({ id, game_id: e.gameId, side: e.side, game_player_id: e.gamePlayerId, kind: e.kind, period: e.period, clock_s: e.clockS })
+        .then(({ error }) => { if (fail(error)) get().loadGame(e.gameId) })
+    },
+    removeLineup: (id) => {
+      set((s) => ({ lineups: s.lineups.filter((e) => e.id !== id) }))
+      supabase.from('lineup_events').delete().eq('id', id).then(({ error }) => fail(error))
     },
     removeStat: (id) => {
       set((s) => ({ stats: s.stats.filter((e) => e.id !== id) }))

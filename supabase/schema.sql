@@ -483,6 +483,36 @@ do $$ begin
   begin alter publication supabase_realtime add table stat_events;  exception when duplicate_object then null; end;
 end $$;
 
+-- ---------- Đồng hồ thi đấu, thay người, phút thi đấu ----------
+alter table games add column if not exists period_len int not null default 600;      -- giây mỗi hiệp (FIBA 10 phút)
+alter table games add column if not exists clock_period int not null default 1;
+alter table games add column if not exists clock_remaining real;                        -- giây còn lại khi dừng
+alter table games add column if not exists clock_running boolean not null default false;
+alter table games add column if not exists clock_started_at timestamptz;               -- lúc bấm chạy
+alter table stat_events add column if not exists clock_s real;                          -- giờ trên đồng hồ khi ghi pha
+-- Vào sân / ra sân: tính phút thi đấu (MIN) và +/- theo đồng hồ thi đấu.
+create table if not exists lineup_events (
+  id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games on delete cascade,
+  side text not null check (side in ('home','away')),
+  game_player_id uuid not null references game_players on delete cascade,
+  kind text not null check (kind in ('in','out')),
+  period int not null,
+  clock_s real not null,
+  author uuid default auth.uid() references auth.users on delete set null,
+  created_at timestamptz default now()
+);
+create index if not exists lineup_events_game_idx on lineup_events (game_id);
+alter table lineup_events enable row level security;
+drop policy if exists lineup_events_read  on lineup_events;
+drop policy if exists lineup_events_write on lineup_events;
+create policy lineup_events_read  on lineup_events for select to authenticated using (is_member(squad_of_game(game_id)));
+create policy lineup_events_write on lineup_events for all to authenticated
+  using (is_editor(squad_of_game(game_id))) with check (is_editor(squad_of_game(game_id)));
+do $$ begin
+  begin alter publication supabase_realtime add table lineup_events; exception when duplicate_object then null; end;
+end $$;
+
 -- ---------- Tổng quan trận đấu (cho màn hình chọn trận / tìm kiếm) ----------
 -- security invoker: RLS vẫn áp dụng, coach chỉ thấy trận của tuyến mình, quản trị thấy tất cả.
 drop function if exists game_overview();
