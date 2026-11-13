@@ -1,0 +1,197 @@
+import { useEffect, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { useData, useUi, selectGame, myOrgRole, toast } from '../store'
+import { lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
+import type { GamePlayer, StatType, TeamSide } from '../types'
+import { BoxScoreView } from './BoxScore'
+
+const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'miss' }[] = [
+  { type: '2PM', label: '2PT', pts: '+2', tone: 'made' }, { type: '2PX', label: '2PT', pts: 'miss', tone: 'miss' },
+  { type: '3PM', label: '3PT', pts: '+3', tone: 'made' }, { type: '3PX', label: '3PT', pts: 'miss', tone: 'miss' },
+  { type: 'FTM', label: 'FT', pts: '+1', tone: 'made' }, { type: 'FTX', label: 'FT', pts: 'miss', tone: 'miss' },
+  { type: 'OREB', label: 'OREB' }, { type: 'DREB', label: 'DREB' }, { type: 'AST', label: 'AST' },
+  { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV' }, { type: 'PF', label: 'PF' },
+]
+
+/** Trang Live Stats riêng: ghi thống kê 2 đội (dùng cho trận của đội hoặc giải đấu), không cần video. */
+export function StatsPage() {
+  const { orgId, squadId, gameId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, set: s.set })))
+  const { squads, games, players, gamePlayers, stats, isSuper, addGame, setTeamNames, addGamePlayers, removeGamePlayer, addStat, removeStat } = useData()
+  const [tab, setTab] = useState<'record' | 'box'>('record')
+  const [sel, setSel] = useState<GamePlayer | null>(null)
+  const [period, setPeriod] = useState(1)
+  const [paste, setPaste] = useState<{ side: TeamSide; text: string } | null>(null)
+  const [newGame, setNewGame] = useState<{ title: string; home: string; away: string; date: string } | null>(null)
+  const orgSquads = squads.filter((s) => s.orgId === orgId)
+  const squadGames = games.filter((g) => g.squadId === squadId)
+  const game = games.find((g) => g.id === gameId)
+  const squad = squads.find((s) => s.id === squadId)
+  const canEdit = isSuper || myOrgRole(orgId) !== 'viewer'
+
+  // Đổi trận thì về Q1 và bỏ chọn cầu thủ.
+  useEffect(() => { setSel(null); setPeriod(Math.max(1, ...stats.filter((e) => e.gameId === gameId).map((e) => e.period))) }, [gameId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const homeName = game?.homeName || squad?.name || 'HOME'
+  const awayName = game?.awayName || 'AWAY'
+  const roster = (side: TeamSide) => gamePlayers.filter((p) => p.side === side).sort((a, b) => a.number - b.number)
+  const score = (side: TeamSide) => lineOf(stats.filter((e) => e.side === side)).pts
+  const fouls = (side: TeamSide) => stats.filter((e) => e.side === side && e.type === 'PF' && e.period === period).length
+  const byId = new Map(gamePlayers.map((p) => [p.id, p]))
+
+  const record = (type: StatType) => {
+    if (!game) return
+    if (!sel) return toast('Chọn cầu thủ trước (bấm số áo)')
+    addStat({ gameId: game.id, side: sel.side, gamePlayerId: sel.id, type, period, videoId: null, videoT: null })
+    toast(`#${sel.number} ${sel.name} · ${STAT_LABEL[type]}`)
+    setSel(null)
+  }
+  const undo = () => { const last = [...stats].sort((a, b) => b.createdAt - a.createdAt)[0]; if (last) removeStat(last.id) }
+  const rename = (side: TeamSide) => {
+    if (!game) return
+    const n = prompt(side === 'home' ? 'Tên đội nhà (HOME)' : 'Tên đội khách (AWAY)', side === 'home' ? homeName : awayName)?.trim()
+    if (n) setTeamNames(game.id, side === 'home' ? n : homeName, side === 'away' ? n : awayName)
+  }
+  const savePaste = () => {
+    if (!paste || !game) return
+    const have = new Set(roster(paste.side).map((p) => p.number))
+    const list = paste.text.split('\n').map((l) => l.trim().match(/^#?(\d{1,3})\s*[\t,;.\-–:]*\s*(.*)$/)).filter(Boolean)
+      .map((m) => ({ number: +m![1], name: m![2].trim() || `No ${m![1]}` })).filter((p) => !have.has(p.number))
+    if (list.length) addGamePlayers(game.id, paste.side, list)
+    setPaste(null)
+  }
+  const createGame = () => {
+    if (!newGame || !squadId) return
+    const { gameId: gid } = addGame({ squadId, title: newGame.title.trim() || `${newGame.home || 'HOME'} vs ${newGame.away || 'AWAY'}`, date: newGame.date }, [])
+    setTeamNames(gid, newGame.home.trim(), newGame.away.trim())
+    selectGame(gid); setNewGame(null); setPeriod(1)
+  }
+
+  const team = (side: TeamSide) => (
+    <div className={`sp-team ${side}`}>
+      <div className="sp-team-head">
+        <button className="sp-name" disabled={!canEdit} title="Bấm để đổi tên đội" onClick={() => rename(side)}>{side === 'home' ? homeName : awayName}</button>
+        <span className="sp-fouls" title={`Team fouls ${periodLabel(period)}`}>TF {fouls(side)}</span>
+      </div>
+      <div className="sp-roster">
+        {roster(side).map((p) => {
+          const l = lineOf(stats.filter((e) => e.gamePlayerId === p.id))
+          const pf = stats.filter((e) => e.gamePlayerId === p.id && e.type === 'PF').length
+          return (
+            <button key={p.id} className={`sp-player ${sel?.id === p.id ? 'on' : ''} ${pf >= 5 ? 'out' : ''}`} disabled={!canEdit}
+              onClick={() => setSel(sel?.id === p.id ? null : p)}
+              onContextMenu={(e) => { e.preventDefault(); if (canEdit && confirm(`Xoá #${p.number} ${p.name} khỏi trận (và các pha của người này)?`)) removeGamePlayer(p.id) }}>
+              <span className="sp-no">{p.number}</span>
+              <span className="sp-pname">{p.name}</span>
+              <span className="sp-mini">{l.pts} PTS · {pf} PF</span>
+            </button>
+          )
+        })}
+        {canEdit && (
+          <div className="row">
+            {side === 'home' && roster('home').length === 0 && players.some((p) => p.squadId === squadId) && (
+              <button className="btn sm" onClick={() => game && addGamePlayers(game.id, 'home', players.filter((p) => p.squadId === squadId).map((p) => ({ number: p.number, name: p.name, playerId: p.id })))}>
+                Lấy cầu thủ của tuyến
+              </button>
+            )}
+            <button className="btn sm ghost" onClick={() => setPaste({ side, text: '' })}>+ Thêm cầu thủ</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="sp">
+      <div className="sp-bar">
+        <select className="sp-select" value={squadId} onChange={(e) => { set({ squadId: e.target.value }); selectGame(null) }}>
+          {orgSquads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <select className="sp-select wide" value={gameId ?? ''} onChange={(e) => selectGame(e.target.value || null)}>
+          <option value="">— Chọn trận —</option>
+          {squadGames.map((g) => <option key={g.id} value={g.id}>{g.date ? `${g.date} · ` : ''}{g.title}</option>)}
+        </select>
+        {canEdit && <button className="btn primary" disabled={!squadId} onClick={() => setNewGame({ title: '', home: squad?.name ?? '', away: '', date: new Date().toISOString().slice(0, 10) })}>+ Trận mới</button>}
+        <span className="spacer" />
+        {game && (
+          <div className="seg-toggle sp-tabs">
+            <button className={tab === 'record' ? 'on' : ''} onClick={() => setTab('record')}>Record</button>
+            <button className={tab === 'box' ? 'on' : ''} onClick={() => setTab('box')}>Box score</button>
+          </div>
+        )}
+      </div>
+
+      {newGame && (
+        <div className="modal-back" onClick={() => setNewGame(null)}>
+          <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
+            <b>Trận mới (chỉ thống kê, không cần video)</b>
+            <div className="org-form">
+              <input placeholder="HOME (đội nhà)" value={newGame.home} onChange={(e) => setNewGame({ ...newGame, home: e.target.value })} />
+              <input placeholder="AWAY (đội khách)" value={newGame.away} onChange={(e) => setNewGame({ ...newGame, away: e.target.value })} />
+              <input placeholder="Tên trận (tuỳ chọn)" value={newGame.title} onChange={(e) => setNewGame({ ...newGame, title: e.target.value })} />
+              <input type="date" value={newGame.date} onChange={(e) => setNewGame({ ...newGame, date: e.target.value })} />
+            </div>
+            <div className="row"><button className="btn" onClick={() => setNewGame(null)}>Huỷ</button><button className="btn primary grow-btn" onClick={createGame}>Tạo trận</button></div>
+          </div>
+        </div>
+      )}
+
+      {!game ? (
+        <div className="placeholder">Chọn một trận ở trên, hoặc bấm <b>+ Trận mới</b> để thống kê một trận (kể cả trận của giải đấu).</div>
+      ) : tab === 'box' ? (
+        <div className="sp-box"><BoxScoreView /></div>
+      ) : (
+        <div className="sp-main">
+          <div className="sp-left">
+            <div className="sp-score">
+              <span className="sp-sname">{homeName}</span>
+              <span className="sp-num home">{score('home')}</span>
+              <div className="sp-period">
+                <button className="icon-btn" disabled={period <= 1} onClick={() => setPeriod(period - 1)}>‹</button>
+                <b>{periodLabel(period)}</b>
+                <button className="icon-btn" onClick={() => setPeriod(period + 1)}>›</button>
+              </div>
+              <span className="sp-num away">{score('away')}</span>
+              <span className="sp-sname">{awayName}</span>
+            </div>
+            <div className="sp-teams">{team('home')}{team('away')}</div>
+            {paste && (
+              <div className="card stack">
+                <label className="field-label">Thêm cầu thủ {paste.side === 'home' ? homeName : awayName}: mỗi dòng “số tên”</label>
+                <textarea rows={5} autoFocus placeholder={'4 Minh\n7 Nam\n(dán được từ Excel)'} value={paste.text} onChange={(e) => setPaste({ ...paste, text: e.target.value })} />
+                <div className="row"><button className="btn" onClick={() => setPaste(null)}>Huỷ</button><button className="btn primary grow-btn" onClick={savePaste}>Thêm</button></div>
+              </div>
+            )}
+            <div className={`sp-pad ${sel ? '' : 'idle'}`}>
+              <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
+              <div className="sp-actions">
+                {ACTIONS.map((a) => (
+                  <button key={a.type} className={`sp-act ${a.tone ?? ''}`} disabled={!canEdit} onClick={() => record(a.type)}>
+                    <span>{a.label}</span>{a.pts && <small>{a.pts}</small>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="sp-log">
+            <div className="row">
+              <b className="grow">Play-by-play ({stats.length})</b>
+              <button className="btn sm" disabled={!stats.length || !canEdit} onClick={undo}>↶ Undo</button>
+            </div>
+            <ul className="list">
+              {[...stats].sort((a, b) => b.createdAt - a.createdAt).map((e) => {
+                const p = e.gamePlayerId ? byId.get(e.gamePlayerId) : undefined
+                return (
+                  <li key={e.id} className="item">
+                    <span className={`st-dot ${e.side}`} />
+                    <span className="grow"><span className="muted">{periodLabel(e.period)}</span> <b>#{p?.number} {p?.name}</b> {STAT_LABEL[e.type]}</span>
+                    {canEdit && <button className="icon-btn" onClick={() => removeStat(e.id)}>×</button>}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

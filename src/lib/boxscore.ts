@@ -17,10 +17,10 @@ export function lineOf(events: StatEvent[]): Line {
 }
 
 export const pct = (m: number, a: number) => (a ? `${Math.round((m / a) * 1000) / 10}%` : '–')
-export const periodLabel = (n: number) => (n <= 4 ? `H${n}` : `OT${n - 4}`)
+export const periodLabel = (n: number) => (n <= 4 ? `Q${n}` : `OT${n - 4}`)
 
-/** Nhãn hiển thị của từng loại pha. */
+/** Thuật ngữ thống kê (tiếng Anh, theo FIBA). */
 export const STAT_LABEL: Record<StatType, string> = {
-  '2PM': '2Đ trúng', '2PX': '2Đ trượt', '3PM': '3Đ trúng', '3PX': '3Đ trượt', FTM: 'Ném phạt trúng', FTX: 'Ném phạt trượt',
-  OREB: 'Bắt bóng tấn công', DREB: 'Bắt bóng phòng thủ', AST: 'Kiến tạo', STL: 'Cướp bóng', BLK: 'Chắn bóng', TOV: 'Mất bóng', PF: 'Phạm lỗi',
+  '2PM': '2PT made', '2PX': '2PT missed', '3PM': '3PT made', '3PX': '3PT missed', FTM: 'FT made', FTX: 'FT missed',
+  OREB: 'OREB', DREB: 'DREB', AST: 'AST', STL: 'STL', BLK: 'BLK', TOV: 'TOV', PF: 'PF',
 }

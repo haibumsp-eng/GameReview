@@ -12,7 +12,7 @@ import { Timeline } from './components/Timeline'
 import { MarkPanel, markNow, markIn, markOut, setSelectedIn, setSelectedOut } from './components/MarkPanel'
 import { ClipList, useFilteredClips } from './components/ClipList'
 import { Comments } from './components/Comments'
-import { StatsPanel } from './components/StatsPanel'
+import { StatsPage } from './components/StatsPage'
 import { Login } from './components/Login'
 import { Overview } from './components/Overview'
 import { RecordHud } from './components/RecordHud'
@@ -85,6 +85,12 @@ export default function App() {
   const { ready, session, error, squads, games, playlists, isSuper, orgs, orgMembers, baseLoaded, init, signOut, loadGame, profiles } = useData()
   const { orgId, squadId, gameId, overview, inPoint, toastMsg, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, overview: s.overview, inPoint: s.inPoint, toastMsg: s.toast, set: s.set })))
   const [modal, setModal] = useState<'' | 'members' | 'orgs'>('')
+  // Hai trang: Mổ băng (video) và Live Stats (thống kê). Nhớ trang đang mở; link #stats mở thẳng trang stats.
+  const [view, setViewState] = useState<'review' | 'stats'>(() => {
+    if (location.hash.includes('stats')) return 'stats'
+    try { return localStorage.getItem('gr-view') === 'stats' ? 'stats' : 'review' } catch { return 'review' }
+  })
+  const setView = (v: 'review' | 'stats') => { setViewState(v); try { localStorage.setItem('gr-view', v) } catch { /* bỏ qua */ } }
   const landed = useRef(false)
   const L = useLayout()
 
@@ -151,11 +157,13 @@ export default function App() {
   }
   return (
     <div className="app">
-      <Hotkeys />
-      <PlaylistRunner />
-      <SpotlightRunner />
+      {view === 'review' && <><Hotkeys /><PlaylistRunner /><SpotlightRunner /></>}
       <header className="topbar">
         <Logo />
+        <div className="seg-toggle view-switch">
+          <button className={view === 'review' ? 'on' : ''} onClick={() => setView('review')}>Mổ băng</button>
+          <button className={view === 'stats' ? 'on' : ''} onClick={() => setView('stats')}>Live Stats</button>
+        </div>
         {isSuper ? (
           <select className="org-select" value={orgId} onChange={(e) => { set({ orgId: e.target.value }); try { localStorage.setItem('gr-org', e.target.value) } catch { /* bỏ qua */ } }}>
             {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -165,7 +173,7 @@ export default function App() {
         {(role === 'owner') && <button className="btn sm ghost" onClick={() => setModal('members')}>Thành viên</button>}
         <span className="spacer" />
         {error && <span className="banner" title="Bấm để ẩn" onClick={() => useData.setState({ error: '' })}>{error}</span>}
-        <div className="keys-help">
+        {view === 'review' && <div className="keys-help">
           <button className="btn sm ghost">⌨ Phím tắt</button>
           <div className="keys-pop">
             <div><kbd>Space</kbd> Phát / dừng</div>
@@ -176,9 +184,9 @@ export default function App() {
             <div><kbd>⇧I</kbd> <kbd>⇧O</kbd> Sửa vào/ra tình huống đang chọn</div>
             <div><kbd>Esc</kbd> Huỷ / thoát ô nhập · <kbd>Del</kbd> Xoá mark</div>
           </div>
-        </div>
+        </div>}
         <button className="btn sm primary" onClick={() => set({ overview: true })}>Tất cả trận</button>
-        <button className="btn sm ghost" title="Đưa các module về kích thước mặc định" onClick={L.reset}>Đặt lại bố cục</button>
+{view === 'review' && <button className="btn sm ghost" title="Đưa các module về kích thước mặc định" onClick={L.reset}>Đặt lại bố cục</button>}
         <span className="me">{me}</span>
         {isSuper && <span className="pill live">ADMIN</span>}
         <button className="btn sm ghost" onClick={signOut}>Đăng xuất</button>
@@ -190,6 +198,7 @@ export default function App() {
       <RecordHud />
       {toastMsg && inPoint == null && <div className="toast">{toastMsg}</div>}
       {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}
+      {view === 'stats' ? <StatsPage /> : (
       <div className="workspace">
         <div className="col" style={{ width: L.left }}>
           <SplitV frac={L.leftSplit} setFrac={(f) => L.set({ leftSplit: f })} top={<Library />} bottom={<Roster />} />
@@ -206,9 +215,10 @@ export default function App() {
 
         <Gutter dir="col" begin={() => L.right} move={(s, dx) => L.set({ right: clamp(s - dx, 260, 700) })} />
         <div className="col" style={{ width: L.right }}>
-          <SplitV frac={L.rightSplit} setFrac={(f) => L.set({ rightSplit: f })} top={<RightTop />} bottom={<Comments />} />
+          <SplitV frac={L.rightSplit} setFrac={(f) => L.set({ rightSplit: f })} top={<MarkPanel />} bottom={<Comments />} />
         </div>
       </div>
+      )}
     </div>
   )
 }
@@ -234,23 +244,6 @@ function JoinByCode() {
         <button className="btn primary" disabled={busy} onClick={go}>Tham gia</button>
       </div>
       {msg && <div className="err">{msg}</div>}
-    </div>
-  )
-}
-
-/** Cột phải phía trên: chuyển giữa Đánh dấu tình huống và Thống kê (box score). */
-function RightTop() {
-  const [tab, setTab] = useState<'mark' | 'stats'>(() => {
-    try { return localStorage.getItem('gr-rtab') === 'stats' ? 'stats' : 'mark' } catch { return 'mark' }
-  })
-  const pick = (t: 'mark' | 'stats') => { setTab(t); try { localStorage.setItem('gr-rtab', t) } catch { /* bỏ qua */ } }
-  return (
-    <div className="rtop">
-      <div className="seg-toggle rtabs">
-        <button className={tab === 'mark' ? 'on' : ''} onClick={() => pick('mark')}>Đánh dấu</button>
-        <button className={tab === 'stats' ? 'on' : ''} onClick={() => pick('stats')}>Thống kê</button>
-      </div>
-      {tab === 'mark' ? <MarkPanel /> : <StatsPanel />}
     </div>
   )
 }
