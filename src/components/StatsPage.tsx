@@ -18,7 +18,7 @@ const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'm
   { type: '3PM', label: '3PT', pts: '+3', tone: 'made' }, { type: '3PX', label: '3PT', pts: 'miss', tone: 'miss' },
   { type: 'FTM', label: 'FT', pts: '+1', tone: 'made' }, { type: 'FTX', label: 'FT', pts: 'miss', tone: 'miss' },
   { type: 'OREB', label: 'OREB' }, { type: 'DREB', label: 'DREB' }, { type: 'AST', label: 'AST' },
-  { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV' }, { type: 'PF', label: 'PF' }, { type: 'PFS', label: 'PF', pts: 'shooting' },
+  { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV' }, { type: 'PF', label: 'PF' }, { type: 'PFS', label: 'SF' },
 ]
 
 /** Trang Live Stats riêng: ghi thống kê 2 đội (dùng cho trận của đội hoặc giải đấu), không cần video. */
