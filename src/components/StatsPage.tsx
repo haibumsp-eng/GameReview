@@ -5,6 +5,9 @@ import { lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
 import { clockNow, mmss, onCourt, periodLength, plusMinus, secondsPlayed } from '../lib/minutes'
 import type { GamePlayer, StatType, TeamSide } from '../types'
 import { BoxScoreView } from './BoxScore'
+import { PlayerPanel } from './PlayerPanel'
+import { yt } from '../youtube'
+import { seekVideo } from '../nav'
 
 const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'miss' }[] = [
   { type: '2PM', label: '2PT', pts: '+2', tone: 'made' }, { type: '2PX', label: '2PT', pts: 'miss', tone: 'miss' },
@@ -16,7 +19,9 @@ const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'm
 
 /** Trang Live Stats riêng: ghi thống kê 2 đội (dùng cho trận của đội hoặc giải đấu), không cần video. */
 export function StatsPage() {
-  const { orgId, squadId, gameId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, set: s.set })))
+  const { orgId, squadId, gameId, videoId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, videoId: s.videoId, set: s.set })))
+  const [showVideo, setShowVideo] = useState(() => { try { return localStorage.getItem('gr-sp-video') !== 'off' } catch { return true } })
+  const toggleVideo = () => { setShowVideo(!showVideo); try { localStorage.setItem('gr-sp-video', showVideo ? 'off' : 'on') } catch { /* bỏ qua */ } }
   const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, addGamePlayers, removeGamePlayer, addStat, removeStat, setClock, addLineup, removeLineup } = useData()
   const [tab, setTab] = useState<'record' | 'box'>('record')
   const [sel, setSel] = useState<GamePlayer | null>(null)
@@ -93,7 +98,9 @@ export function StatsPage() {
   const record = (type: StatType) => {
     if (!game) return
     if (!sel) return toast('Chọn cầu thủ trước (bấm số áo)')
-    addStat({ gameId: game.id, side: sel.side, gamePlayerId: sel.id, type, period, videoId: null, videoT: null, clockS: remaining })
+    // Đang xem video thì gắn đúng giây trong video để bấm vào pha là xem lại được.
+    const onVideo = showVideo && !!videoId && yt.ready()
+    addStat({ gameId: game.id, side: sel.side, gamePlayerId: sel.id, type, period, videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, clockS: remaining })
     toast(`#${sel.number} ${sel.name} · ${STAT_LABEL[type]}`)
     setSel(null)
   }
@@ -171,6 +178,35 @@ export function StatsPage() {
     )
   }
 
+  const logEl = (
+  <div className="sp-log">
+    <div className="row">
+      <b className="grow">Play-by-play ({stats.length + lineups.length})</b>
+      <button className="btn sm" disabled={!(stats.length + lineups.length) || !canEdit} onClick={undo}>↶ Undo</button>
+    </div>
+    <ul className="list">
+      {[...stats.map((e) => ({ at: e.createdAt, s: e, l: undefined })), ...lineups.map((e) => ({ at: e.createdAt, s: undefined, l: e }))]
+        .sort((a, b) => b.at - a.at).map(({ s: e, l }) => {
+          const ev = (e ?? l)!
+          const p = byId.get((e ? e.gamePlayerId : l!.gamePlayerId) ?? '')
+          const clock = e ? e.clockS : l!.clockS
+          return (
+            <li key={ev.id} className={`item ${l ? 'sp-subrow' : ''} ${e?.videoT != null ? 'seekable' : ''}`}
+              title={e?.videoT != null ? 'Bấm để xem lại pha này' : undefined}
+              onClick={() => { if (e?.videoId && e.videoT != null) { if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(e.videoId!, Math.max(0, e.videoT! - 3), true), 50) } }}>
+              <span className={`st-dot ${ev.side}`} />
+              <span className="grow">
+                <span className="muted">{periodLabel(ev.period)}{clock != null ? ` ${mmss(clock)}` : ''}</span> <b>#{p?.number} {p?.name}</b>{' '}
+                {e ? STAT_LABEL[e.type] : l!.kind === 'in' ? 'SUB IN' : 'SUB OUT'}
+              </span>
+              {canEdit && <button className="icon-btn" onClick={() => (e ? removeStat(e.id) : removeLineup(l!.id))}>×</button>}
+            </li>
+          )
+        })}
+    </ul>
+  </div>
+  )
+
   return (
     <div className="sp">
       <div className="sp-bar">
@@ -183,6 +219,9 @@ export function StatsPage() {
         </select>
         {canEdit && <button className="btn primary" disabled={!squadId} onClick={() => setNewGame({ title: '', home: squad?.name ?? '', away: '', date: new Date().toISOString().slice(0, 10), len: 600 })}>+ Trận mới</button>}
         <span className="spacer" />
+        {game && (
+          <button className="btn sm ghost" onClick={toggleVideo}>{showVideo ? 'Ẩn video' : 'Hiện video'}</button>
+        )}
         {game && (
           <div className="seg-toggle sp-tabs">
             <button className={tab === 'record' ? 'on' : ''} onClick={() => setTab('record')}>Record</button>
@@ -212,9 +251,10 @@ export function StatsPage() {
       {!game ? (
         <div className="placeholder">Chọn một trận ở trên, hoặc bấm <b>+ Trận mới</b> để thống kê một trận (kể cả trận của giải đấu).</div>
       ) : tab === 'box' ? (
-        <div className="sp-box"><BoxScoreView /></div>
+        <div className="sp-box"><BoxScoreView onSeek={(vid, t) => { setTab('record'); if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(vid, t, true), 50) }} /></div>
       ) : (
-        <div className="sp-main">
+        <div className={`sp-main ${showVideo ? 'with-video' : ''}`}>
+          {showVideo && <div className="sp-watch"><div className="sp-video"><PlayerPanel /></div>{logEl}</div>}
           <div className="sp-left">
             <div className="sp-score">
               <span className="sp-sname">{homeName}</span>
@@ -252,30 +292,7 @@ export function StatsPage() {
               </div>
             </div>
           </div>
-          <div className="sp-log">
-            <div className="row">
-              <b className="grow">Play-by-play ({stats.length + lineups.length})</b>
-              <button className="btn sm" disabled={!(stats.length + lineups.length) || !canEdit} onClick={undo}>↶ Undo</button>
-            </div>
-            <ul className="list">
-              {[...stats.map((e) => ({ at: e.createdAt, s: e, l: undefined })), ...lineups.map((e) => ({ at: e.createdAt, s: undefined, l: e }))]
-                .sort((a, b) => b.at - a.at).map(({ s: e, l }) => {
-                  const ev = (e ?? l)!
-                  const p = byId.get((e ? e.gamePlayerId : l!.gamePlayerId) ?? '')
-                  const clock = e ? e.clockS : l!.clockS
-                  return (
-                    <li key={ev.id} className={`item ${l ? 'sp-subrow' : ''}`}>
-                      <span className={`st-dot ${ev.side}`} />
-                      <span className="grow">
-                        <span className="muted">{periodLabel(ev.period)}{clock != null ? ` ${mmss(clock)}` : ''}</span> <b>#{p?.number} {p?.name}</b>{' '}
-                        {e ? STAT_LABEL[e.type] : l!.kind === 'in' ? 'SUB IN' : 'SUB OUT'}
-                      </span>
-                      {canEdit && <button className="icon-btn" onClick={() => (e ? removeStat(e.id) : removeLineup(l!.id))}>×</button>}
-                    </li>
-                  )
-                })}
-            </ul>
-          </div>
+          {!showVideo && logEl}
         </div>
       )}
     </div>

@@ -517,3 +517,13 @@ a.btn { text-decoration: none; text-align: center; }
 .sp-pname { padding-right: 28px; }
 .sp-subrow { opacity: .75; }
 .bs-plus { color: var(--accent); } .bs-minus { color: var(--def); }
+
+/* ---------- Video trong trang Live Stats ---------- */
+.sp-main.with-video { grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); }
+.sp-watch { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.sp-video { flex: none; height: clamp(260px, 52vh, 620px); display: flex; min-height: 0; }
+.sp-watch .sp-log { flex: 1; }
+.sp-video > .panel { flex: 1; }
+.sp-log .item.seekable { cursor: pointer; }
+.sp-log .item.seekable:hover { background: var(--accent-soft); }
+.sp-video .panel-actions { display: none; } /* ô Trước/Sau chỉ dùng cho mổ băng */

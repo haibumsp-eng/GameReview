@@ -16,7 +16,7 @@ const COLS: { k: string; label: string; v: (l: Line) => string | number }[] = [
 ]
 
 /** Box score 2 đội kiểu FIBA (hiển thị ngay trong trang). Bấm một cầu thủ để xem từng pha. */
-export function BoxScoreView() {
+export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => void }) {
   const gameId = useUi((s) => s.gameId)
   const game = useData((s) => s.games.find((g) => g.id === gameId))
   const squad = useData((s) => s.squads.find((x) => x.id === game?.squadId))
@@ -56,7 +56,10 @@ export function BoxScoreView() {
                   open === p.id && (
                     <tr key={p.id + '-ev'} className="bs-events"><td colSpan={COLS.length + 4}>
                       {mine.length === 0 ? <span className="muted">Chưa có pha nào.</span> : [...mine].sort((a, b) => a.createdAt - b.createdAt).map((e) => (
-                        <span key={e.id} className="tag bs-ev">{periodLabel(e.period)} · {STAT_LABEL[e.type]}</span>
+                        <button key={e.id} className="tag bs-ev" disabled={!e.videoId || e.videoT == null || !props.onSeek}
+                          onClick={() => e.videoId && e.videoT != null && props.onSeek?.(e.videoId, Math.max(0, e.videoT - 3))}>
+                          {periodLabel(e.period)}{e.clockS != null ? ` ${mmss(e.clockS)}` : ''} · {STAT_LABEL[e.type]}{e.videoT != null ? ' ▶' : ''}
+                        </button>
                       ))}
                     </td></tr>
                   ),
