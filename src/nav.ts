@@ -13,3 +13,10 @@ export function goToClip(c: Clip, play = false) {
     ui.set({ clipId: c.id, videoId: c.videoId, pending: { t: c.start, play }, time: c.start })
   }
 }
+
+/** Tua tới một thời điểm trong một video (hiệp) bất kỳ của trận đang mở. */
+export function seekVideo(videoId: string, t: number, play = false) {
+  const ui = useUi.getState()
+  if (videoId === ui.videoId) { yt.seek(t); if (play) yt.play() }
+  else ui.set({ videoId, clipId: null, pending: { t, play }, time: t })
+}

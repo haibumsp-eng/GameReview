@@ -12,6 +12,7 @@ import { Timeline } from './components/Timeline'
 import { MarkPanel, markNow, markIn, markOut, setSelectedIn, setSelectedOut } from './components/MarkPanel'
 import { ClipList, useFilteredClips } from './components/ClipList'
 import { Comments } from './components/Comments'
+import { StatsPanel } from './components/StatsPanel'
 import { Login } from './components/Login'
 import { Overview } from './components/Overview'
 import { RecordHud } from './components/RecordHud'
@@ -205,7 +206,7 @@ export default function App() {
 
         <Gutter dir="col" begin={() => L.right} move={(s, dx) => L.set({ right: clamp(s - dx, 260, 700) })} />
         <div className="col" style={{ width: L.right }}>
-          <SplitV frac={L.rightSplit} setFrac={(f) => L.set({ rightSplit: f })} top={<MarkPanel />} bottom={<Comments />} />
+          <SplitV frac={L.rightSplit} setFrac={(f) => L.set({ rightSplit: f })} top={<RightTop />} bottom={<Comments />} />
         </div>
       </div>
     </div>
@@ -233,6 +234,23 @@ function JoinByCode() {
         <button className="btn primary" disabled={busy} onClick={go}>Tham gia</button>
       </div>
       {msg && <div className="err">{msg}</div>}
+    </div>
+  )
+}
+
+/** Cột phải phía trên: chuyển giữa Đánh dấu tình huống và Thống kê (box score). */
+function RightTop() {
+  const [tab, setTab] = useState<'mark' | 'stats'>(() => {
+    try { return localStorage.getItem('gr-rtab') === 'stats' ? 'stats' : 'mark' } catch { return 'mark' }
+  })
+  const pick = (t: 'mark' | 'stats') => { setTab(t); try { localStorage.setItem('gr-rtab', t) } catch { /* bỏ qua */ } }
+  return (
+    <div className="rtop">
+      <div className="seg-toggle rtabs">
+        <button className={tab === 'mark' ? 'on' : ''} onClick={() => pick('mark')}>Đánh dấu</button>
+        <button className={tab === 'stats' ? 'on' : ''} onClick={() => pick('stats')}>Thống kê</button>
+      </div>
+      {tab === 'mark' ? <MarkPanel /> : <StatsPanel />}
     </div>
   )
 }

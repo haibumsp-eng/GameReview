@@ -406,3 +406,48 @@ a.btn { text-decoration: none; text-align: center; }
 .spot-edit { border-color: var(--accent-line); }
 .spot-num { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border-radius: 6px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12px; }
 .spot-info { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+
+/* ---------- Cột phải: tab Đánh dấu / Thống kê ---------- */
+.slot > .rtop { flex: 1; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.rtop > .panel { flex: 1; }
+.rtabs { flex: none; }
+
+/* ---------- Bàn bấm thống kê ---------- */
+.st-team { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+.st-team.home { border-left: 3px solid var(--accent); }
+.st-team.away { border-left: 3px solid #9aa0ff; }
+.st-team-head { display: flex; align-items: center; justify-content: space-between; }
+.st-name { background: none; border: 0; padding: 0; cursor: pointer; font-family: var(--font-display); font-stretch: 112%; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text); }
+.st-name:hover { color: var(--accent); }
+.st-score { font-family: var(--font-display); font-stretch: 112%; font-weight: 800; font-size: 22px; font-variant-numeric: tabular-nums; }
+.st-team.away .chip.on { background: #9aa0ff; border-color: #9aa0ff; color: #0a0b1a; }
+.st-pad { border: 1px solid var(--accent-line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 8px; background: #101203; flex: none; }
+.st-pad.idle { border-color: var(--line); background: var(--panel-2); }
+.st-sel { font-size: 13px; color: var(--text-2); }
+.st-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.st-act { padding: 9px 6px; font-weight: 600; }
+.st-act.made { border-color: #4f5a10; }
+.st-act.miss { color: var(--text-2); }
+.st-pad.idle .st-act { opacity: .55; }
+.st-log .item { padding: 6px 8px; font-size: 13px; }
+.st-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.st-dot.home { background: var(--accent); } .st-dot.away { background: #9aa0ff; }
+
+/* ---------- Box score ---------- */
+.bs { width: min(1180px, 96vw); }
+.bs-score { font-family: var(--font-display); font-stretch: 112%; font-size: 20px; font-weight: 600; text-align: center; }
+.bs-score b { color: var(--accent); font-size: 26px; font-variant-numeric: tabular-nums; }
+.bs-body { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 16px; }
+.bs-title { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--font-display); font-stretch: 112%; font-weight: 800; text-transform: uppercase; padding: 0 4px 6px; }
+.bs-pts { font-size: 22px; color: var(--accent); }
+.bs-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.bs-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.bs-table th { background: var(--panel-2); color: var(--muted); font-size: 11px; font-weight: 600; text-align: center; padding: 8px 6px; position: sticky; top: 0; white-space: nowrap; }
+.bs-table td { text-align: center; padding: 7px 6px; border-top: 1px solid var(--line); white-space: nowrap; }
+.bs-table .bs-no { width: 36px; color: var(--accent); font-weight: 700; }
+.bs-table .bs-name { text-align: left; min-width: 140px; }
+.bs-row { cursor: pointer; } .bs-row:hover, .bs-row.open { background: var(--accent-soft); }
+.bs-strong { font-weight: 700; color: var(--text); }
+.bs-total td { font-weight: 700; background: var(--panel-2); }
+.bs-events td { text-align: left; background: #0d0d0f; }
+.bs-ev { margin: 2px 4px 2px 0; cursor: pointer; } .bs-ev:disabled { cursor: default; opacity: .7; }

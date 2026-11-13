@@ -439,6 +439,50 @@ do $$ begin
   begin alter publication supabase_realtime add table playlists; exception when duplicate_object then null; end;
 end $$;
 
+-- ---------- Thống kê trận đấu (box score kiểu FIBA, cả 2 đội) ----------
+alter table games add column if not exists home_name text;
+alter table games add column if not exists away_name text;
+-- Danh sách cầu thủ CỦA TỪNG TRẬN, mỗi đội một bên (home / away). player_id: nối với cầu thủ của tuyến nếu có.
+create table if not exists game_players (
+  id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games on delete cascade,
+  side text not null check (side in ('home','away')),
+  number int not null,
+  name text not null,
+  player_id uuid references players on delete set null
+);
+create index if not exists game_players_game_idx on game_players (game_id);
+-- Mỗi pha thống kê. video_id / video_t: thời điểm trong video (để bấm vào xem lại); trống khi ghi tại sân.
+create table if not exists stat_events (
+  id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games on delete cascade,
+  side text not null check (side in ('home','away')),
+  game_player_id uuid references game_players on delete cascade,
+  type text not null check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF')),
+  period int not null default 1,
+  video_id uuid references game_videos on delete set null,
+  video_t real,
+  author uuid default auth.uid() references auth.users on delete set null,
+  created_at timestamptz default now()
+);
+create index if not exists stat_events_game_idx on stat_events (game_id);
+alter table game_players enable row level security;
+alter table stat_events  enable row level security;
+drop policy if exists game_players_read  on game_players;
+drop policy if exists game_players_write on game_players;
+create policy game_players_read  on game_players for select to authenticated using (is_member(squad_of_game(game_id)));
+create policy game_players_write on game_players for all to authenticated
+  using (is_editor(squad_of_game(game_id))) with check (is_editor(squad_of_game(game_id)));
+drop policy if exists stat_events_read  on stat_events;
+drop policy if exists stat_events_write on stat_events;
+create policy stat_events_read  on stat_events for select to authenticated using (is_member(squad_of_game(game_id)));
+create policy stat_events_write on stat_events for all to authenticated
+  using (is_editor(squad_of_game(game_id))) with check (is_editor(squad_of_game(game_id)));
+do $$ begin
+  begin alter publication supabase_realtime add table game_players; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table stat_events;  exception when duplicate_object then null; end;
+end $$;
+
 -- ---------- Tổng quan trận đấu (cho màn hình chọn trận / tìm kiếm) ----------
 -- security invoker: RLS vẫn áp dụng, coach chỉ thấy trận của tuyến mình, quản trị thấy tất cả.
 drop function if exists game_overview();

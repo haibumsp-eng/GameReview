@@ -11,6 +11,8 @@ export interface Game {
   squadId: string
   title: string
   date: string
+  homeName?: string
+  awayName?: string
 }
 /** Một video (một hiệp / OT) của trận. Mốc thời gian của mark tính theo video này. */
 export interface GameVideo {
@@ -68,4 +70,22 @@ export interface Playlist {
   side: Side | null
   playType: string
   playerIds: string[]
+}
+
+/* ---------- Thống kê (box score kiểu FIBA) ---------- */
+export type TeamSide = 'home' | 'away'
+/** Cầu thủ của một trận (mỗi đội một bên). playerId: nối với cầu thủ của tuyến nếu có. */
+export interface GamePlayer { id: string; gameId: string; side: TeamSide; number: number; name: string; playerId: string | null }
+/** M = trúng (made), X = trượt. */
+export type StatType = '2PM' | '2PX' | '3PM' | '3PX' | 'FTM' | 'FTX' | 'OREB' | 'DREB' | 'AST' | 'STL' | 'BLK' | 'TOV' | 'PF'
+export interface StatEvent {
+  id: string
+  gameId: string
+  side: TeamSide
+  gamePlayerId: string | null
+  type: StatType
+  period: number
+  videoId: string | null
+  videoT: number | null
+  createdAt: number
 }
