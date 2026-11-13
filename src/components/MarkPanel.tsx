@@ -5,6 +5,8 @@ import { yt } from '../youtube'
 import { fmt } from '../util'
 import { Panel } from './Panel'
 import { AutoTextarea } from './AutoTextarea'
+import { useEffect } from 'react'
+import type { Clip } from '../types'
 
 const warn = (msg: string) => useData.setState({ error: msg })
 
@@ -156,9 +158,104 @@ export function MarkPanel() {
           <label className="field-label">Nhận xét</label>
           <AutoTextarea minRows={4} placeholder="Ghi chú tình huống…" value={clip.note} onChange={(e) => updateClip(clip.id, { note: e.target.value })} />
 
+          <SpotlightControls clip={clip} />
+
           <button className="btn danger" onClick={() => { removeClip(clip.id); set({ clipId: null }) }}>Xoá mark <kbd>Del</kbd></button>
         </div>
       )}
     </Panel>
+  )
+}
+
+/** Khoanh cầu thủ khi dừng hình: tạo, sửa, xem thử, xoá. */
+function SpotlightControls({ clip }: { clip: Clip }) {
+  const spotEdit = useUi((s) => s.spotEdit)
+  const set = useUi((s) => s.set)
+  const updateClip = useData((s) => s.updateClip)
+  const allPlayers = useData((s) => s.players)
+  const squadId = useUi((s) => s.squadId)
+  const editing = spotEdit && spotEdit.clipId === clip.id ? spotEdit : null
+  const sp = clip.spotlight
+
+  // Đổi sang tình huống khác thì huỷ việc vẽ đang dở.
+  useEffect(() => {
+    const e = useUi.getState().spotEdit
+    if (e && e.clipId !== clip.id) useUi.getState().set({ spotEdit: null })
+  }, [clip.id])
+
+  const players = [...allPlayers.filter((p) => p.squadId === squadId)].sort((a, b) =>
+    (clip.playerIds.includes(b.id) ? 1 : 0) - (clip.playerIds.includes(a.id) ? 1 : 0) || a.number - b.number)
+  const within = (t: number) => Math.min(clip.end - 0.3, Math.max(clip.start, t))
+
+  const begin = () => {
+    yt.pause()
+    let t = yt.time()
+    if (t < clip.start || t > clip.end) { t = Math.min(clip.end, clip.start + 1); yt.seek(t) }
+    set({ spotEdit: { clipId: clip.id, t: within(t), hold: 2, boxes: [] } })
+  }
+  const edit = () => {
+    if (!sp) return
+    yt.pause(); yt.seek(sp.t)
+    set({ spotEdit: { clipId: clip.id, t: sp.t, hold: sp.hold, boxes: sp.boxes } })
+  }
+  const save = () => {
+    if (!editing) return
+    updateClip(clip.id, { spotlight: { t: editing.t, hold: editing.hold, boxes: editing.boxes } })
+    set({ spotEdit: null })
+    toast('Đã lưu khoanh cầu thủ')
+  }
+  const preview = () => {
+    if (!sp) return
+    yt.seek(Math.max(clip.start, sp.t - 2))
+    yt.play()
+    set({ spotPreview: clip.id, playlist: false })
+  }
+  const setBox = (i: number, label: string) =>
+    editing && set({ spotEdit: { ...editing, boxes: editing.boxes.map((b, j) => (j === i ? { ...b, label: label || undefined } : b)) } })
+
+  return (
+    <>
+      <label className="field-label">Khoanh cầu thủ (dừng hình)</label>
+      {editing ? (
+        <div className="card stack spot-edit">
+          <div className="small-note">
+            <b>Kéo chuột trên video</b> để khoanh cầu thủ (tối đa 3 khung). Video dừng tại <b>{fmt(editing.t)}</b>.
+          </div>
+          <button className="btn sm" onClick={() => { yt.pause(); set({ spotEdit: { ...editing, t: within(yt.time()) } }) }}>Lấy khung hình đang dừng</button>
+          {editing.boxes.length === 0 && <div className="muted small-note">Chưa có khung nào.</div>}
+          {editing.boxes.map((b, i) => (
+            <div key={i} className="row">
+              <span className="spot-num">{i + 1}</span>
+              <select value={b.label ?? ''} onChange={(e) => setBox(i, e.target.value)}>
+                <option value="">— không ghi tên —</option>
+                {players.map((p) => <option key={p.id} value={`#${p.number} ${p.name}`}>#{p.number} {p.name}</option>)}
+              </select>
+              <button className="icon-btn" title="Xoá khung" onClick={() => set({ spotEdit: { ...editing, boxes: editing.boxes.filter((_, j) => j !== i) } })}>×</button>
+            </div>
+          ))}
+          <div className="row">
+            <span className="muted">Dừng hình</span>
+            <select style={{ width: 110 }} value={editing.hold} onChange={(e) => set({ spotEdit: { ...editing, hold: +e.target.value } })}>
+              {[1, 1.5, 2, 3, 4, 5].map((s) => <option key={s} value={s}>{s} giây</option>)}
+            </select>
+          </div>
+          <div className="row">
+            <button className="btn" onClick={() => set({ spotEdit: null })}>Huỷ</button>
+            <button className="btn primary grow-btn" disabled={!editing.boxes.length} onClick={save}>Lưu khoanh</button>
+          </div>
+        </div>
+      ) : sp ? (
+        <div className="spot-info">
+          <span>🎯 Dừng tại <b>{fmt(sp.t)}</b> · {sp.boxes.length} khung · {sp.hold} giây</span>
+          <div className="row">
+            <button className="btn sm" onClick={preview}>Xem thử</button>
+            <button className="btn sm" onClick={edit}>Sửa</button>
+            <button className="icon-btn" title="Bỏ khoanh" onClick={() => confirm('Bỏ khoanh cầu thủ ở tình huống này?') && updateClip(clip.id, { spotlight: null })}>×</button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn" onClick={begin}>🎯 Khoanh cầu thủ tại khoảnh khắc đang dừng</button>
+      )}
+    </>
   )
 }

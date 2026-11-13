@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import type { Clip, Comment, Game, GameVideo, Org, OrgMember, Player, Playlist, Side, Squad } from './types'
+import type { Clip, Comment, Game, GameVideo, Org, OrgMember, Player, Playlist, Side, SpotBox, Squad } from './types'
 import { toLoginEmail, uid } from './util'
 
 /* ---------- Dữ liệu (Supabase) ---------- */
@@ -88,6 +88,7 @@ export const useData = create<DataState>((set, get) => {
     if (patch.teamWide !== undefined) row.team_wide = patch.teamWide
     if (patch.playType !== undefined) row.play_type = patch.playType
     if (patch.note !== undefined) row.note = patch.note
+    if (patch.spotlight !== undefined) row.spotlight = patch.spotlight
     if (Object.keys(row).length && fail((await supabase.from('clips').update(row).eq('id', id)).error)) return
     if (patch.playerIds) {
       if (fail((await supabase.from('clip_players').delete().eq('clip_id', id)).error)) return
@@ -207,7 +208,7 @@ export const useData = create<DataState>((set, get) => {
       const clips: Clip[] = (cl ?? []).map((r: any) => ({
         id: r.id, gameId: r.game_id, videoId: r.video_id ?? '', start: r.start_s, end: r.end_s, side: r.side,
         teamWide: r.team_wide, playerIds: r.clip_players.map((x: any) => x.player_id),
-        playType: r.play_type ?? '', note: r.note ?? '', author: r.author ?? '',
+        playType: r.play_type ?? '', note: r.note ?? '', author: r.author ?? '', spotlight: r.spotlight ?? null,
         ...pending.get(r.id),
       }))
       const { data: pl, error: e3 } = await supabase.from('playlists').select('*').eq('game_id', gameId).order('created_at')
@@ -399,6 +400,9 @@ interface UiState {
   playlist: boolean
   playlistId: string
   inPoint: number | null // điểm Vào (phím I) đang chờ điểm Ra
+  spotEdit: { clipId: string; t: number; hold: number; boxes: SpotBox[] } | null // đang vẽ khung khoanh
+  spotHold: { boxes: SpotBox[]; frame: string | null } | null // đang dừng hình để khoanh
+  spotPreview: string | null // clipId đang xem thử khoanh
   lastSide: Side
   pending: { t: number; play: boolean } | null // tua tới đây sau khi video mới tải xong
   overview: boolean // màn hình tổng quan trận đấu
@@ -423,6 +427,9 @@ export const useUi = create<UiState>((set) => ({
   playlist: false,
   playlistId: '',
   inPoint: null,
+  spotEdit: null,
+  spotHold: null,
+  spotPreview: null,
   lastSide: 'ATK',
   pending: null,
   overview: false,

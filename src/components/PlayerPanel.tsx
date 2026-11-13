@@ -4,6 +4,7 @@ import { yt } from '../youtube'
 import { defaultLabel, fmt, parseYouTubeId } from '../util'
 import { Panel } from './Panel'
 import { CaptionOverlay } from './CaptionOverlay'
+import { SpotlightLayer } from './Spotlight'
 
 export function PlayerPanel() {
   const { gameId, videoId, time, duration, playing, pre, post, playlist, autoNext, set } = useUi()
@@ -118,7 +119,7 @@ export function PlayerPanel() {
               </>
             )}
           </div>
-          <div className="video-wrap"><div ref={host} className="video-host" /><CaptionOverlay /></div>
+          <div className="video-wrap"><div ref={host} className="video-host" /><SpotlightLayer /><CaptionOverlay /></div>
           <div className="transport">
             <button className="btn" onClick={() => yt.seek(time - 5)} title="J">⟲ 5s</button>
             <button className="btn primary" onClick={() => yt.toggle()} title="Space">{playing ? '❚❚ Dừng' : '▶ Phát'}</button>

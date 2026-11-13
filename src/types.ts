@@ -32,7 +32,12 @@ export interface Clip {
   playType: string
   note: string
   author: string
+  spotlight?: Spotlight | null
 }
+/** Khung khoanh cầu thủ, toạ độ 0..1 theo khung hình video (16:9). */
+export interface SpotBox { x: number; y: number; w: number; h: number; label?: string }
+/** Dừng hình tại thời điểm t trong `hold` giây và khoanh các cầu thủ. */
+export interface Spotlight { t: number; hold: number; boxes: SpotBox[] }
 export interface Comment {
   id: string
   clipId: string

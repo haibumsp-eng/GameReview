@@ -100,6 +100,8 @@ create table if not exists clips (
   author uuid default auth.uid() references auth.users on delete set null
 );
 alter table clips add column if not exists video_id uuid references game_videos on delete cascade;
+-- Khoanh cầu thủ khi dừng hình: { t, hold, boxes: [{x,y,w,h,label}] } (toạ độ 0..1 theo khung video 16:9).
+alter table clips add column if not exists spotlight jsonb;
 create table if not exists clip_players (
   clip_id uuid references clips on delete cascade,
   player_id uuid references players on delete cascade,
