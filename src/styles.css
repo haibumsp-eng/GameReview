@@ -605,3 +605,11 @@ a.btn { text-decoration: none; text-align: center; }
 .sp-deck .sp-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .sp-deck .sp-act { height: 50px; font-size: 14px; }
 .sp-deck .sp-keys { float: none; display: block; margin-bottom: 2px; }
+
+/* Sửa danh sách trong box score */
+.bs-title .row { gap: 10px; }
+.bs-in { padding: 4px 6px; font-size: 13px; border-radius: 6px; }
+.bs-in.num { width: 46px; text-align: center; }
+.bs-row.editing { cursor: default; }
+.bs-row.editing:hover { background: transparent; }
+.bs-add td { background: #101203; }

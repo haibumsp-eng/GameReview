@@ -327,7 +327,7 @@ export function StatsPage() {
       {!game ? (
         <div className="placeholder">Chọn một trận ở trên, hoặc bấm <b>+ Trận mới</b> để thống kê một trận (kể cả trận của giải đấu).</div>
       ) : tab === 'box' ? (
-        <div className="sp-box"><BoxScoreView onSeek={(vid, t) => { setTab('record'); if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(vid, t, true), 50) }} /></div>
+        <div className="sp-box"><BoxScoreView editable={canEdit} onSeek={(vid, t) => { setTab('record'); if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(vid, t, true), 50) }} /></div>
       ) : (
         <div className="sp-work">
           <div className="col center sp-main-col">

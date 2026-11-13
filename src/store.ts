@@ -56,6 +56,7 @@ interface DataState {
   setTeamNames: (gameId: string, home: string, away: string) => void
   addGamePlayers: (gameId: string, side: TeamSide, list: { number: number; name: string; playerId?: string | null }[]) => void
   removeGamePlayer: (id: string) => void
+  updateGamePlayer: (id: string, patch: { number?: number; name?: string }) => void
   addStat: (e: Omit<StatEvent, 'id' | 'createdAt'>) => string
   removeStat: (id: string) => void
   setStatVideo: (id: string, videoId: string, videoT: number) => void
@@ -383,6 +384,10 @@ export const useData = create<DataState>((set, get) => {
       set((s) => ({ gamePlayers: [...s.gamePlayers, ...rows] }))
       supabase.from('game_players').insert(rows.map((r) => ({ id: r.id, game_id: gameId, side, number: r.number, name: r.name, player_id: r.playerId })))
         .then(({ error }) => { if (fail(error)) get().loadGame(gameId) })
+    },
+    updateGamePlayer: (id, p) => {
+      set((s) => ({ gamePlayers: s.gamePlayers.map((x) => (x.id === id ? { ...x, ...p } : x)) }))
+      supabase.from('game_players').update(p).eq('id', id).then(({ error }) => { if (fail(error)) get().loadGame(useUi.getState().gameId) })
     },
     removeGamePlayer: (id) => {
       set((s) => ({ gamePlayers: s.gamePlayers.filter((p) => p.id !== id), stats: s.stats.filter((e) => e.gamePlayerId !== id), lineups: s.lineups.filter((e) => e.gamePlayerId !== id) }))
