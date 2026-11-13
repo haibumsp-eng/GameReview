@@ -113,10 +113,14 @@ export function RemotePad({ token }: { token: string }) {
     flash(error ? error.message : data === 'ok' ? '↶ Đã hoàn tác' : String(data)); void load()
   }
 
+  useEffect(() => {
+    if (sel && st && !st.players.some((p) => p.id === sel.id && p.on)) setSel(null)
+  }, [st, sel])
+
   if (!st) return <div className="rp rp-center">{err ? <div className="err">{err}</div> : <div className="muted">Đang tải…</div>}</div>
   const clock = st.game.running ? st.game.clock - (Date.now() - fetchedAt.current) / 1000 : st.game.clock
-  const team = st.players.filter((p) => p.side === side)
-  const on = team.filter((p) => p.on), bench = team.filter((p) => !p.on)
+  // Chỉ cầu thủ đang trên sân (thay người làm trên máy tính).
+  const on = st.players.filter((p) => p.side === side && p.on)
 
   return (
     <div className="rp">
@@ -137,11 +141,12 @@ export function RemotePad({ token }: { token: string }) {
         <button className={side === 'away' ? 'on' : ''} onClick={() => { setSide('away'); setSel(null) }}>{st.game.away}</button>
       </div>
       <div className="rp-players">
-        {[...on, ...bench].map((p) => (
-          <button key={p.id} className={`rp-player ${p.on ? 'oncourt' : ''} ${sel?.id === p.id ? 'sel' : ''} ${p.pf >= 5 ? 'out' : ''}`} onClick={() => setSel(sel?.id === p.id ? null : p)}>
-            <b>{p.number}</b><span>{p.name}</span><small>{p.pts}đ · {p.pf}PF</small>
+        {on.map((p) => (
+          <button key={p.id} className={`rp-player oncourt ${sel?.id === p.id ? 'sel' : ''} ${p.pf >= 5 ? 'out' : ''}`} onClick={() => setSel(sel?.id === p.id ? null : p)}>
+            <b>{p.number}</b><span>{p.name}</span><small>{p.pts} PTS · {p.pf} PF</small>
           </button>
         ))}
+        {on.length === 0 && <div className="rp-empty muted">Chưa có cầu thủ trên sân. Hãy đưa đội hình vào sân trên máy tính.</div>}
       </div>
       <div className="rp-sel">{sel ? <>Đang chọn <b>#{sel.number} {sel.name}</b></> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
       <div className={`rp-actions ${sel ? '' : 'idle'}`}>
