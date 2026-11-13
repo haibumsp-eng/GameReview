@@ -401,7 +401,6 @@ interface UiState {
   playlistId: string
   inPoint: number | null // điểm Vào (phím I) đang chờ điểm Ra
   spotEdit: { clipId: string; t: number; hold: number; boxes: SpotBox[] } | null // đang vẽ khung khoanh
-  spotHold: { boxes: SpotBox[]; frame: string | null } | null // đang dừng hình để khoanh
   spotPreview: string | null // clipId đang xem thử khoanh
   lastSide: Side
   pending: { t: number; play: boolean } | null // tua tới đây sau khi video mới tải xong
@@ -428,7 +427,6 @@ export const useUi = create<UiState>((set) => ({
   playlistId: '',
   inPoint: null,
   spotEdit: null,
-  spotHold: null,
   spotPreview: null,
   lastSide: 'ATK',
   pending: null,

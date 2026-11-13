@@ -206,20 +206,22 @@ function SpotlightControls({ clip }: { clip: Clip }) {
   }
   const preview = () => {
     if (!sp) return
-    yt.seek(Math.max(clip.start, sp.t - 2))
+    const from = Math.max(clip.start, sp.t - 1.5)
+    yt.seek(from)
     yt.play()
     set({ spotPreview: clip.id, playlist: false })
+    setTimeout(() => { if (useUi.getState().spotPreview === clip.id) set({ spotPreview: null }) }, (sp.t - from + sp.hold + 1) * 1000)
   }
   const setBox = (i: number, label: string) =>
     editing && set({ spotEdit: { ...editing, boxes: editing.boxes.map((b, j) => (j === i ? { ...b, label: label || undefined } : b)) } })
 
   return (
     <>
-      <label className="field-label">Khoanh cầu thủ (dừng hình)</label>
+      <label className="field-label">Khoanh cầu thủ</label>
       {editing ? (
         <div className="card stack spot-edit">
           <div className="small-note">
-            <b>Kéo chuột trên video</b> để khoanh cầu thủ (tối đa 3 khung). Video dừng tại <b>{fmt(editing.t)}</b>.
+            <b>Kéo chuột trên video</b> để khoanh cầu thủ (tối đa 3 khung). Khung hiện từ <b>{fmt(editing.t)}</b>, video vẫn chạy bình thường.
           </div>
           <button className="btn sm" onClick={() => { yt.pause(); set({ spotEdit: { ...editing, t: within(yt.time()) } }) }}>Lấy khung hình đang dừng</button>
           {editing.boxes.length === 0 && <div className="muted small-note">Chưa có khung nào.</div>}
@@ -234,7 +236,7 @@ function SpotlightControls({ clip }: { clip: Clip }) {
             </div>
           ))}
           <div className="row">
-            <span className="muted">Dừng hình</span>
+            <span className="muted">Hiện khung trong</span>
             <select style={{ width: 110 }} value={editing.hold} onChange={(e) => set({ spotEdit: { ...editing, hold: +e.target.value } })}>
               {[1, 1.5, 2, 3, 4, 5].map((s) => <option key={s} value={s}>{s} giây</option>)}
             </select>
@@ -246,7 +248,7 @@ function SpotlightControls({ clip }: { clip: Clip }) {
         </div>
       ) : sp ? (
         <div className="spot-info">
-          <span>🎯 Dừng tại <b>{fmt(sp.t)}</b> · {sp.boxes.length} khung · {sp.hold} giây</span>
+          <span>🎯 Hiện tại <b>{fmt(sp.t)}</b> · {sp.boxes.length} khung · {sp.hold} giây</span>
           <div className="row">
             <button className="btn sm" onClick={preview}>Xem thử</button>
             <button className="btn sm" onClick={edit}>Sửa</button>

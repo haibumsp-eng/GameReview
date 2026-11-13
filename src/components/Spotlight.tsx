@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useData, useUi, matches } from '../store'
-import { yt } from '../youtube'
-import { grabFrame } from '../lib/recordScreen'
-import type { SpotBox, Spotlight } from '../types'
+import type { SpotBox } from '../types'
 
 /** Khung hình video (16:9) nằm trong khung player (có thể có viền đen). */
 export function videoRect(W: number, H: number) {
@@ -14,12 +12,24 @@ export function videoRect(W: number, H: number) {
 }
 
 /**
- * Lớp khoanh cầu thủ nằm trong khung video (được quay vào file):
- * - khi đang dừng hình: ảnh khung hình đứng yên (nếu đang quay) + làm tối xung quanh + khung sáng kèm tên
- * - khi HLV đang vẽ: kéo chuột để tạo khung
+ * Lớp khoanh cầu thủ nằm trong khung video (được quay vào file).
+ * Video KHÔNG dừng: khung chỉ hiện khi thời gian video nằm trong [t, t + hold] của tình huống.
+ * Hiện khi phát playlist, khi quay, khi xem thử, hoặc khi đang chọn đúng tình huống đó.
+ * Khi HLV đang vẽ: kéo chuột để tạo khung.
  */
 export function SpotlightLayer() {
-  const { spotEdit, spotHold, set } = useUi(useShallow((s) => ({ spotEdit: s.spotEdit, spotHold: s.spotHold, set: s.set })))
+  const { spotEdit, set, time, gameId, videoId, filter, playlist, rec, spotPreview, clipId } = useUi(useShallow((s) => ({
+    spotEdit: s.spotEdit, set: s.set, time: s.time, gameId: s.gameId, videoId: s.videoId, filter: s.filter,
+    playlist: s.playlist, rec: s.rec, spotPreview: s.spotPreview, clipId: s.clipId,
+  })))
+  const clips = useData((s) => s.clips)
+  const listMode = playlist || (!!rec && (rec.phase === 'recording' || rec.phase === 'waiting'))
+  const shown = spotEdit ? undefined : clips.find((c) => {
+    const sp = c.spotlight
+    if (!sp || c.gameId !== gameId || c.videoId !== videoId) return false
+    const mine = spotPreview ? c.id === spotPreview : listMode ? matches(c, filter) : c.id === clipId
+    return mine && time >= sp.t - 0.05 && time <= sp.t + sp.hold
+  })
   const ref = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [draft, setDraft] = useState<SpotBox | null>(null)
@@ -34,7 +44,8 @@ export function SpotlightLayer() {
   }, [])
 
   const r = videoRect(size.w, size.h)
-  const boxes = [...(spotEdit?.boxes ?? spotHold?.boxes ?? []), ...(draft ? [draft] : [])]
+  const boxes = [...(spotEdit?.boxes ?? shown?.spotlight?.boxes ?? []), ...(draft ? [draft] : [])]
+  const on = !!spotEdit || !!shown
   const px = (b: SpotBox) => ({ x: r.x + b.x * r.w, y: r.y + b.y * r.h, w: b.w * r.w, h: b.h * r.h })
 
   const norm = (e: React.PointerEvent) => {
@@ -44,8 +55,7 @@ export function SpotlightLayer() {
 
   return (
     <div ref={ref} className={`spot-layer ${spotEdit ? 'editing' : ''}`}>
-      {spotHold?.frame && <img className="spot-frame" src={spotHold.frame} alt="" />}
-      {(spotEdit || spotHold) && boxes.length > 0 && (
+      {on && boxes.length > 0 && (
         <svg className="spot-svg" width={size.w} height={size.h}>
           <defs>
             <mask id="spot-mask">
@@ -53,11 +63,11 @@ export function SpotlightLayer() {
               {boxes.map((b, i) => { const p = px(b); return <rect key={i} x={p.x} y={p.y} width={p.w} height={p.h} rx={8} fill="black" /> })}
             </mask>
           </defs>
-          <rect width={size.w} height={size.h} fill={spotEdit ? '#0000004d' : '#0000008c'} mask="url(#spot-mask)" />
+          <rect width={size.w} height={size.h} fill={spotEdit ? '#0000004d' : '#00000066'} mask="url(#spot-mask)" />
           {boxes.map((b, i) => { const p = px(b); return <rect key={i} className="spot-box" x={p.x} y={p.y} width={p.w} height={p.h} rx={8} /> })}
         </svg>
       )}
-      {(spotEdit || spotHold) && boxes.map((b, i) => {
+      {on && boxes.map((b, i) => {
         const p = px(b)
         return b.label ? <div key={i} className="spot-label" style={{ left: p.x + p.w / 2, top: p.y }}>{b.label}</div> : null
       })}
@@ -89,43 +99,4 @@ function defaultLabel(clipId: string, i: number): string | undefined {
   const c = d.clips.find((x) => x.id === clipId)
   const p = c && d.players.find((x) => x.id === c.playerIds[i])
   return p ? `#${p.number} ${p.name}` : undefined
-}
-
-/** Dừng hình đúng lúc và khoanh cầu thủ, khi phát playlist / đang quay / xem thử. */
-export function SpotlightRunner() {
-  const { time, playlist, rec, spotPreview, spotHold, spotEdit, videoId, gameId, filter } = useUi(useShallow((s) => ({
-    time: s.time, playlist: s.playlist, rec: s.rec, spotPreview: s.spotPreview, spotHold: s.spotHold, spotEdit: s.spotEdit,
-    videoId: s.videoId, gameId: s.gameId, filter: s.filter,
-  })))
-  const clips = useData((s) => s.clips)
-  const done = useRef(new Set<string>())
-  const active = playlist || (!!rec && rec.phase === 'recording') || !!spotPreview
-
-  useEffect(() => {
-    if (!active) { done.current.clear(); return }
-    if (spotHold || spotEdit) return
-    const cands = clips.filter((c) => c.spotlight && c.gameId === gameId && c.videoId === videoId &&
-      (spotPreview ? c.id === spotPreview : matches(c, filter)))
-    for (const c of cands) {
-      const sp = c.spotlight!
-      const key = `${c.id}:${sp.t}`
-      if (time < sp.t - 0.6) { done.current.delete(key); continue } // tua lại trước điểm dừng: cho phép dừng lại lần nữa
-      if (!done.current.has(key) && time >= sp.t - 0.05 && time < sp.t + 0.8) {
-        done.current.add(key)
-        void freeze(sp, !!spotPreview)
-        break
-      }
-    }
-  }, [time, active, spotHold, spotEdit, clips, gameId, videoId, filter, spotPreview])
-  return null
-}
-
-async function freeze(sp: Spotlight, preview: boolean) {
-  const frame = await grabFrame() // đang quay: chụp khung hình để che giao diện YouTube khi tạm dừng
-  yt.pause()
-  useUi.getState().set({ spotHold: { boxes: sp.boxes, frame } })
-  setTimeout(() => {
-    useUi.getState().set({ spotHold: null, ...(preview ? { spotPreview: null } : {}) })
-    yt.play()
-  }, Math.max(0.5, sp.hold) * 1000)
 }

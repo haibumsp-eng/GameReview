@@ -15,7 +15,6 @@ import { Comments } from './components/Comments'
 import { Login } from './components/Login'
 import { Overview } from './components/Overview'
 import { RecordHud } from './components/RecordHud'
-import { SpotlightRunner } from './components/Spotlight'
 import { Gutter, SplitV } from './components/Gutter'
 import { useLayout, clamp } from './layout'
 
@@ -152,7 +151,6 @@ export default function App() {
     <div className="app">
       <Hotkeys />
       <PlaylistRunner />
-      <SpotlightRunner />
       <header className="topbar">
         <Logo />
         {isSuper ? (
