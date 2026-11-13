@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useData, useUi, selectGame, myOrgRole, toast } from '../store'
 import { isFoul, lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
@@ -12,6 +12,8 @@ import { RemoteModal } from './Remote'
 import { yt } from '../youtube'
 import { seekVideo } from '../nav'
 import { confirmDialog, promptDialog, dialogOpen } from '../lib/dialog'
+import { VoicePanel, type VoiceStamp } from './VoicePanel'
+import type { VoiceItem } from '../voice/parse'
 
 const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'miss' }[] = [
   { type: '2PM', label: '2PT', pts: '+2', tone: 'made' }, { type: '2PX', label: '2PT', pts: 'miss', tone: 'miss' },
@@ -137,6 +139,29 @@ export function StatsPage() {
     toast(`#${sel.number} ${sel.name} · ${STAT_LABEL[type]}`)
     setSel(null)
   }
+  // Ghi các pha từ giọng nói. Giờ / giây video lấy lúc bắt đầu nói.
+  const voiceStamp = (): VoiceStamp => {
+    const onVideo = showVideo && !!videoId && yt.ready()
+    return { period, clockS: game ? clockNow(game) : 0, videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null }
+  }
+  const voiceCommit = (items: VoiceItem[], st: VoiceStamp) => {
+    if (!game) return 0
+    let n = 0
+    for (const it of items) {
+      if (it.kind === 'stat' && !it.error && it.gamePlayerId && it.side) {
+        addStat({ gameId: game.id, side: it.side, gamePlayerId: it.gamePlayerId, type: it.type, period: st.period, videoId: st.videoId, videoT: st.videoT, clockS: st.clockS })
+        n++
+      } else if (it.kind === 'clock') {
+        const g = useData.getState().games.find((x) => x.id === game.id)
+        if (!g) continue
+        if (!it.run && g.clockRunning) setClock(g.id, { clockRunning: false, clockRemaining: st.period === (g.clockPeriod ?? 1) ? st.clockS : clockNow(g), clockStartedAt: null })
+        if (it.run && !g.clockRunning && clockNow(g) > 0) setClock(g.id, { clockRunning: true, clockRemaining: clockNow(g), clockStartedAt: Date.now() })
+      }
+    }
+    return n
+  }
+  const voicePlayers = useMemo(() => gamePlayers.map((p) => ({ id: p.id, side: p.side, number: p.number, on: court.has(p.id) })), [gamePlayers, lineups])
+
   const undo = () => {
     const ls = [...stats].sort((a, b) => b.createdAt - a.createdAt)[0]
     const ll = [...lineups].sort((a, b) => b.createdAt - a.createdAt)[0]
@@ -256,6 +281,7 @@ export function StatsPage() {
               </button>
             ))}
           </div>
+          {game && <VoicePanel gameId={game.id} homeName={homeName} awayName={awayName} players={voicePlayers} canEdit={canEdit} stamp={voiceStamp} onCommit={voiceCommit} />}
         </div>
   )
 
