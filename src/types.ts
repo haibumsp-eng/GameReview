@@ -83,7 +83,7 @@ export type TeamSide = 'home' | 'away'
 /** Cầu thủ của một trận (mỗi đội một bên). playerId: nối với cầu thủ của tuyến nếu có. */
 export interface GamePlayer { id: string; gameId: string; side: TeamSide; number: number; name: string; playerId: string | null }
 /** M = trúng (made), X = trượt. */
-export type StatType = '2PM' | '2PX' | '3PM' | '3PX' | 'FTM' | 'FTX' | 'OREB' | 'DREB' | 'AST' | 'STL' | 'BLK' | 'TOV' | 'PF'
+export type StatType = '2PM' | '2PX' | '3PM' | '3PX' | 'FTM' | 'FTX' | 'OREB' | 'DREB' | 'AST' | 'STL' | 'BLK' | 'TOV' | 'PF' | 'PFS'
 export interface StatEvent {
   id: string
   gameId: string

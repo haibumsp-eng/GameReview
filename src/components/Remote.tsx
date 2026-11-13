@@ -69,9 +69,9 @@ const ACTIONS: { type: string; label: string; sub?: string; tone?: string }[] = 
   { type: '2PM', label: '2PT', sub: '+2', tone: 'made' }, { type: '3PM', label: '3PT', sub: '+3', tone: 'made' }, { type: 'FTM', label: 'FT', sub: '+1', tone: 'made' },
   { type: '2PX', label: '2PT', sub: 'miss', tone: 'miss' }, { type: '3PX', label: '3PT', sub: 'miss', tone: 'miss' }, { type: 'FTX', label: 'FT', sub: 'miss', tone: 'miss' },
   { type: 'OREB', label: 'OREB' }, { type: 'DREB', label: 'DREB' }, { type: 'AST', label: 'AST' },
-  { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV' }, { type: 'PF', label: 'PF' },
+  { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV' }, { type: 'PF', label: 'PF' }, { type: 'PFS', label: 'PF', sub: 'shooting' },
 ]
-const NAME: Record<string, string> = { '2PM': '2PT made', '2PX': '2PT missed', '3PM': '3PT made', '3PX': '3PT missed', FTM: 'FT made', FTX: 'FT missed' }
+const NAME: Record<string, string> = { '2PM': '2PT made', '2PX': '2PT missed', '3PM': '3PT made', '3PX': '3PT missed', FTM: 'FT made', FTX: 'FT missed', PFS: 'Shooting foul' }
 const mmss = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`
 const qLabel = (n: number) => (n <= 4 ? `Q${n}` : `OT${n - 4}`)
 

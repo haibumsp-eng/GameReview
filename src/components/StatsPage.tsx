@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useData, useUi, selectGame, myOrgRole, toast } from '../store'
-import { lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
-import { clockNow, mmss, onCourt, periodLength, plusMinus, secondsPlayed } from '../lib/minutes'
+import { isFoul, lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
+import { clockNow, mmss, onCourt, periodLength, secondsPlayed } from '../lib/minutes'
 import type { GamePlayer, StatType, TeamSide } from '../types'
 import { BoxScoreView } from './BoxScore'
 import { PlayerPanel } from './PlayerPanel'
@@ -18,7 +18,7 @@ const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'm
   { type: '3PM', label: '3PT', pts: '+3', tone: 'made' }, { type: '3PX', label: '3PT', pts: 'miss', tone: 'miss' },
   { type: 'FTM', label: 'FT', pts: '+1', tone: 'made' }, { type: 'FTX', label: 'FT', pts: 'miss', tone: 'miss' },
   { type: 'OREB', label: 'OREB' }, { type: 'DREB', label: 'DREB' }, { type: 'AST', label: 'AST' },
-  { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV' }, { type: 'PF', label: 'PF' },
+  { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV' }, { type: 'PF', label: 'PF' }, { type: 'PFS', label: 'PF', pts: 'shooting' },
 ]
 
 /** Trang Live Stats riêng: ghi thống kê 2 đội (dùng cho trận của đội hoặc giải đấu), không cần video. */
@@ -114,23 +114,23 @@ export function StatsPage() {
   const awayName = game?.awayName || 'AWAY'
   const roster = (side: TeamSide) => gamePlayers.filter((p) => p.side === side).sort((a, b) => a.number - b.number)
   const score = (side: TeamSide) => lineOf(stats.filter((e) => e.side === side)).pts
-  const fouls = (side: TeamSide) => stats.filter((e) => e.side === side && e.type === 'PF' && e.period === period).length
+  const fouls = (side: TeamSide) => stats.filter((e) => e.side === side && isFoul(e.type) && e.period === period).length
   const byId = new Map(gamePlayers.map((p) => [p.id, p]))
   const court = onCourt(lineups)
   const secs = secondsPlayed(lineups, len, period, remaining)
-  const pm = plusMinus(lineups, stats)
 
   const sub = (p: GamePlayer) => {
     if (!game || !canEdit) return
     const isOn = court.has(p.id)
     if (!isOn && roster(p.side).filter((x) => court.has(x.id)).length >= 5) return toast('Đã đủ 5 người trên sân: cho một người ra trước')
     addLineup({ gameId: game.id, side: p.side, gamePlayerId: p.id, kind: isOn ? 'out' : 'in', period, clockS: remaining })
+    if (isOn && sel?.id === p.id) setSel(null)
     toast(`${periodLabel(period)} ${mmss(remaining)} · #${p.number} ${p.name} ${isOn ? 'ra sân' : 'vào sân'}`)
   }
 
   const record = (type: StatType) => {
     if (!game) return
-    if (!sel) return toast('Chọn cầu thủ trước (bấm số áo)')
+    if (!sel) return toast('Chưa chọn cầu thủ trên sân')
     // Đang xem video thì gắn đúng giây trong video để bấm vào pha là xem lại được.
     const onVideo = showVideo && !!videoId && yt.ready()
     addStat({ gameId: game.id, side: sel.side, gamePlayerId: sel.id, type, period, videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, clockS: remaining })
@@ -174,16 +174,14 @@ export function StatsPage() {
     toast(`Đã xoá #${p.number} ${p.name}`)
   }
   const card = (p: GamePlayer) => {
-    const l = lineOf(stats.filter((e) => e.gamePlayerId === p.id))
-    const pf = stats.filter((e) => e.gamePlayerId === p.id && e.type === 'PF').length
-    const v = pm.get(p.id) ?? 0
+    const pf = stats.filter((e) => e.gamePlayerId === p.id && isFoul(e.type)).length
+    const isOn = court.has(p.id)
     return (
-      <div key={p.id} className={`sp-player ${sel?.id === p.id ? 'on' : ''} ${pf >= 5 ? 'out' : ''}`}
-        title="Click: chọn để ghi stats · Shift + click: xoá khỏi trận"
-        onClick={(e) => { if (!canEdit) return; if (e.shiftKey) return deletePlayer(p); setSel(sel?.id === p.id ? null : p) }}>
+      <div key={p.id} className={`sp-player ${sel?.id === p.id ? 'on' : ''} ${pf >= 5 ? 'out' : ''} ${isOn ? '' : 'benched'}`}
+        title={`#${p.number} ${p.name} · ${pf} PF · ${mmss(secs.get(p.id) ?? 0)} MIN`}
+        onClick={(e) => { if (!canEdit) return; if (e.shiftKey) return deletePlayer(p); if (isOn) setSel(sel?.id === p.id ? null : p) }}>
         <span className="sp-no">{p.number}</span>
         <span className="sp-pname">{p.name}</span>
-        <span className="sp-mini">{l.pts} PTS · {pf} PF · {mmss(secs.get(p.id) ?? 0)} MIN · {v > 0 ? '+' : ''}{v}</span>
         {canEdit && <button className="sp-sub" title={court.has(p.id) ? 'Ra sân' : 'Vào sân'} onClick={(e) => { e.stopPropagation(); sub(p) }}>{court.has(p.id) ? '↓' : '↑'}</button>}
       </div>
     )
@@ -200,7 +198,6 @@ export function StatsPage() {
         <div className="sp-group-label">ON COURT <b>{on.length}/5</b></div>
         <div className="sp-roster">
           {on.map(card)}
-          {on.length === 0 && <div className="muted small-note">Bấm ↑ trên thẻ cầu thủ ở BENCH để đưa 5 người đá chính vào sân.</div>}
         </div>
         <div className="sp-group-label">BENCH</div>
         <div className="sp-roster bench">
@@ -251,8 +248,7 @@ export function StatsPage() {
 
   const padBlock = (
         <div className={`sp-pad ${sel ? '' : 'idle'}`}>
-          <div className="sp-keys muted"><kbd>Space</kbd> đồng hồ · <kbd>K</kbd> phát/dừng video · <kbd>J</kbd><kbd>L</kbd> video ±5s · <kbd>Shift</kbd>+click cầu thủ: xoá</div>
-      <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
+      <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></> : '—'}</div>
           <div className="sp-actions">
             {ACTIONS.map((a) => (
               <button key={a.type} className={`sp-act ${a.tone ?? ''}`} disabled={!canEdit} onClick={() => record(a.type)}>

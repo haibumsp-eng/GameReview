@@ -458,7 +458,7 @@ create table if not exists stat_events (
   game_id uuid not null references games on delete cascade,
   side text not null check (side in ('home','away')),
   game_player_id uuid references game_players on delete cascade,
-  type text not null check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF')),
+  type text not null check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS')),
   period int not null default 1,
   video_id uuid references game_videos on delete set null,
   video_t real,
@@ -516,6 +516,9 @@ end $$;
 -- ---------- Bảng bấm trên điện thoại (quét QR, không cần đăng nhập) ----------
 -- Mã QR chứa một token ngẫu nhiên: chỉ cho phép GHI STATS của đúng 1 trận, tự hết hạn, thu hồi được.
 alter table stat_events add column if not exists via_remote boolean not null default false;
+-- PFS = shooting foul (lỗi khi ném, đối phương được ném phạt). Vẫn tính là 1 PF.
+alter table stat_events drop constraint if exists stat_events_type_check;
+alter table stat_events add constraint stat_events_type_check check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS'));
 create table if not exists remote_tokens (
   token text primary key,
   game_id uuid not null references games on delete cascade,
@@ -576,7 +579,7 @@ begin
     'players', coalesce((select jsonb_agg(jsonb_build_object('id', p.id, 'side', p.side, 'number', p.number, 'name', p.name,
         'on', coalesce((select kind = 'in' from last_in li where li.game_player_id = p.id), false),
         'pts', (select coalesce(sum(case type when '2PM' then 2 when '3PM' then 3 when 'FTM' then 1 else 0 end), 0) from ev where ev.game_player_id = p.id),
-        'pf', (select count(*) from ev where ev.game_player_id = p.id and type = 'PF')) order by p.side, p.number)
+        'pf', (select count(*) from ev where ev.game_player_id = p.id and type in ('PF','PFS'))) order by p.side, p.number)
       from game_players p where p.game_id = gid), '[]'::jsonb),
     'recent', coalesce((select jsonb_agg(x order by x->>'at' desc) from (
         select jsonb_build_object('id', e.id, 'type', e.type, 'side', e.side, 'number', p.number, 'name', p.name, 'remote', e.via_remote, 'at', e.created_at) x
@@ -594,7 +597,7 @@ begin
   if gid is null then return 'Mã QR không hợp lệ hoặc đã hết hạn.'; end if;
   select side into ps from game_players where id = p_player and game_id = gid;
   if ps is null then return 'Cầu thủ không thuộc trận này.'; end if;
-  if p_type not in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF') then return 'Loại pha không hợp lệ.'; end if;
+  if p_type not in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS') then return 'Loại pha không hợp lệ.'; end if;
   select * into g from games where id = gid;
   insert into stat_events (game_id, side, game_player_id, type, period, clock_s, via_remote, author)
     values (gid, ps, p_player, p_type, g.clock_period, game_clock_now(g), true, null);
