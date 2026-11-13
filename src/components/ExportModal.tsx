@@ -43,7 +43,12 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
   }
 
   // Thứ tự quay: theo hiệp rồi theo thời gian; gộp đoạn chồng nhau.
-  const recClips = groups.flatMap((g) => g.segs.map((sg, i) => ({ ...props.clips.find((c) => c.videoId === g.video.id)!, id: `${g.video.id}-${i}`, start: sg.start, end: sg.end })))
+  const recClips = groups.flatMap((g) => g.segs.map((sg, i) => ({
+    ...props.clips.find((c) => c.videoId === g.video.id)!, id: `${g.video.id}-${i}`, start: sg.start, end: sg.end,
+    // Điểm khoanh của các tình huống nằm trong đoạn này: dừng hình đúng một lần tại mỗi điểm.
+    spots: props.clips.filter((c) => c.videoId === g.video.id && c.spotlight && c.spotlight.t >= sg.start && c.spotlight.t < sg.end).map((c) => c.spotlight!),
+  })))
+  const holdTotal = recClips.reduce((a, c) => a + c.spots.reduce((x, s) => x + s.hold, 0), 0)
 
   const startRec = async () => {
     setRecErr('')
@@ -87,7 +92,7 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
                 <li>Dùng <b>Chrome hoặc Edge trên máy tính</b>.</li>
                 <li>Khi trình duyệt hỏi, chọn <b>đúng tab này</b> và để bật <b>“Chia sẻ âm thanh”</b>.</li>
                 <li><b>Không thu nhỏ cửa sổ</b>, không rê chuột lên video trong lúc quay.</li>
-                <li>Thời gian quay bằng độ dài video: khoảng <b>{fmt(total)}</b>. Nếu bạn chuyển sang tab khác, app <b>tự tạm dừng</b> và ghi tiếp khi bạn quay lại.</li>
+                <li>Thời gian quay bằng độ dài video: khoảng <b>{fmt(total + holdTotal)}</b>. Nếu bạn chuyển sang tab khác, app <b>tự tạm dừng</b> và ghi tiếp khi bạn quay lại.</li>
               </ol>
               <div className="muted">File sẽ là .{pickFormat().ext}{pickFormat().ext === 'mp4' ? ' (xem được trên điện thoại)' : ' (xem tốt trên máy tính)'}.</div>
             </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useData, useUi, matches } from '../store'
+import { yt } from '../youtube'
 import type { SpotBox } from '../types'
 
 /** Khung hình video (16:9) nằm trong khung player (có thể có viền đen). */
@@ -13,23 +14,11 @@ export function videoRect(W: number, H: number) {
 
 /**
  * Lớp khoanh cầu thủ nằm trong khung video (được quay vào file).
- * Video KHÔNG dừng: khung chỉ hiện khi thời gian video nằm trong [t, t + hold] của tình huống.
- * Hiện khi phát playlist, khi quay, khi xem thử, hoặc khi đang chọn đúng tình huống đó.
- * Khi HLV đang vẽ: kéo chuột để tạo khung.
+ * Khung CHỈ hiện khi đang dừng hình tại điểm khoanh (spotHold) hoặc khi HLV đang vẽ (spotEdit).
+ * Khi quay: ảnh khung hình chụp lúc dừng phủ lên để che giao diện tạm dừng của YouTube.
  */
 export function SpotlightLayer() {
-  const { spotEdit, set, time, gameId, videoId, filter, playlist, rec, spotPreview, clipId } = useUi(useShallow((s) => ({
-    spotEdit: s.spotEdit, set: s.set, time: s.time, gameId: s.gameId, videoId: s.videoId, filter: s.filter,
-    playlist: s.playlist, rec: s.rec, spotPreview: s.spotPreview, clipId: s.clipId,
-  })))
-  const clips = useData((s) => s.clips)
-  const listMode = playlist || (!!rec && (rec.phase === 'recording' || rec.phase === 'waiting'))
-  const shown = spotEdit ? undefined : clips.find((c) => {
-    const sp = c.spotlight
-    if (!sp || c.gameId !== gameId || c.videoId !== videoId) return false
-    const mine = spotPreview ? c.id === spotPreview : listMode ? matches(c, filter) : c.id === clipId
-    return mine && time >= sp.t - 0.05 && time <= sp.t + sp.hold
-  })
+  const { spotEdit, spotHold, set } = useUi(useShallow((s) => ({ spotEdit: s.spotEdit, spotHold: s.spotHold, set: s.set })))
   const ref = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [draft, setDraft] = useState<SpotBox | null>(null)
@@ -44,8 +33,8 @@ export function SpotlightLayer() {
   }, [])
 
   const r = videoRect(size.w, size.h)
-  const boxes = [...(spotEdit?.boxes ?? shown?.spotlight?.boxes ?? []), ...(draft ? [draft] : [])]
-  const on = !!spotEdit || !!shown
+  const boxes = [...(spotEdit?.boxes ?? spotHold?.boxes ?? []), ...(draft ? [draft] : [])]
+  const on = !!spotEdit || !!spotHold
   const px = (b: SpotBox) => ({ x: r.x + b.x * r.w, y: r.y + b.y * r.h, w: b.w * r.w, h: b.h * r.h })
 
   const norm = (e: React.PointerEvent) => {
@@ -55,6 +44,7 @@ export function SpotlightLayer() {
 
   return (
     <div ref={ref} className={`spot-layer ${spotEdit ? 'editing' : ''}`}>
+      {spotHold?.frame && <img className="spot-frame" src={spotHold.frame} alt="" />}
       {on && boxes.length > 0 && (
         <svg className="spot-svg" width={size.w} height={size.h}>
           <defs>
@@ -63,7 +53,7 @@ export function SpotlightLayer() {
               {boxes.map((b, i) => { const p = px(b); return <rect key={i} x={p.x} y={p.y} width={p.w} height={p.h} rx={8} fill="black" /> })}
             </mask>
           </defs>
-          <rect width={size.w} height={size.h} fill={spotEdit ? '#0000004d' : '#00000066'} mask="url(#spot-mask)" />
+          <rect width={size.w} height={size.h} fill={spotEdit ? '#0000004d' : '#00000080'} mask="url(#spot-mask)" />
           {boxes.map((b, i) => { const p = px(b); return <rect key={i} className="spot-box" x={p.x} y={p.y} width={p.w} height={p.h} rx={8} /> })}
         </svg>
       )}
@@ -99,4 +89,41 @@ function defaultLabel(clipId: string, i: number): string | undefined {
   const c = d.clips.find((x) => x.id === clipId)
   const p = c && d.players.find((x) => x.id === c.playerIds[i])
   return p ? `#${p.number} ${p.name}` : undefined
+}
+
+/**
+ * Dừng hình khi PHÁT PLAYLIST hoặc XEM THỬ (không áp dụng khi quay: bộ quay tự xử lý).
+ * Mỗi tình huống chỉ dừng MỘT lần trong một lượt phát; danh sách "đã dừng" chỉ xoá khi bắt đầu lượt mới.
+ */
+export function SpotlightRunner() {
+  const { time, playlist, rec, spotPreview, videoId, gameId, filter } = useUi(useShallow((s) => ({
+    time: s.time, playlist: s.playlist, rec: s.rec, spotPreview: s.spotPreview, videoId: s.videoId, gameId: s.gameId, filter: s.filter,
+  })))
+  const clips = useData((s) => s.clips)
+  const done = useRef(new Set<string>())
+  const holding = useRef(false)
+  const recording = !!rec && rec.phase !== 'done' && rec.phase !== 'error'
+  const live = (playlist || !!spotPreview) && !recording
+
+  // Lượt phát mới (bật playlist / xem thử khác) thì cho phép dừng lại từ đầu.
+  useEffect(() => { done.current.clear() }, [playlist, spotPreview])
+
+  useEffect(() => {
+    if (!live || holding.current) return
+    const c = clips.find((x) => x.spotlight && x.gameId === gameId && x.videoId === videoId &&
+      (spotPreview ? x.id === spotPreview : matches(x, filter)) &&
+      !done.current.has(x.id) && time >= x.spotlight.t - 0.05 && time < x.spotlight.t + 1)
+    if (!c) return
+    const sp = c.spotlight!
+    done.current.add(c.id)
+    holding.current = true
+    yt.pause()
+    useUi.getState().set({ spotHold: { boxes: sp.boxes, frame: null } })
+    setTimeout(() => {
+      useUi.getState().set({ spotHold: null })
+      holding.current = false
+      yt.play()
+    }, Math.max(0.5, sp.hold) * 1000)
+  }, [time, live, clips, gameId, videoId, filter, spotPreview])
+  return null
 }

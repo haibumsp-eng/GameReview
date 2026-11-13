@@ -3,7 +3,7 @@
 import { useUi } from '../store'
 import { goToClip } from '../nav'
 import { yt } from '../youtube'
-import type { Clip } from '../types'
+import type { Clip, Spotlight } from '../types'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -61,10 +61,24 @@ export async function startCapture(videoEl: HTMLElement): Promise<MediaStream> {
 }
 
 let cancelled = false
+let frameVideo: HTMLVideoElement | null = null
+
+/** Chụp khung hình hiện tại từ luồng đang quay (để che giao diện YouTube khi tạm dừng). */
+function grabFrame(): string | null {
+  const v = frameVideo
+  if (!v || !v.videoWidth) return null
+  const c = document.createElement('canvas')
+  c.width = v.videoWidth; c.height = v.videoHeight
+  c.getContext('2d')!.drawImage(v, 0, 0)
+  return c.toDataURL('image/jpeg', 0.92)
+}
+
+/** Một đoạn cần quay, kèm các điểm khoanh nằm trong đoạn (mỗi điểm dừng hình đúng một lần). */
+export type RecClip = Clip & { spots?: Spotlight[] }
 export function cancelRecording() { cancelled = true }
 
 /** Phát lần lượt từng đoạn và chỉ ghi khi video thật sự đang chạy (tự dừng khi YouTube đang tải hoặc khi rời tab). */
-export async function runRecording(stream: MediaStream, clips: Clip[], title: string) {
+export async function runRecording(stream: MediaStream, clips: RecClip[], title: string) {
   cancelled = false
   const ui = useUi.getState
   const setRec = (p: Partial<NonNullable<ReturnType<typeof ui>['rec']>>) => {
@@ -84,6 +98,10 @@ export async function runRecording(stream: MediaStream, clips: Clip[], title: st
   const stopped = new Promise<void>((r) => { rec.onstop = () => r() })
   let userStopped = false
   stream.getVideoTracks()[0].addEventListener('ended', () => { userStopped = true }) // bấm "Dừng chia sẻ" của trình duyệt
+  frameVideo = document.createElement('video')
+  frameVideo.muted = true
+  frameVideo.srcObject = stream
+  void frameVideo.play().catch(() => {})
   rec.start(1000)
   rec.pause()
   const pauseRec = () => { if (rec.state === 'recording') rec.pause() }
@@ -117,6 +135,8 @@ export async function runRecording(stream: MediaStream, clips: Clip[], title: st
       }
       // Ghi tới hết đoạn.
       let lastMove = performance.now()
+      const spots = [...(c.spots ?? [])].sort((a, b) => a.t - b.t)
+      let si = 0
       while (!cancelled && !userStopped) {
         if (document.hidden) {
           pauseRec(); yt.pause()
@@ -129,6 +149,28 @@ export async function runRecording(stream: MediaStream, clips: Clip[], title: st
         }
         const t = yt.time()
         if (t >= c.end) break
+        // Tới điểm khoanh: dừng hình đúng một lần.
+        if (si < spots.length && t >= spots[si].t && yt.state() === 1) {
+          const sp = spots[si++]
+          const frame = grabFrame()
+          ui().set({ spotHold: { boxes: sp.boxes, frame } })
+          await sleep(60) // chờ ảnh khung hình hiện ra rồi mới tạm dừng YouTube
+          yt.pause()
+          resumeRec()
+          setRec({ phase: 'recording', msg: '' })
+          const until = Date.now() + Math.max(0.5, sp.hold) * 1000
+          while (Date.now() < until && !cancelled && !userStopped) await sleep(50)
+          // Ngưng ghi trong lúc YouTube chạy lại, chỉ bỏ ảnh đứng yên khi hình đã chạy thật.
+          pauseRec()
+          const t0 = yt.time()
+          yt.play()
+          const giveUp = Date.now() + 8000
+          while (Date.now() < giveUp && !cancelled && !(yt.state() === 1 && yt.time() > t0 + 0.08)) await sleep(30)
+          ui().set({ spotHold: null })
+          await sleep(60)
+          lastMove = performance.now(); lastT = yt.time()
+          continue
+        }
         if (t > lastT + 0.005) lastMove = performance.now()
         lastT = t
         const stalled = performance.now() - lastMove > 120 // hình đứng hơn 0,12 giây (≈3 khung) thì ngừng ghi
@@ -149,7 +191,8 @@ export async function runRecording(stream: MediaStream, clips: Clip[], title: st
     if (rec.state !== 'inactive') rec.stop()
     stream.getTracks().forEach((t) => t.stop())
     setRec({ phase: 'error', msg: e instanceof Error ? e.message : String(e) })
-    ui().set({ clipId: null })
+    ui().set({ clipId: null, spotHold: null })
+    if (frameVideo) { frameVideo.srcObject = null; frameVideo = null }
     return
   }
 
@@ -157,7 +200,8 @@ export async function runRecording(stream: MediaStream, clips: Clip[], title: st
   if (rec.state !== 'inactive') rec.stop()
   await stopped
   stream.getTracks().forEach((t) => t.stop())
-  ui().set({ clipId: null }) // bỏ chọn tình huống tạm dùng khi quay
+  ui().set({ clipId: null, spotHold: null }) // bỏ chọn tình huống tạm dùng khi quay
+  if (frameVideo) { frameVideo.srcObject = null; frameVideo = null }
   if (cancelled) return ui().set({ rec: null })
   const blob = new Blob(chunks, { type: rec.mimeType || mime || 'video/webm' })
   setRec({

@@ -393,6 +393,7 @@ a.btn { text-decoration: none; text-align: center; }
 
 /* ---------- Khoanh cầu thủ khi dừng hình (nằm trong khung được quay) ---------- */
 .spot-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.spot-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
 .spot-svg { position: absolute; inset: 0; }
 .spot-box { fill: none; stroke: var(--accent); stroke-width: 3; filter: drop-shadow(0 0 6px #bedf00aa); animation: spotin .35s ease-out; transform-box: fill-box; transform-origin: center; }
 @keyframes spotin { from { opacity: 0; transform: scale(1.25); } to { opacity: 1; transform: scale(1); } }
