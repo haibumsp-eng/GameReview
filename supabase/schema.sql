@@ -513,6 +513,111 @@ do $$ begin
   begin alter publication supabase_realtime add table lineup_events; exception when duplicate_object then null; end;
 end $$;
 
+-- ---------- Bảng bấm trên điện thoại (quét QR, không cần đăng nhập) ----------
+-- Mã QR chứa một token ngẫu nhiên: chỉ cho phép GHI STATS của đúng 1 trận, tự hết hạn, thu hồi được.
+alter table stat_events add column if not exists via_remote boolean not null default false;
+create table if not exists remote_tokens (
+  token text primary key,
+  game_id uuid not null references games on delete cascade,
+  created_by uuid default auth.uid() references auth.users on delete set null,
+  created_at timestamptz default now(),
+  expires_at timestamptz not null
+);
+create index if not exists remote_tokens_game_idx on remote_tokens (game_id);
+alter table remote_tokens enable row level security;
+drop policy if exists remote_tokens_read   on remote_tokens;
+drop policy if exists remote_tokens_delete on remote_tokens;
+create policy remote_tokens_read   on remote_tokens for select to authenticated using (is_member(squad_of_game(game_id)));
+create policy remote_tokens_delete on remote_tokens for delete to authenticated using (is_editor(squad_of_game(game_id)));
+
+-- Tạo (hoặc lấy lại) token cho trận. Chỉ người được sửa trận mới tạo được.
+create or replace function create_remote_token(p_game uuid, p_hours int default 12) returns text
+language plpgsql security definer set search_path = public, extensions as $$
+declare t text;
+begin
+  if not is_editor(squad_of_game(p_game)) then raise exception 'Bạn không có quyền ghi stats cho trận này.'; end if;
+  select token into t from remote_tokens where game_id = p_game and expires_at > now() + interval '1 hour' order by expires_at desc limit 1;
+  if t is not null then return t; end if;
+  t := encode(gen_random_bytes(16), 'hex');
+  insert into remote_tokens (token, game_id, expires_at) values (t, p_game, now() + make_interval(hours => greatest(1, least(p_hours, 48))));
+  return t;
+end $$;
+
+-- Trận của token (null nếu sai / hết hạn / gói của trung tâm hết hạn).
+create or replace function remote_game_of(p_token text) returns uuid
+language sql security definer stable set search_path = public as $$
+  select r.game_id from remote_tokens r
+  where r.token = p_token and r.expires_at > now() and org_active(org_of_squad(squad_of_game(r.game_id)))
+$$;
+
+-- Giây còn lại trên đồng hồ thi đấu lúc này.
+create or replace function game_clock_now(g games) returns real
+language sql stable as $$
+  select greatest(0, coalesce(g.clock_remaining, case when g.clock_period <= 4 then g.period_len else 300 end)
+    - case when g.clock_running and g.clock_started_at is not null then extract(epoch from now() - g.clock_started_at) else 0 end)::real
+$$;
+
+-- Toàn bộ thông tin cho bảng bấm trên điện thoại.
+create or replace function remote_state(p_token text) returns jsonb
+language plpgsql security definer stable set search_path = public as $$
+declare gid uuid; g games; res jsonb;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return jsonb_build_object('error', 'Mã QR không hợp lệ hoặc đã hết hạn.'); end if;
+  select * into g from games where id = gid;
+  with ev as (select * from stat_events where game_id = gid),
+       last_in as (select distinct on (game_player_id) game_player_id, kind from lineup_events where game_id = gid order by game_player_id, created_at desc)
+  select jsonb_build_object(
+    'game', jsonb_build_object('title', g.title, 'home', coalesce(nullif(g.home_name, ''), (select name from squads where id = g.squad_id)), 'away', coalesce(nullif(g.away_name, ''), 'AWAY'),
+      'period', g.clock_period, 'clock', game_clock_now(g), 'running', g.clock_running),
+    'score', jsonb_build_object(
+      'home', (select coalesce(sum(case type when '2PM' then 2 when '3PM' then 3 when 'FTM' then 1 else 0 end), 0) from ev where side = 'home'),
+      'away', (select coalesce(sum(case type when '2PM' then 2 when '3PM' then 3 when 'FTM' then 1 else 0 end), 0) from ev where side = 'away')),
+    'players', coalesce((select jsonb_agg(jsonb_build_object('id', p.id, 'side', p.side, 'number', p.number, 'name', p.name,
+        'on', coalesce((select kind = 'in' from last_in li where li.game_player_id = p.id), false),
+        'pts', (select coalesce(sum(case type when '2PM' then 2 when '3PM' then 3 when 'FTM' then 1 else 0 end), 0) from ev where ev.game_player_id = p.id),
+        'pf', (select count(*) from ev where ev.game_player_id = p.id and type = 'PF')) order by p.side, p.number)
+      from game_players p where p.game_id = gid), '[]'::jsonb),
+    'recent', coalesce((select jsonb_agg(x order by x->>'at' desc) from (
+        select jsonb_build_object('id', e.id, 'type', e.type, 'side', e.side, 'number', p.number, 'name', p.name, 'remote', e.via_remote, 'at', e.created_at) x
+        from ev e left join game_players p on p.id = e.game_player_id order by e.created_at desc limit 8) t), '[]'::jsonb)
+  ) into res;
+  return res;
+end $$;
+
+-- Ghi một pha từ điện thoại. Hiệp và giờ lấy theo đồng hồ thi đấu của trận.
+create or replace function remote_add_stat(p_token text, p_player uuid, p_type text) returns text
+language plpgsql security definer set search_path = public as $$
+declare gid uuid; g games; ps text;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return 'Mã QR không hợp lệ hoặc đã hết hạn.'; end if;
+  select side into ps from game_players where id = p_player and game_id = gid;
+  if ps is null then return 'Cầu thủ không thuộc trận này.'; end if;
+  if p_type not in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF') then return 'Loại pha không hợp lệ.'; end if;
+  select * into g from games where id = gid;
+  insert into stat_events (game_id, side, game_player_id, type, period, clock_s, via_remote, author)
+    values (gid, ps, p_player, p_type, g.clock_period, game_clock_now(g), true, null);
+  return 'ok';
+end $$;
+
+-- Hoàn tác pha gần nhất do điện thoại ghi (trong 10 phút).
+create or replace function remote_undo(p_token text) returns text
+language plpgsql security definer set search_path = public as $$
+declare gid uuid; eid uuid;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return 'Mã QR không hợp lệ hoặc đã hết hạn.'; end if;
+  select id into eid from stat_events where game_id = gid and via_remote and created_at > now() - interval '10 minutes' order by created_at desc limit 1;
+  if eid is null then return 'Không có pha nào để hoàn tác.'; end if;
+  delete from stat_events where id = eid;
+  return 'ok';
+end $$;
+
+grant execute on function remote_state(text), remote_add_stat(text, uuid, text), remote_undo(text) to anon, authenticated;
+grant execute on function create_remote_token(uuid, int) to authenticated;
+revoke execute on function create_remote_token(uuid, int) from anon;
+
 -- ---------- Tổng quan trận đấu (cho màn hình chọn trận / tìm kiếm) ----------
 -- security invoker: RLS vẫn áp dụng, coach chỉ thấy trận của tuyến mình, quản trị thấy tất cả.
 drop function if exists game_overview();

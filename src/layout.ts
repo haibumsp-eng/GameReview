@@ -8,11 +8,14 @@ export interface LayoutState {
   rightSplit: number // tỉ lệ chiều cao Đánh dấu / Bình luận
   tlH: number // chiều cao Timeline (px)
   clipsH: number // chiều cao Tình huống (px)
+  spLeft: number // Live Stats: độ rộng cột video + bảng điều khiển
+  spRight: number // Live Stats: độ rộng cột play-by-play
+  spSplit: number // Live Stats: tỉ lệ video / bảng điều khiển
   set: (p: Partial<LayoutState>) => void
   reset: () => void
 }
 
-const defaults = { left: 270, right: 360, leftSplit: 0.62, rightSplit: 0.6, tlH: 132, clipsH: 300 }
+const defaults = { left: 270, right: 360, leftSplit: 0.62, rightSplit: 0.6, tlH: 132, clipsH: 300, spLeft: 640, spRight: 300, spSplit: 0.6 }
 
 export const useLayout = create<LayoutState>()(
   persist(

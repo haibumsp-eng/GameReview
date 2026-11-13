@@ -58,6 +58,7 @@ interface DataState {
   removeGamePlayer: (id: string) => void
   addStat: (e: Omit<StatEvent, 'id' | 'createdAt'>) => string
   removeStat: (id: string) => void
+  setStatVideo: (id: string, videoId: string, videoT: number) => void
   setClock: (gameId: string, patch: Partial<Pick<Game, 'periodLen' | 'clockPeriod' | 'clockRemaining' | 'clockRunning' | 'clockStartedAt'>>) => void
   addLineup: (e: Omit<LineupEvent, 'id' | 'createdAt'>) => void
   removeLineup: (id: string) => void
@@ -236,7 +237,7 @@ export const useData = create<DataState>((set, get) => {
         gamePlayers: (gpr.data ?? []).map((r: any) => ({ id: r.id, gameId: r.game_id, side: r.side, number: r.number, name: r.name, playerId: r.player_id ?? null })),
         stats: (ser.data ?? []).map((r: any) => ({
           id: r.id, gameId: r.game_id, side: r.side, gamePlayerId: r.game_player_id ?? null, type: r.type, period: r.period,
-          videoId: r.video_id ?? null, videoT: r.video_t ?? null, clockS: r.clock_s ?? null, createdAt: new Date(r.created_at).getTime(),
+          videoId: r.video_id ?? null, videoT: r.video_t ?? null, clockS: r.clock_s ?? null, viaRemote: !!r.via_remote, createdAt: new Date(r.created_at).getTime(),
         })),
         lineups: (ler.data ?? []).map((r: any) => ({
           id: r.id, gameId: r.game_id, side: r.side, gamePlayerId: r.game_player_id, kind: r.kind, period: r.period, clockS: r.clock_s,
@@ -415,6 +416,10 @@ export const useData = create<DataState>((set, get) => {
     removeLineup: (id) => {
       set((s) => ({ lineups: s.lineups.filter((e) => e.id !== id) }))
       supabase.from('lineup_events').delete().eq('id', id).then(({ error }) => fail(error))
+    },
+    setStatVideo: (id, videoId, videoT) => {
+      set((s) => ({ stats: s.stats.map((e) => (e.id === id ? { ...e, videoId, videoT } : e)) }))
+      supabase.from('stat_events').update({ video_id: videoId, video_t: videoT }).eq('id', id).then(({ error }) => fail(error))
     },
     removeStat: (id) => {
       set((s) => ({ stats: s.stats.filter((e) => e.id !== id) }))

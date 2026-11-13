@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useData, useUi, selectGame, myOrgRole, toast } from '../store'
 import { lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
@@ -6,6 +6,9 @@ import { clockNow, mmss, onCourt, periodLength, plusMinus, secondsPlayed } from 
 import type { GamePlayer, StatType, TeamSide } from '../types'
 import { BoxScoreView } from './BoxScore'
 import { PlayerPanel } from './PlayerPanel'
+import { Gutter, SplitV } from './Gutter'
+import { useLayout, clamp } from '../layout'
+import { RemoteModal } from './Remote'
 import { yt } from '../youtube'
 import { seekVideo } from '../nav'
 
@@ -20,9 +23,11 @@ const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'm
 /** Trang Live Stats riêng: ghi thống kê 2 đội (dùng cho trận của đội hoặc giải đấu), không cần video. */
 export function StatsPage() {
   const { orgId, squadId, gameId, videoId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, videoId: s.videoId, set: s.set })))
+  const L = useLayout()
+  const [remoteOpen, setRemoteOpen] = useState(false)
   const [showVideo, setShowVideo] = useState(() => { try { return localStorage.getItem('gr-sp-video') !== 'off' } catch { return true } })
   const toggleVideo = () => { setShowVideo(!showVideo); try { localStorage.setItem('gr-sp-video', showVideo ? 'off' : 'on') } catch { /* bỏ qua */ } }
-  const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, addGamePlayers, removeGamePlayer, addStat, removeStat, setClock, addLineup, removeLineup } = useData()
+  const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, addGamePlayers, removeGamePlayer, addStat, removeStat, setClock, addLineup, removeLineup, setStatVideo } = useData()
   const [tab, setTab] = useState<'record' | 'box'>('record')
   const [sel, setSel] = useState<GamePlayer | null>(null)
   const [, tick] = useState(0)
@@ -36,6 +41,19 @@ export function StatsPage() {
 
   // Đổi trận thì bỏ chọn cầu thủ.
   useEffect(() => { setSel(null) }, [gameId])
+
+  // Pha bấm từ điện thoại: nếu máy này đang mở video thì gắn giây video cho pha đó (để bấm vào xem lại được).
+  const attached = useRef(new Set<string>())
+  useEffect(() => {
+    if (!showVideo || !videoId || !yt.ready()) return
+    const now = Date.now()
+    for (const e of stats) {
+      if (!e.viaRemote || e.videoT != null || attached.current.has(e.id) || now - e.createdAt > 15000) continue
+      attached.current.add(e.id)
+      const lag = yt.playing() ? Math.min(10, Math.max(0, (now - e.createdAt) / 1000)) : 0
+      setStatVideo(e.id, videoId, Math.max(0, yt.time() - lag))
+    }
+  }, [stats, showVideo, videoId, setStatVideo])
 
   // ---- Đồng hồ thi đấu ----
   const len = game?.periodLen ?? 600
@@ -207,6 +225,19 @@ export function StatsPage() {
   </div>
   )
 
+  const padBlock = (
+        <div className={`sp-pad ${sel ? '' : 'idle'}`}>
+          <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
+          <div className="sp-actions">
+            {ACTIONS.map((a) => (
+              <button key={a.type} className={`sp-act ${a.tone ?? ''}`} disabled={!canEdit} onClick={() => record(a.type)}>
+                <span>{a.label}</span>{a.pts && <small>{a.pts}</small>}
+              </button>
+            ))}
+          </div>
+        </div>
+  )
+
   return (
     <div className="sp">
       <div className="sp-bar">
@@ -219,6 +250,7 @@ export function StatsPage() {
         </select>
         {canEdit && <button className="btn primary" disabled={!squadId} onClick={() => setNewGame({ title: '', home: squad?.name ?? '', away: '', date: new Date().toISOString().slice(0, 10), len: 600 })}>+ Trận mới</button>}
         <span className="spacer" />
+        {game && canEdit && <button className="btn sm" onClick={() => setRemoteOpen(true)}>📱 Điện thoại</button>}
         {game && (
           <button className="btn sm ghost" onClick={toggleVideo}>{showVideo ? 'Ẩn video' : 'Hiện video'}</button>
         )}
@@ -230,6 +262,7 @@ export function StatsPage() {
         )}
       </div>
 
+      {remoteOpen && game && <RemoteModal gameId={game.id} onClose={() => setRemoteOpen(false)} />}
       {newGame && (
         <div className="modal-back" onClick={() => setNewGame(null)}>
           <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
@@ -253,9 +286,14 @@ export function StatsPage() {
       ) : tab === 'box' ? (
         <div className="sp-box"><BoxScoreView onSeek={(vid, t) => { setTab('record'); if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(vid, t, true), 50) }} /></div>
       ) : (
-        <div className={`sp-main ${showVideo ? 'with-video' : ''}`}>
-          {showVideo && <div className="sp-watch"><div className="sp-video"><PlayerPanel /></div>{logEl}</div>}
-          <div className="sp-left">
+        <div className="sp-work">
+          <div className="col sp-col-left" style={{ width: L.spLeft }}>
+            {showVideo
+              ? <SplitV frac={L.spSplit} setFrac={(f) => L.set({ spSplit: f })} top={<div className="sp-video"><PlayerPanel /></div>} bottom={padBlock} />
+              : padBlock}
+          </div>
+          <Gutter dir="col" begin={() => L.spLeft} move={(st, dx) => L.set({ spLeft: clamp(st + dx, 360, 1100) })} />
+          <div className="col center sp-center">
             <div className="sp-score">
               <span className="sp-sname">{homeName}</span>
               <span className="sp-num home">{score('home')}</span>
@@ -281,18 +319,9 @@ export function StatsPage() {
                 <div className="row"><button className="btn" onClick={() => setPaste(null)}>Huỷ</button><button className="btn primary grow-btn" onClick={savePaste}>Thêm</button></div>
               </div>
             )}
-            <div className={`sp-pad ${sel ? '' : 'idle'}`}>
-              <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
-              <div className="sp-actions">
-                {ACTIONS.map((a) => (
-                  <button key={a.type} className={`sp-act ${a.tone ?? ''}`} disabled={!canEdit} onClick={() => record(a.type)}>
-                    <span>{a.label}</span>{a.pts && <small>{a.pts}</small>}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
-          {!showVideo && logEl}
+          <Gutter dir="col" begin={() => L.spRight} move={(st, dx) => L.set({ spRight: clamp(st - dx, 220, 560) })} />
+          <div className="col sp-col-right" style={{ width: L.spRight }}>{logEl}</div>
         </div>
       )}
     </div>

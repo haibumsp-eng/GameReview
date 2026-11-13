@@ -94,6 +94,7 @@ export interface StatEvent {
   videoId: string | null
   videoT: number | null
   clockS?: number | null
+  viaRemote?: boolean
   createdAt: number
 }
 /** Vào sân / ra sân, ghi theo đồng hồ thi đấu. */
