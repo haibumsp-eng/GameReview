@@ -161,14 +161,22 @@ export function StatsPage() {
     selectGame(gid); setNewGame(null)
   }
 
+  // Shift + click: xoá cầu thủ. Chưa có pha nào thì xoá ngay; đã có thì hỏi lại một lần.
+  const deletePlayer = (p: GamePlayer) => {
+    const n = stats.filter((e) => e.gamePlayerId === p.id).length + lineups.filter((e) => e.gamePlayerId === p.id).length
+    if (n && !confirm(`Xoá #${p.number} ${p.name}? ${n} pha / lần thay người của cầu thủ này cũng bị xoá.`)) return
+    if (sel?.id === p.id) setSel(null)
+    removeGamePlayer(p.id)
+    toast(`Đã xoá #${p.number} ${p.name}`)
+  }
   const card = (p: GamePlayer) => {
     const l = lineOf(stats.filter((e) => e.gamePlayerId === p.id))
     const pf = stats.filter((e) => e.gamePlayerId === p.id && e.type === 'PF').length
     const v = pm.get(p.id) ?? 0
     return (
       <div key={p.id} className={`sp-player ${sel?.id === p.id ? 'on' : ''} ${pf >= 5 ? 'out' : ''}`}
-        onClick={() => canEdit && setSel(sel?.id === p.id ? null : p)}
-        onContextMenu={(e) => { e.preventDefault(); if (canEdit && confirm(`Xoá #${p.number} ${p.name} khỏi trận (và các pha của người này)?`)) removeGamePlayer(p.id) }}>
+        title="Click: chọn để ghi stats · Shift + click: xoá khỏi trận"
+        onClick={(e) => { if (!canEdit) return; if (e.shiftKey) return deletePlayer(p); setSel(sel?.id === p.id ? null : p) }}>
         <span className="sp-no">{p.number}</span>
         <span className="sp-pname">{p.name}</span>
         <span className="sp-mini">{l.pts} PTS · {pf} PF · {mmss(secs.get(p.id) ?? 0)} MIN · {v > 0 ? '+' : ''}{v}</span>
@@ -239,7 +247,7 @@ export function StatsPage() {
 
   const padBlock = (
         <div className={`sp-pad ${sel ? '' : 'idle'}`}>
-          <div className="sp-keys muted"><kbd>Space</kbd> đồng hồ · <kbd>K</kbd> phát/dừng video · <kbd>J</kbd><kbd>L</kbd> video ±5s</div>
+          <div className="sp-keys muted"><kbd>Space</kbd> đồng hồ · <kbd>K</kbd> phát/dừng video · <kbd>J</kbd><kbd>L</kbd> video ±5s · <kbd>Shift</kbd>+click cầu thủ: xoá</div>
       <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
           <div className="sp-actions">
             {ACTIONS.map((a) => (

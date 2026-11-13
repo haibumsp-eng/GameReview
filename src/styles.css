@@ -613,3 +613,4 @@ a.btn { text-decoration: none; text-align: center; }
 .bs-row.editing { cursor: default; }
 .bs-row.editing:hover { background: transparent; }
 .bs-add td { background: #101203; }
+.sp-player, .bs-row { user-select: none; } /* Shift + click không bôi đen chữ */

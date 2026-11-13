@@ -45,9 +45,11 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
     updateGamePlayer(id, { number: n })
   }
   const saveName = (id: string, raw: string, old: string) => { const v = raw.trim(); if (v && v !== old) updateGamePlayer(id, { name: v }) }
+  // Chưa có pha nào thì xoá ngay; đã có thì hỏi lại một lần.
   const remove = (id: string, label: string) => {
     const n = stats.filter((e) => e.gamePlayerId === id).length + lineups.filter((e) => e.gamePlayerId === id).length
-    if (confirm(n ? `Xoá ${label}? ${n} pha / lần thay người của cầu thủ này cũng bị xoá.` : `Xoá ${label} khỏi trận?`)) removeGamePlayer(id)
+    if (n && !confirm(`Xoá ${label}? ${n} pha / lần thay người của cầu thủ này cũng bị xoá.`)) return
+    removeGamePlayer(id)
   }
   const addRow = (side: TeamSide) => {
     const n = parseInt(draft.number, 10)
@@ -79,7 +81,8 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
                 const mine = ev.filter((e) => e.gamePlayerId === p.id)
                 const l = lineOf(mine)
                 return [
-                  <tr key={p.id} className={`bs-row ${open === p.id ? 'open' : ''} ${edit ? 'editing' : ''}`} onClick={() => !edit && setOpen(open === p.id ? null : p.id)}>
+                  <tr key={p.id} className={`bs-row ${open === p.id ? 'open' : ''} ${edit ? 'editing' : ''}`} title={props.editable ? 'Shift + click: xoá cầu thủ' : undefined}
+                    onClick={(e) => { if (e.shiftKey && props.editable) { e.preventDefault(); return remove(p.id, `#${p.number} ${p.name}`) } if (!edit) setOpen(open === p.id ? null : p.id) }}>
                     {edit ? (
                       <>
                         <td className="bs-no"><input className="bs-in num" defaultValue={p.number} inputMode="numeric" key={'n' + p.number}
