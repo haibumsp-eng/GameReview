@@ -675,3 +675,4 @@ a.btn { text-decoration: none; text-align: center; }
 .vp-x { border: 0; background: none; color: var(--muted); cursor: pointer; width: 20px; height: 20px; border-radius: 5px; font-size: 13px; line-height: 1; padding: 0; }
 .vp-x:hover { background: #ffffff14; color: var(--text); }
 .vp-chip .st-dot { margin: 0; }
+.vp-alias { font-size: 13px; padding: 6px 8px; resize: vertical; font-family: var(--font-ui); }

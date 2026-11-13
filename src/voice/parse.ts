@@ -10,7 +10,7 @@ import type { StatType, TeamSide } from '../types'
  */
 
 export interface VPlayer { id: string; side: TeamSide; number: number; on: boolean }
-export interface VoiceCtx { homeWords: string[]; awayWords: string[]; players: VPlayer[] }
+export interface VoiceCtx { homeWords: string[]; awayWords: string[]; players: VPlayer[]; aliases?: [string, string][] }
 
 export type VoiceItem =
   | { kind: 'stat'; type: StatType; side: TeamSide | null; number: number | null; gamePlayerId: string | null; warn?: string; error?: string }
@@ -71,7 +71,8 @@ const PHRASES: [string, Act][] = [
   ['stop gio', { t: 'clock', run: false }], ['chay gio', { t: 'clock', run: true }], ['bat gio', { t: 'clock', run: true }],
   ['chay dong ho', { t: 'clock', run: true }], ['tiep tuc gio', { t: 'clock', run: true }],
   // lỗi
-  ['shooting foul', { t: 'stat', type: 'PFS' }], ['loi khi nem', { t: 'stat', type: 'PFS' }], ['loi nem', { t: 'stat', type: 'PFS' }], ['sf', { t: 'stat', type: 'PFS' }],
+  ['shooting foul', { t: 'stat', type: 'PFS' }], ['shooting file', { t: 'stat', type: 'PFS' }], ['shooting phai', { t: 'stat', type: 'PFS' }], ['shooting', { t: 'stat', type: 'PFS' }],
+  ['loi nem phat', { t: 'stat', type: 'PFS' }], ['pham loi nem phat', { t: 'stat', type: 'PFS' }], ['loi khi nem', { t: 'stat', type: 'PFS' }], ['loi nem', { t: 'stat', type: 'PFS' }], ['sf', { t: 'stat', type: 'PFS' }],
   ['loi ca nhan', { t: 'stat', type: 'PF' }], ['pham loi', { t: 'stat', type: 'PF' }], ['personal foul', { t: 'stat', type: 'PF' }],
   ['foul', { t: 'stat', type: 'PF' }], ['phao', { t: 'stat', type: 'PF' }], ['pf', { t: 'stat', type: 'PF' }], ['loi', { t: 'stat', type: 'PF' }],
   // kiến tạo, cướp, mất bóng, chắn
@@ -101,7 +102,12 @@ const shotType = (pts: number, miss: boolean): StatType =>
   pts === 1 ? (miss ? 'FTX' : 'FTM') : pts === 3 ? (miss ? '3PX' : '3PM') : (miss ? '2PX' : '2PM')
 
 export function parseVoice(text: string, ctx: VoiceCtx): VoiceItem[] {
-  const toks = norm(text).split(' ').filter(Boolean)
+  let t = ` ${norm(text)} `
+  for (const [from, to] of ctx.aliases ?? []) {
+    const f = norm(from), x = norm(to)
+    if (f && f !== ',') t = t.split(` ${f} `).join(` ${x} `)
+  }
+  const toks = t.trim().split(' ').filter(Boolean)
   const teamPhrases: [string[], TeamSide][] = [
     ...ctx.homeWords.map((w) => [norm(w).replace(/ , /g, ' ').split(' ').filter((x) => x !== ','), 'home'] as [string[], TeamSide]),
     ...ctx.awayWords.map((w) => [norm(w).replace(/ , /g, ' ').split(' ').filter((x) => x !== ','), 'away'] as [string[], TeamSide]),
@@ -112,6 +118,7 @@ export function parseVoice(text: string, ctx: VoiceCtx): VoiceItem[] {
   const out: VoiceItem[] = []
   let team: TeamSide | null = null
   let player: number | null = null
+  let fresh = false // vừa nói số, chưa có hành động: màu nói ngay sau thuộc về số này
   let pending: Extract<VoiceItem, { kind: 'stat' }>[] = [] // hành động nói trước số áo
   let lastShot: { item: Extract<VoiceItem, { kind: 'stat' }>; idx: number; ptsSet: boolean } | null = null
   let ft: { idx: number; used: boolean } | null = null
@@ -138,7 +145,7 @@ export function parseVoice(text: string, ctx: VoiceCtx): VoiceItem[] {
 
     // Đội
     const tp = teamPhrases.find(([w]) => at(i, w))
-    if (tp) { team = tp[1]; player = null; pending = []; i += tp[0].length; continue }
+    if (tp) { team = tp[1]; if (!fresh) { player = null; pending = [] } i += tp[0].length; continue }
 
     // Số (chữ số hoặc chữ)
     let num: number | null = null, len = 0
@@ -160,6 +167,7 @@ export function parseVoice(text: string, ctx: VoiceCtx): VoiceItem[] {
       if (next === 'qua' || next === 'lan' || next === 'trai') { i += len; continue } // "2 quả ném phạt"
       if (next === 'diem') { pointsFor = { pts: num, idx: i }; i += len; continue }
       setPlayer(num)
+      fresh = true
       lastShot = null; ft = null; lastReb = null
       i += len; continue
     }
@@ -169,6 +177,7 @@ export function parseVoice(text: string, ctx: VoiceCtx): VoiceItem[] {
     const ph = PHRASES.find(([p]) => at(i, p.split(' ')))
     if (!ph) { i++; continue }
     const [p, a] = ph
+    if (a.t !== 'skip') fresh = false
     const step = p.split(' ').length
     switch (a.t) {
       case 'clock': out.push({ kind: 'clock', run: a.run }); break

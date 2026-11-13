@@ -25,6 +25,12 @@ function loadWords(gameId: string) {
   return { home: 'xanh', away: 'tím' }
 }
 
+const ALIAS_KEY = 'gr-voice-aliases'
+const loadAliases = () => { try { return localStorage.getItem(ALIAS_KEY) ?? '' } catch { return '' } }
+/** Mỗi dòng "nghe thành = hiểu là". */
+const parseAliases = (txt: string): [string, string][] =>
+  txt.split('\n').map((l) => l.split('=')).filter((x) => x.length === 2 && x[0].trim() && x[1].trim()).map(([a, b]) => [a.trim(), b.trim()])
+
 /** Nói để ghi stats: giữ V (hoặc giữ nút mic) → nói → thả → kiểm tra → Enter để ghi. Whisper chạy ngay trong trình duyệt. */
 export function VoicePanel({ gameId, homeName, awayName, players, canEdit, stamp, onCommit }: Props) {
   const asr = useAsr()
@@ -33,6 +39,8 @@ export function VoicePanel({ gameId, homeName, awayName, players, canEdit, stamp
   const [removed, setRemoved] = useState<Set<number>>(new Set())
   const [words, setWords] = useState(() => loadWords(gameId))
   const [showSet, setShowSet] = useState(false)
+  const [aliasText, setAliasText] = useState(loadAliases)
+  const saveAliases = (v: string) => { setAliasText(v); try { localStorage.setItem(ALIAS_KEY, v) } catch { /* bỏ qua */ } }
   const [ms, setMs] = useState(0)
   const st = useRef<{ stamp: VoiceStamp | null; wasPlaying: boolean; holding: boolean; starting: boolean }>({ stamp: null, wasPlaying: false, holding: false, starting: false })
 
@@ -44,7 +52,8 @@ export function VoicePanel({ gameId, homeName, awayName, players, canEdit, stamp
     homeWords: [words.home, homeName, 'đội nhà', 'home'].filter(Boolean),
     awayWords: [words.away, awayName, 'đội khách', 'away'].filter(Boolean),
     players,
-  }), [words, homeName, awayName, players])
+    aliases: parseAliases(aliasText),
+  }), [words, homeName, awayName, players, aliasText])
   const items = useMemo(() => (phase === 'review' ? parseVoice(text, ctx) : []), [phase, text, ctx])
   const keep = items.filter((_, i) => !removed.has(i))
   const okCount = keep.filter((it) => (it.kind === 'stat' && !it.error) || it.kind === 'clock').length
@@ -156,6 +165,9 @@ export function VoicePanel({ gameId, homeName, awayName, players, canEdit, stamp
             <label><span className="st-dot home" />{homeName} gọi là<input value={words.home} onChange={(e) => saveWords({ ...words, home: e.target.value })} placeholder="xanh" /></label>
             <label><span className="st-dot away" />{awayName} gọi là<input value={words.away} onChange={(e) => saveWords({ ...words, away: e.target.value })} placeholder="tím" /></label>
           </div>
+          <label className="field-label">Sửa từ hay nghe sai · mỗi dòng: nghe thành = hiểu là</label>
+          <textarea className="vp-alias" rows={4} value={aliasText} onChange={(e) => saveAliases(e.target.value)}
+            placeholder={'shooting file = shooting foul\nsổ = số\nxin = xanh'} />
         </div>
       )}
 
