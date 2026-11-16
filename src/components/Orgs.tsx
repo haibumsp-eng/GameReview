@@ -80,14 +80,14 @@ export function OrgMembersModal(props: { onClose: () => void }) {
 /** Quản trị hệ thống: tạo trung tâm, đặt gói cước, ngày hết hạn. */
 export function OrgAdminModal(props: { onClose: () => void }) {
   const { orgs, squads, createOrg } = useData()
-  const [form, setForm] = useState({ name: '', owner: '', plan: 'trial', max: '1', expires: '' })
+  const [form, setForm] = useState({ name: '', owner: '', plan: 'trial', max: '', expires: '' })
   const [msg, setMsg] = useState('')
 
   const create = async () => {
     if (!form.name.trim() || !form.owner.trim()) return setMsg('Nhập tên trung tâm và tài khoản chủ trung tâm.')
     const err = await createOrg(form.name.trim(), form.owner, form.plan, form.max ? +form.max : null, form.expires || null)
     setMsg(err ?? `Đã tạo trung tâm “${form.name}”.`)
-    if (!err) setForm({ name: '', owner: '', plan: 'trial', max: '1', expires: '' })
+    if (!err) setForm({ name: '', owner: '', plan: 'trial', max: '', expires: '' })
   }
 
   return (

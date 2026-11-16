@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { alertDialog } from './lib/dialog'
 import type { Clip, Comment, Game, GamePlayer, GameVideo, LineupEvent, Org, OrgMember, Player, Playlist, Side, SpotBox, Squad, StatEvent, TeamSide } from './types'
 import { toLoginEmail, uid } from './util'
 
@@ -256,7 +257,12 @@ export const useData = create<DataState>((set, get) => {
     addSquad: (name, orgId) => {
       const id = uid()
       set((s) => ({ squads: [...s.squads, { id, name, orgId }] }))
-      supabase.rpc('create_squad', { p_id: id, p_name: name, p_org: orgId }).then(({ error }) => { if (fail(error)) get().loadBase() })
+      supabase.rpc('create_squad', { p_id: id, p_name: name, p_org: orgId }).then(({ error }) => {
+        if (!error) return
+        console.error(error)
+        alertDialog({ title: 'Chưa tạo được tuyến đội', message: error.message })
+        get().loadBase()
+      })
       return id
     },
     createOrg: async (name, ownerLogin, plan, maxSquads, expiresOn) => {
