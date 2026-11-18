@@ -70,6 +70,9 @@ interface DataState {
 const pending = new Map<string, Partial<Clip>>()
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 let reloadTimer: ReturnType<typeof setTimeout> | undefined
+// Đếm lần sửa tình huống + số lần ghi đang bay: dùng để bỏ kết quả tải cũ, tránh đè chữ đang gõ.
+let editSeq = 0
+let inflight = 0
 let autoJoinTried = false
 
 export const useData = create<DataState>((set, get) => {
@@ -85,7 +88,7 @@ export const useData = create<DataState>((set, get) => {
   const reloadSoon = () => {
     clearTimeout(reloadTimer)
     reloadTimer = setTimeout(() => {
-      if (pending.size) return reloadSoon() // đang gõ dở: chờ ghi xong
+      if (pending.size || inflight) return reloadSoon() // đang gõ dở hoặc đang ghi: chờ xong
       get().loadBase()
       get().loadGame(useUi.getState().gameId)
     }, 300)
@@ -95,6 +98,10 @@ export const useData = create<DataState>((set, get) => {
     const patch = pending.get(id)
     pending.delete(id); timers.delete(id)
     if (!patch) return
+    inflight++
+    try { await writeClip(id, patch) } finally { inflight--; editSeq++ }
+  }
+  const writeClip = async (id: string, patch: Partial<Clip>) => {
     const row: Record<string, unknown> = {}
     if (patch.start !== undefined) row.start_s = patch.start
     if (patch.end !== undefined) row.end_s = patch.end
@@ -211,6 +218,7 @@ export const useData = create<DataState>((set, get) => {
     },
 
     loadGame: async (gameId) => {
+      const seq0 = editSeq
       if (!gameId) return set({ clips: [], comments: [], playlists: [], gamePlayers: [], stats: [], lineups: [] })
       const { data: cl, error } = await supabase
         .from('clips').select('*, clip_players(player_id)').eq('game_id', gameId).limit(5000)
@@ -234,6 +242,8 @@ export const useData = create<DataState>((set, get) => {
         supabase.from('lineup_events').select('*').eq('game_id', gameId).order('created_at').limit(5000),
       ])
       if (fail(plr.error) || fail(gpr.error) || fail(ser.error) || fail(ler.error)) return
+      // Trong lúc tải, người dùng đang gõ / vừa ghi: kết quả này đã cũ, áp vào sẽ làm mất hoặc nhảy chữ. Tải lại sau.
+      if (editSeq !== seq0 || pending.size || inflight) { reloadSoon(); return }
       const pl = plr.data
       set({
         gamePlayers: (gpr.data ?? []).map((r: any) => ({ id: r.id, gameId: r.game_id, side: r.side, number: r.number, name: r.name, playerId: r.player_id ?? null })),
@@ -362,6 +372,7 @@ export const useData = create<DataState>((set, get) => {
       return id
     },
     updateClip: (id, patch) => {
+      editSeq++
       set((s) => ({ clips: s.clips.map((c) => (c.id === id ? { ...c, ...patch } : c)) }))
       pending.set(id, { ...pending.get(id), ...patch })
       clearTimeout(timers.get(id))
