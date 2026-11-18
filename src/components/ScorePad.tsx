@@ -52,7 +52,7 @@ export function ScorePad({ token, embedded }: { token: string; embedded?: boolea
   )
 
   return (
-    <div className={`pad ${embedded ? 'embedded' : ''}`}>
+    <div className={`pad ${embedded ? 'embedded' : ''}`} style={{ ['--home' as string]: st.homeColor, ['--away' as string]: st.awayColor }}>
       {!embedded && <div className="pad-head"><Logo size={22} /><span className="muted pad-title">{st.name}</span></div>}
       <div className="pad-teams">{teamCol('home')}{teamCol('away')}</div>
       <div className="pad-clockbox">

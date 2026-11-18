@@ -5,6 +5,7 @@ export interface SbState {
   name: string; league: string; home: string; away: string
   score: { home: number; away: number }
   period: number; periodLen: number; clock: number; running: boolean; canControl: boolean
+  homeColor: string; awayColor: string; homeLogoV: string; awayLogoV: string
 }
 
 export const mmss = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`
@@ -43,4 +44,31 @@ export function useSbState(token: string, everyMs: number) {
 
   const clock = st ? (st.running ? Math.max(0, st.clock - (Date.now() - fetchedAt.current) / 1000) : st.clock) : 0
   return { st, setSt, err, reload, clock }
+}
+
+/** Logo 2 đội: chỉ tải lại khi mã logo (md5) thay đổi. */
+export function useSbLogos(token: string, st: SbState | null) {
+  const [logos, setLogos] = useState<{ home: string | null; away: string | null }>({ home: null, away: null })
+  const key = st ? `${st.homeLogoV}|${st.awayLogoV}` : ''
+  useEffect(() => {
+    if (!st) return
+    if (!st.homeLogoV && !st.awayLogoV) { setLogos({ home: null, away: null }); return }
+    let live = true
+    void supabase.rpc('sb_logos', { p_token: token }).then(({ data }) => {
+      if (live && data) setLogos({ home: (data as any).home ?? null, away: (data as any).away ?? null })
+    })
+    return () => { live = false }
+  }, [token, key]) // eslint-disable-line react-hooks/exhaustive-deps
+  return logos
+}
+
+/** Màu chữ đọc được trên nền màu đội. */
+export function inkOn(hex: string): string {
+  const n = parseInt(hex.slice(1), 16)
+  const l = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
+  return l > 0.6 ? '#0b0b0c' : '#ffffff'
+}
+export const rgba = (hex: string, a: number) => {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
 }

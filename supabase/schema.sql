@@ -731,4 +731,40 @@ end $$;
 
 grant execute on function sb_state(text), sb_act(text, text, int, text) to anon, authenticated;
 
+-- Logo đội (ảnh nhỏ lưu dạng data URL, app tự thu nhỏ trước khi lưu) và màu áo.
+alter table scoreboards add column if not exists home_color text not null default '#bedf00';
+alter table scoreboards add column if not exists away_color text not null default '#9aa0ff';
+alter table scoreboards add column if not exists home_logo text;
+alter table scoreboards add column if not exists away_logo text;
+alter table scoreboards drop constraint if exists scoreboards_style_check;
+alter table scoreboards add constraint scoreboards_style_check check (
+  home_color ~ '^#[0-9a-fA-F]{6}$' and away_color ~ '^#[0-9a-fA-F]{6}$'
+  and coalesce(length(home_logo), 0) < 200000 and coalesce(length(away_logo), 0) < 200000);
+
+create or replace function sb_state(p_token text) returns jsonb
+language plpgsql security definer stable set search_path = public as $$
+declare s scoreboards; c real;
+begin
+  select * into s from scoreboards where (control_token = p_token or view_token = p_token) and org_active(org_id);
+  if s.id is null then return jsonb_build_object('error', 'Mã không hợp lệ hoặc gói của trung tâm đã hết hạn.'); end if;
+  c := sb_clock_now(s);
+  return jsonb_build_object('name', s.name, 'league', s.league, 'home', s.home_name, 'away', s.away_name,
+    'score', jsonb_build_object('home', s.home_score, 'away', s.away_score),
+    'period', s.period, 'periodLen', s.period_len, 'clock', c, 'running', s.clock_running and c > 0,
+    'homeColor', s.home_color, 'awayColor', s.away_color,
+    'homeLogoV', coalesce(md5(s.home_logo), ''), 'awayLogoV', coalesce(md5(s.away_logo), ''),
+    'canControl', s.control_token = p_token);
+end $$;
+
+-- Logo 2 đội (nặng hơn nên tách riêng: app chỉ tải khi logo đổi).
+create or replace function sb_logos(p_token text) returns jsonb
+language plpgsql security definer stable set search_path = public as $$
+declare s scoreboards;
+begin
+  select * into s from scoreboards where (control_token = p_token or view_token = p_token) and org_active(org_id);
+  if s.id is null then return jsonb_build_object('home', null, 'away', null); end if;
+  return jsonb_build_object('home', s.home_logo, 'away', s.away_logo);
+end $$;
+grant execute on function sb_state(text), sb_logos(text) to anon, authenticated;
+
 notify pgrst, 'reload schema';

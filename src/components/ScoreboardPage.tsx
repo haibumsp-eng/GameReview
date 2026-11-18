@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { useShallow } from 'zustand/react/shallow'
 import { supabase } from '../supabase'
@@ -6,11 +6,15 @@ import { useData, useUi, myOrgRole } from '../store'
 import { confirmDialog, promptDialog } from '../lib/dialog'
 import { BoardOverlay } from './Board'
 import { ScorePad } from './ScorePad'
+import { fileToLogo } from '../scoreboard/image'
+
+const SWATCHES = ['#bedf00', '#9aa0ff', '#e5483b', '#ff8a1f', '#ffd23f', '#2ecc71', '#2f80ff', '#ff5fa2', '#f2f2f2', '#1f1f23']
 
 interface Board {
   id: string; name: string; league: string; home: string; away: string; periodLen: number; controlToken: string; viewToken: string
+  homeColor: string; awayColor: string; homeLogo: string | null; awayLogo: string | null
 }
-const fromRow = (r: any): Board => ({ id: r.id, name: r.name, league: r.league, home: r.home_name, away: r.away_name, periodLen: r.period_len, controlToken: r.control_token, viewToken: r.view_token })
+const fromRow = (r: any): Board => ({ id: r.id, name: r.name, league: r.league, home: r.home_name, away: r.away_name, periodLen: r.period_len, controlToken: r.control_token, viewToken: r.view_token, homeColor: r.home_color, awayColor: r.away_color, homeLogo: r.home_logo, awayLogo: r.away_logo })
 const newToken = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
 
 /** Trang "Bảng tỉ số": riêng hoàn toàn với mổ băng và Live Stats. */
@@ -56,6 +60,10 @@ export function ScoreboardPage() {
     if (p.periodLen !== undefined) row.period_len = p.periodLen
     if (p.controlToken !== undefined) row.control_token = p.controlToken
     if (p.viewToken !== undefined) row.view_token = p.viewToken
+    if (p.homeColor !== undefined) row.home_color = p.homeColor
+    if (p.awayColor !== undefined) row.away_color = p.awayColor
+    if (p.homeLogo !== undefined) row.home_logo = p.homeLogo
+    if (p.awayLogo !== undefined) row.away_logo = p.awayLogo
     setBoards((l) => l.map((x) => (x.id === b.id ? { ...x, ...p } : x)))
     const { error } = await supabase.from('scoreboards').update(row).eq('id', b.id)
     if (error) { setErr(error.message); void load() }
@@ -126,6 +134,11 @@ function BoardDetail({ b, onPatch }: { b: Board; onPatch: (p: Partial<Board>) =>
       </div>
 
       <div className="sb-cols">
+        <TeamStyle title={b.home || 'Đội nhà'} color={b.homeColor} logo={b.homeLogo} onColor={(c) => onPatch({ homeColor: c })} onLogo={(l) => onPatch({ homeLogo: l })} />
+        <TeamStyle title={b.away || 'Đội khách'} color={b.awayColor} logo={b.awayLogo} onColor={(c) => onPatch({ awayColor: c })} onLogo={(l) => onPatch({ awayLogo: l })} />
+      </div>
+
+      <div className="sb-cols">
         <div className="card stack">
           <b>📱 Điều khiển bằng điện thoại</b>
           <div className="muted small-note">Quét mã để mở bảng điều khiển tỉ số và đồng hồ. Không cần đăng nhập.</div>
@@ -174,5 +187,37 @@ function BoardDetail({ b, onPatch }: { b: Board; onPatch: (p: Partial<Board>) =>
         </div>
       </div>
     </>
+  )
+}
+
+function TeamStyle(props: { title: string; color: string; logo: string | null; onColor: (c: string) => void; onLogo: (l: string | null) => void }) {
+  const [err, setErr] = useState('')
+  const [c, setC] = useState(props.color)
+  const timer = useRef<ReturnType<typeof setTimeout>>()
+  useEffect(() => { setC(props.color) }, [props.color])
+  // Kéo bảng màu sinh ra rất nhiều giá trị: chờ dừng tay rồi mới lưu.
+  const setColor = (v: string, now?: boolean) => {
+    setC(v); clearTimeout(timer.current)
+    if (now) props.onColor(v); else timer.current = setTimeout(() => props.onColor(v), 350)
+  }
+  const pick = async (f: File | undefined) => {
+    if (!f) return
+    try { setErr(''); props.onLogo(await fileToLogo(f)) } catch (e) { setErr((e as Error).message) }
+  }
+  return (
+    <div className="card sb-team">
+      <b>{props.title}: logo và màu áo</b>
+      <div className="sb-logo-row">
+        <div className="sb-logo">{props.logo ? <img src={props.logo} alt="" /> : 'Chưa có logo'}</div>
+        <label className="btn sm">Chọn ảnh…<input type="file" accept="image/*" hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = '' }} /></label>
+        {props.logo && <button className="btn sm ghost" onClick={() => props.onLogo(null)}>Bỏ logo</button>}
+      </div>
+      {err && <div className="err">{err}</div>}
+      <div className="sb-swatches">
+        {SWATCHES.map((sw) => <button key={sw} className={`sb-sw ${c.toLowerCase() === sw ? 'on' : ''}`} style={{ background: sw }} title={sw} onClick={() => setColor(sw, true)} />)}
+        <input className="sb-color" type="color" value={c} onChange={(e) => setColor(e.target.value)} title="Chọn màu khác" />
+      </div>
+      <div className="muted small-note">Màu này dùng cho ô điểm, viền đội và hiệu ứng ghi điểm trên bảng.</div>
+    </div>
   )
 }

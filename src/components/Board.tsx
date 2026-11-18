@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { mmss, qLabel, useSbState } from '../scoreboard/api'
+import { inkOn, mmss, qLabel, rgba, useSbLogos, useSbState } from '../scoreboard/api'
 
 /**
  * Bảng tỉ số cho livestream (OBS → Browser Source). Nền trong suốt, không cần đăng nhập.
@@ -8,6 +8,7 @@ import { mmss, qLabel, useSbState } from '../scoreboard/api'
  */
 export function BoardOverlay({ token, pos, scale, inline, bonus }: { token: string; pos: 'top' | 'bottom'; scale: number; inline?: boolean; bonus?: { home: number; away: number } }) {
   const { st, err, clock } = useSbState(token, 1000)
+  const logos = useSbLogos(token, st)
   const prev = useRef<{ home: number; away: number } | null>(null)
   // Hiệu ứng ghi điểm: 1 điểm nhẹ, 2 điểm vừa, 3 điểm mạnh (tăng nhiều hơn tính theo mức 3).
   const [fx, setFx] = useState<{ side: 'home' | 'away'; pts: number; n: number } | null>(null)
@@ -50,17 +51,21 @@ export function BoardOverlay({ token, pos, scale, inline, bonus }: { token: stri
   }
 
   return (
-    <div className={`obs-wrap ${pos} ${inline ? 'inline' : ''}`} style={{ transform: `translateX(-50%) scale(${scale})`, transformOrigin: pos === 'top' ? 'top center' : 'bottom center' }}>
+    <div className={`obs-wrap ${pos} ${inline ? 'inline' : ''}`} style={{
+      transform: `translateX(-50%) scale(${scale})`, transformOrigin: pos === 'top' ? 'top center' : 'bottom center',
+      ['--home' as string]: st.homeColor, ['--home-ink' as string]: inkOn(st.homeColor), ['--home-g' as string]: rgba(st.homeColor, 0.8), ['--home-g2' as string]: rgba(st.homeColor, 0.6),
+      ['--away' as string]: st.awayColor, ['--away-ink' as string]: inkOn(st.awayColor), ['--away-g' as string]: rgba(st.awayColor, 0.8), ['--away-g2' as string]: rgba(st.awayColor, 0.6),
+    }}>
       {st.league && pos === 'top' && <div className="obs-league">{st.league}</div>}
       <div className={`obs-bar ${fx ? `fx${tier} ${fx.side}` : ''}`}>
-        <div className="obs-team home"><span className="obs-name">{st.home}</span></div>
+        <div className="obs-team home">{logos.home && <img className="obs-logo" src={logos.home} alt="" />}<span className="obs-name">{st.home}</span></div>
         <div className={`obs-score home ${fx?.side === 'home' ? `fx${tier}` : ''}`} key={`h${shownH}`}>{shownH}{effect('home')}</div>
         <div className="obs-mid">
           <span className="obs-q">{qLabel(st.period)}</span>
           <span className={`obs-clock ${st.running ? 'run' : ''}`}>{mmss(clock)}</span>
         </div>
         <div className={`obs-score away ${fx?.side === 'away' ? `fx${tier}` : ''}`} key={`a${shownA}`}>{shownA}{effect('away')}</div>
-        <div className="obs-team away"><span className="obs-name">{st.away}</span></div>
+        <div className="obs-team away"><span className="obs-name">{st.away}</span>{logos.away && <img className="obs-logo" src={logos.away} alt="" />}</div>
       </div>
       {st.league && pos === 'bottom' && <div className="obs-league bottom">{st.league}</div>}
       {err && <div className="obs-err small">{err}</div>}
