@@ -747,3 +747,15 @@ html.obs, html.obs body, html.obs #root { background: transparent !important; ov
 
 /* Thanh không cắt tràn để hiệu ứng ghi điểm bay ra ngoài được: bo góc đặt ở hai đầu */
 .obs-team.home { border-radius: 12px 0 0 12px; } .obs-team.away { border-radius: 0 12px 12px 0; }
+
+/* Xem trước bảng tỉ số ngay trong app */
+.obs-preview { border-radius: 10px; overflow: hidden; border: 1px solid var(--line-2); }
+.obs-stage { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: linear-gradient(135deg, #2e7d4f, #12304a); }
+.obs-stage::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, #ffffff0d 0 2px, transparent 2px 60px); pointer-events: none; }
+.obs-wrap.inline { position: absolute; }
+.obs-wrap.inline.top { top: 10px; } .obs-wrap.inline.bottom { bottom: 10px; }
+.obs-wrap.inline .obs-err { position: absolute; }
+
+.row.wrap { flex-wrap: wrap; row-gap: 6px; }
+.remote-obs { border-top: 0; padding-top: 0; }
+.remote-obs select { width: auto; }
