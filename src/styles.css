@@ -691,3 +691,25 @@ a.btn { text-decoration: none; text-align: center; }
 .spot-h.n { left: 50%; top: 0; cursor: ns-resize; } .spot-h.s { left: 50%; top: 100%; cursor: ns-resize; }
 .spot-h.e { left: 100%; top: 50%; cursor: ew-resize; } .spot-h.w { left: 0; top: 50%; cursor: ew-resize; }
 .spot-layer.editing .spot-box { animation: none; }
+
+/* ---------- Bảng tỉ số cho livestream (OBS) ---------- */
+html.obs, html.obs body, html.obs #root { background: transparent !important; overflow: hidden; }
+.obs-wrap { position: fixed; left: 50%; z-index: 1; font-family: var(--font-display); }
+.obs-wrap.top { top: 24px; } .obs-wrap.bottom { bottom: 24px; }
+.obs-bar { display: flex; align-items: stretch; height: 84px; border-radius: 14px; overflow: hidden; background: #0b0b0cee; border: 2px solid #ffffff22; box-shadow: 0 8px 30px #0008; color: #fff; }
+.obs-team { display: flex; align-items: center; justify-content: center; min-width: 250px; max-width: 380px; padding: 0 22px; }
+.obs-team.home { border-top: 5px solid var(--accent); } .obs-team.away { border-top: 5px solid #9aa0ff; }
+.obs-name { font-stretch: 112%; font-weight: 800; font-size: 30px; letter-spacing: .02em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.obs-score { display: flex; align-items: center; justify-content: center; min-width: 96px; font-stretch: 112%; font-weight: 900; font-size: 60px; font-variant-numeric: tabular-nums; }
+.obs-score.home { background: var(--accent); color: #0b0b0c; } .obs-score.away { background: #9aa0ff; color: #0a0b1a; }
+.obs-score.pop { animation: obspop .9s ease-out; }
+@keyframes obspop { 0% { transform: scale(1.35); filter: brightness(1.6); } 100% { transform: scale(1); filter: none; } }
+.obs-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 150px; padding: 0 16px; background: #16161a; }
+.obs-q { font-size: 15px; font-weight: 700; letter-spacing: .12em; color: #ffffffb3; }
+.obs-clock { font-size: 38px; font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.obs-clock.run { color: var(--accent); }
+.obs-err { position: fixed; left: 12px; top: 12px; color: #ff8a70; font: 600 14px var(--font-ui); background: #000a; padding: 6px 10px; border-radius: 8px; }
+.obs-err.small { position: static; margin-top: 6px; display: inline-block; font-size: 12px; }
+.remote-obs { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+.remote-obs ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.remote-obs code { background: var(--panel-3); padding: 0 4px; border-radius: 4px; }

@@ -7,6 +7,8 @@ import { confirmDialog } from '../lib/dialog'
 /* ================= Máy tính: tạo mã QR cho điện thoại ================= */
 export function RemoteModal(props: { gameId: string; onClose: () => void }) {
   const [url, setUrl] = useState('')
+  const [boardUrl, setBoardUrl] = useState('')
+  const [copiedB, setCopiedB] = useState(false)
   const [qr, setQr] = useState('')
   const [err, setErr] = useState('')
   const [copied, setCopied] = useState(false)
@@ -17,7 +19,7 @@ export function RemoteModal(props: { gameId: string; onClose: () => void }) {
     const { data, error } = await supabase.rpc('create_remote_token', { p_game: props.gameId })
     if (error) return setErr(error.message)
     const u = `${location.origin}${location.pathname}#remote=${data as string}`
-    setUrl(u)
+    setUrl(u); setBoardUrl(`${location.origin}${location.pathname}#board=${data as string}`)
     setQr(await QRCode.toDataURL(u, { width: 320, margin: 1, errorCorrectionLevel: 'M' }))
     setState('ready')
   }
@@ -43,7 +45,19 @@ export function RemoteModal(props: { gameId: string; onClose: () => void }) {
               <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} />
               <button className="btn sm" onClick={() => navigator.clipboard?.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) })}>{copied ? '✓' : 'Copy'}</button>
             </div>
-            <div className="muted small-note">Mã chỉ ghi được stats của <b>trận này</b>, tự hết hạn sau <b>12 giờ</b>. Ai có mã đều bấm được, nên chỉ đưa cho người ghi stats.</div>
+            <div className="muted small-note">Mã chỉ ghi được stats của <b>trận này</b>, tự hết hạn sau <b>12 giờ</b>. Ai có mã đều bấm được, nên chỉ đưa cho người ghi stats. Địa chỉ OBS cũng dùng chung mã này: đừng để lộ lên hình stream.</div>
+            <div className="remote-obs">
+              <b>📺 Bảng tỉ số cho livestream (OBS)</b>
+              <div className="row">
+                <input readOnly value={boardUrl} onFocus={(e) => e.currentTarget.select()} />
+                <button className="btn sm" onClick={() => navigator.clipboard?.writeText(boardUrl).then(() => { setCopiedB(true); setTimeout(() => setCopiedB(false), 1500) })}>{copiedB ? '✓' : 'Copy'}</button>
+              </div>
+              <ol className="muted small-note">
+                <li>OBS → Sources → <b>+</b> → <b>Browser</b>.</li>
+                <li>Dán địa chỉ trên vào ô <b>URL</b>, đặt Width <b>1920</b>, Height <b>1080</b>.</li>
+                <li>Bảng nằm giữa phía trên, nền trong suốt. Muốn xuống dưới thêm <code>&amp;pos=bottom</code>, muốn to hơn thêm <code>&amp;scale=1.3</code> vào cuối địa chỉ.</li>
+              </ol>
+            </div>
             <button className="btn danger" onClick={revoke}>Thu hồi mã</button>
           </>
         ) : state === 'loading' && !err ? <div className="muted">Đang tạo mã…</div> : (
