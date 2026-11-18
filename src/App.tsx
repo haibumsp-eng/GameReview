@@ -16,6 +16,7 @@ import { Comments } from './components/Comments'
 import { StatsPage } from './components/StatsPage'
 import { Login } from './components/Login'
 import { Overview } from './components/Overview'
+import { ScoreboardPage } from './components/ScoreboardPage'
 import { RecordHud } from './components/RecordHud'
 import { SpotlightRunner } from './components/Spotlight'
 import { Gutter, SplitV } from './components/Gutter'
@@ -88,11 +89,11 @@ export default function App() {
   const { orgId, squadId, gameId, overview, inPoint, toastMsg, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, overview: s.overview, inPoint: s.inPoint, toastMsg: s.toast, set: s.set })))
   const [modal, setModal] = useState<'' | 'members' | 'orgs'>('')
   // Hai trang: Mổ băng (video) và Live Stats (thống kê). Nhớ trang đang mở; link #stats mở thẳng trang stats.
-  const [view, setViewState] = useState<'review' | 'stats'>(() => {
+  const [view, setViewState] = useState<'review' | 'stats' | 'board'>(() => {
     if (location.hash.includes('stats')) return 'stats'
-    try { return localStorage.getItem('gr-view') === 'stats' ? 'stats' : 'review' } catch { return 'review' }
+    try { const v = localStorage.getItem('gr-view'); return v === 'stats' || v === 'board' ? v : 'review' } catch { return 'review' }
   })
-  const setView = (v: 'review' | 'stats') => { setViewState(v); try { localStorage.setItem('gr-view', v) } catch { /* bỏ qua */ } }
+  const setView = (v: 'review' | 'stats' | 'board') => { setViewState(v); try { localStorage.setItem('gr-view', v) } catch { /* bỏ qua */ } }
   const landed = useRef(false)
   const L = useLayout()
 
@@ -165,6 +166,7 @@ export default function App() {
         <div className="seg-toggle view-switch">
           <button className={view === 'review' ? 'on' : ''} onClick={() => setView('review')}>Mổ băng</button>
           <button className={view === 'stats' ? 'on' : ''} onClick={() => setView('stats')}>Live Stats</button>
+          <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>Bảng tỉ số</button>
         </div>
         {isSuper ? (
           <select className="org-select" value={orgId} onChange={(e) => { set({ orgId: e.target.value }); try { localStorage.setItem('gr-org', e.target.value) } catch { /* bỏ qua */ } }}>
@@ -200,7 +202,7 @@ export default function App() {
       <RecordHud />
       {toastMsg && inPoint == null && <div className="toast">{toastMsg}</div>}
       {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}
-      {view === 'stats' ? <StatsPage /> : (
+      {view === 'stats' ? <StatsPage /> : view === 'board' ? <ScoreboardPage /> : (
       <div className="workspace">
         <div className="col" style={{ width: L.left }}>
           <SplitV frac={L.leftSplit} setFrac={(f) => L.set({ leftSplit: f })} top={<Library />} bottom={<Roster />} />

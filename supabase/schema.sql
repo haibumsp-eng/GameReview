@@ -636,3 +636,99 @@ $$;
 
 -- Báo Supabase nạp lại danh sách bảng ngay (tránh lỗi "schema cache").
 notify pgrst, 'reload schema';
+
+-- ================= Bảng tỉ số livestream (tách riêng khỏi mổ băng và Live Stats) =================
+-- Một bảng tỉ số = tên đội, tên giải, tỉ số, hiệp, đồng hồ. Không liên quan tới trận hay stats.
+-- Điện thoại điều khiển bằng control_token; OBS chỉ đọc bằng view_token (không ghi được gì).
+create or replace function is_org_editor(oid uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select is_super() or (
+    exists (select 1 from org_members where org_id = oid and user_id = auth.uid() and role in ('owner','coach'))
+    and org_active(oid))
+$$;
+
+create table if not exists scoreboards (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references orgs on delete cascade,
+  name text not null default 'Bảng tỉ số',
+  league text not null default '',
+  home_name text not null default 'HOME',
+  away_name text not null default 'AWAY',
+  home_score int not null default 0,
+  away_score int not null default 0,
+  period int not null default 1,
+  period_len int not null default 600,
+  clock_remaining real not null default 600,
+  clock_running boolean not null default false,
+  clock_started_at timestamptz,
+  control_token text not null unique default encode(gen_random_bytes(16), 'hex'),
+  view_token text not null unique default encode(gen_random_bytes(16), 'hex'),
+  author uuid default auth.uid() references auth.users on delete set null,
+  created_at timestamptz default now()
+);
+create index if not exists scoreboards_org_idx on scoreboards (org_id);
+alter table scoreboards enable row level security;
+drop policy if exists scoreboards_read   on scoreboards;
+drop policy if exists scoreboards_insert on scoreboards;
+drop policy if exists scoreboards_update on scoreboards;
+drop policy if exists scoreboards_delete on scoreboards;
+create policy scoreboards_read   on scoreboards for select to authenticated using (is_org_editor(org_id));
+create policy scoreboards_insert on scoreboards for insert to authenticated with check (is_org_editor(org_id));
+create policy scoreboards_update on scoreboards for update to authenticated using (is_org_editor(org_id)) with check (is_org_editor(org_id));
+create policy scoreboards_delete on scoreboards for delete to authenticated using (is_org_editor(org_id));
+
+-- Giây còn lại trên đồng hồ lúc này.
+create or replace function sb_clock_now(s scoreboards) returns real
+language sql stable as $$
+  select greatest(0, s.clock_remaining
+    - case when s.clock_running and s.clock_started_at is not null then extract(epoch from now() - s.clock_started_at) else 0 end)::real
+$$;
+
+-- Trạng thái bảng (đọc bằng control_token hoặc view_token). Không cần đăng nhập.
+create or replace function sb_state(p_token text) returns jsonb
+language plpgsql security definer stable set search_path = public as $$
+declare s scoreboards; c real;
+begin
+  select * into s from scoreboards where (control_token = p_token or view_token = p_token) and org_active(org_id);
+  if s.id is null then return jsonb_build_object('error', 'Mã không hợp lệ hoặc gói của trung tâm đã hết hạn.'); end if;
+  c := sb_clock_now(s);
+  return jsonb_build_object('name', s.name, 'league', s.league, 'home', s.home_name, 'away', s.away_name,
+    'score', jsonb_build_object('home', s.home_score, 'away', s.away_score),
+    'period', s.period, 'periodLen', s.period_len, 'clock', c, 'running', s.clock_running and c > 0,
+    'canControl', s.control_token = p_token);
+end $$;
+
+-- Điều khiển bảng bằng control_token: score (side + arg = +/- điểm) | start | stop | set_clock (arg = giây)
+-- | period (arg = số hiệp, đồng hồ về đầu hiệp) | reset. Trả về 'ok' hoặc lý do lỗi.
+create or replace function sb_act(p_token text, p_action text, p_arg int default null, p_side text default null) returns text
+language plpgsql security definer set search_path = public as $$
+declare s scoreboards; c real; v int;
+begin
+  select * into s from scoreboards where control_token = p_token and org_active(org_id) for update;
+  if s.id is null then return 'Mã điều khiển không hợp lệ hoặc gói của trung tâm đã hết hạn.'; end if;
+  c := sb_clock_now(s);
+  if p_action = 'score' then
+    if p_side = 'home' then update scoreboards set home_score = greatest(0, least(999, home_score + coalesce(p_arg, 0))) where id = s.id;
+    elsif p_side = 'away' then update scoreboards set away_score = greatest(0, least(999, away_score + coalesce(p_arg, 0))) where id = s.id;
+    else return 'Sai đội.'; end if;
+  elsif p_action = 'start' then
+    if c <= 0 then return 'Hết giờ hiệp này.'; end if;
+    update scoreboards set clock_running = true, clock_remaining = c, clock_started_at = now() where id = s.id;
+  elsif p_action = 'stop' then
+    update scoreboards set clock_running = false, clock_remaining = c, clock_started_at = null where id = s.id;
+  elsif p_action = 'set_clock' then
+    update scoreboards set clock_remaining = greatest(0, least(coalesce(p_arg, 0), 5999)),
+      clock_started_at = case when clock_running then now() else null end where id = s.id;
+  elsif p_action = 'period' then
+    v := greatest(1, least(coalesce(p_arg, 1), 12));
+    update scoreboards set period = v, clock_running = false, clock_started_at = null,
+      clock_remaining = case when v <= 4 then period_len else least(period_len, 300) end where id = s.id;
+  elsif p_action = 'reset' then
+    update scoreboards set home_score = 0, away_score = 0, period = 1, clock_running = false, clock_started_at = null, clock_remaining = period_len where id = s.id;
+  else return 'Lệnh không hợp lệ.'; end if;
+  return 'ok';
+end $$;
+
+grant execute on function sb_state(text), sb_act(text, text, int, text) to anon, authenticated;
+
+notify pgrst, 'reload schema';

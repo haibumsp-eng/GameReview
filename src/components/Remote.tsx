@@ -2,18 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { supabase } from '../supabase'
 import { Logo } from './Logo'
-import { BoardOverlay } from './Board'
 import { confirmDialog } from '../lib/dialog'
 
 /* ================= Máy tính: tạo mã QR cho điện thoại ================= */
 export function RemoteModal(props: { gameId: string; onClose: () => void }) {
   const [url, setUrl] = useState('')
-  const [copiedB, setCopiedB] = useState(false)
-  const [token, setToken] = useState('')
-  const [bpos, setBpos] = useState<'top' | 'bottom'>('top')
-  const [bscale, setBscale] = useState(1)
-  const [tab, setTab] = useState<'phone' | 'obs'>('phone')
-  const [bonus, setBonus] = useState({ home: 0, away: 0 })
   const [qr, setQr] = useState('')
   const [err, setErr] = useState('')
   const [copied, setCopied] = useState(false)
@@ -24,11 +17,10 @@ export function RemoteModal(props: { gameId: string; onClose: () => void }) {
     const { data, error } = await supabase.rpc('create_remote_token', { p_game: props.gameId })
     if (error) return setErr(error.message)
     const u = `${location.origin}${location.pathname}#remote=${data as string}`
-    setUrl(u); setToken(data as string)
+    setUrl(u)
     setQr(await QRCode.toDataURL(u, { width: 320, margin: 1, errorCorrectionLevel: 'M' }))
     setState('ready')
   }
-  const boardUrl = token ? `${location.origin}${location.pathname}#board=${token}${bpos === 'bottom' ? '&pos=bottom' : ''}${bscale !== 1 ? `&scale=${bscale.toFixed(1)}` : ''}` : ''
   useEffect(() => { void make() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const revoke = async () => {
@@ -41,50 +33,17 @@ export function RemoteModal(props: { gameId: string; onClose: () => void }) {
   return (
     <div className="modal-back" onClick={props.onClose}>
       <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
-        <div className="row"><b className="grow">Kết nối</b><button className="icon-btn" onClick={props.onClose}>×</button></div>
-        <div className="seg-toggle">
-          <button className={tab === 'phone' ? 'on' : ''} onClick={() => setTab('phone')}>📱 Điện thoại</button>
-          <button className={tab === 'obs' ? 'on' : ''} onClick={() => setTab('obs')}>📺 Livestream OBS</button>
-        </div>
+        <div className="row"><b className="grow">📱 Bấm stats trên điện thoại</b><button className="icon-btn" onClick={props.onClose}>×</button></div>
+        <div className="muted small-note">Quét mã bằng camera điện thoại để mở bảng bấm của trận này. Không cần đăng nhập. Mỗi pha bấm trên điện thoại hiện ngay trên máy tính.</div>
         {err && <div className="err">{err}</div>}
         {qr ? (
           <>
-            {tab === 'phone' && <>
-            <div className="muted small-note">Quét mã bằng camera điện thoại để mở bảng bấm của trận này. Không cần đăng nhập. Mỗi pha bấm trên điện thoại hiện ngay trên máy tính.</div>
             <img className="remote-qr" src={qr} alt="Mã QR bảng bấm" />
             <div className="row">
               <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} />
               <button className="btn sm" onClick={() => navigator.clipboard?.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) })}>{copied ? '✓' : 'Copy'}</button>
             </div>
-            <div className="muted small-note">Mã chỉ ghi được stats của <b>trận này</b>, tự hết hạn sau <b>12 giờ</b>. Ai có mã đều bấm được, nên chỉ đưa cho người ghi stats. Địa chỉ OBS cũng dùng chung mã này: đừng để lộ lên hình stream.</div>
-            </>}
-            {tab === 'obs' && <div className="remote-obs">
-              <div className="obs-preview" title="Xem trước (nền xanh giả làm hình video)">
-                <div className="obs-stage">{token && <BoardOverlay token={token} pos={bpos} scale={bscale * 0.5} inline bonus={bonus} />}</div>
-              </div>
-              <div className="row wrap">
-                <span className="muted small-note">Thử hiệu ứng</span>
-                {[1, 2, 3].map((n) => <button key={n} className="btn sm" onClick={() => setBonus((b) => ({ ...b, home: b.home + n }))}>HOME +{n}</button>)}
-                {[1, 2, 3].map((n) => <button key={'a' + n} className="btn sm" onClick={() => setBonus((b) => ({ ...b, away: b.away + n }))}>AWAY +{n}</button>)}
-                <button className="btn sm ghost" onClick={() => setBonus({ home: 0, away: 0 })}>Đặt lại</button>
-              </div>
-              <div className="row">
-                <label className="muted small-note">Vị trí</label>
-                <select value={bpos} onChange={(e) => setBpos(e.target.value as 'top' | 'bottom')}><option value="top">Phía trên</option><option value="bottom">Phía dưới</option></select>
-                <label className="muted small-note">Cỡ</label>
-                <input type="range" min={0.6} max={1.6} step={0.1} value={bscale} onChange={(e) => setBscale(+e.target.value)} style={{ flex: 1 }} />
-                <span className="muted small-note">{Math.round(bscale * 100)}%</span>
-              </div>
-              <div className="row">
-                <input readOnly value={boardUrl} onFocus={(e) => e.currentTarget.select()} />
-                <button className="btn sm" onClick={() => navigator.clipboard?.writeText(boardUrl).then(() => { setCopiedB(true); setTimeout(() => setCopiedB(false), 1500) })}>{copiedB ? '✓' : 'Copy'}</button>
-              </div>
-              <ol className="muted small-note">
-                <li>OBS → Sources → <b>+</b> → <b>Browser</b>.</li>
-                <li>Dán địa chỉ trên vào ô <b>URL</b>, đặt Width <b>1920</b>, Height <b>1080</b>.</li>
-                <li>Địa chỉ đã gồm vị trí và cỡ bạn chọn ở trên. Trong OBS nền bảng trong suốt, ô xanh chỉ để xem trước.</li>
-              </ol>
-            </div>}
+            <div className="muted small-note">Mã chỉ ghi được stats của <b>trận này</b>, tự hết hạn sau <b>12 giờ</b>. Ai có mã đều bấm được, nên chỉ đưa cho người ghi stats.</div>
             <button className="btn danger" onClick={revoke}>Thu hồi mã</button>
           </>
         ) : state === 'loading' && !err ? <div className="muted">Đang tạo mã…</div> : (
