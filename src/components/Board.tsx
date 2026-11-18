@@ -58,14 +58,14 @@ export function BoardOverlay({ token, pos, scale, inline, bonus }: { token: stri
     }}>
       {st.league && pos === 'top' && <div className="obs-league">{st.league}</div>}
       <div className={`obs-bar ${fx ? `fx${tier} ${fx.side}` : ''}`}>
-        <div className="obs-team home">{logos.home && <img className="obs-logo" src={logos.home} alt="" />}<span className="obs-name">{st.home}</span></div>
+        <div className="obs-team home">{logos.home && <img className={`obs-logo ${fx?.side === 'home' ? `fx${tier}` : ''}`} key={`lh${fx?.side === 'home' ? fx.n : 0}`} src={logos.home} alt="" />}<span className="obs-name">{st.home}</span></div>
         <div className={`obs-score home ${fx?.side === 'home' ? `fx${tier}` : ''}`} key={`h${shownH}`}>{shownH}{effect('home')}</div>
         <div className="obs-mid">
           <span className="obs-q">{qLabel(st.period)}</span>
           <span className={`obs-clock ${st.running ? 'run' : ''}`}>{mmss(clock)}</span>
         </div>
         <div className={`obs-score away ${fx?.side === 'away' ? `fx${tier}` : ''}`} key={`a${shownA}`}>{shownA}{effect('away')}</div>
-        <div className="obs-team away"><span className="obs-name">{st.away}</span>{logos.away && <img className="obs-logo" src={logos.away} alt="" />}</div>
+        <div className="obs-team away"><span className="obs-name">{st.away}</span>{logos.away && <img className={`obs-logo ${fx?.side === 'away' ? `fx${tier}` : ''}`} key={`la${fx?.side === 'away' ? fx.n : 0}`} src={logos.away} alt="" />}</div>
       </div>
       {st.league && pos === 'bottom' && <div className="obs-league bottom">{st.league}</div>}
       {err && <div className="obs-err small">{err}</div>}

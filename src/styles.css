@@ -817,3 +817,19 @@ html.obs, html.obs body, html.obs #root { background: transparent !important; ov
 .sb-sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; outline: 1px solid #ffffff33; }
 .sb-sw.on { border-color: #fff; }
 .sb-color { width: 34px; height: 28px; padding: 0; border: 0; background: none; cursor: pointer; }
+
+/* Logo đội nảy lên và toả sáng theo màu áo khi ghi điểm (cùng 3 mức với ô điểm) */
+.obs-logo { position: relative; z-index: 2; }
+.home .obs-logo { --glow: var(--home-g); } .away .obs-logo { --glow: var(--away-g); }
+.obs-logo.fx1 { animation: logofx1 .8s ease-out; }
+.obs-logo.fx2 { animation: logofx2 1.3s cubic-bezier(.2, 1.4, .4, 1); }
+.obs-logo.fx3 { animation: logofx3 2.2s cubic-bezier(.2, 1.5, .4, 1); }
+@keyframes logofx1 { 0% { transform: scale(1.18); filter: drop-shadow(0 0 8px var(--glow)) drop-shadow(0 2px 6px #0009); } 100% { transform: none; filter: drop-shadow(0 2px 6px #0009); } }
+@keyframes logofx2 { 0% { transform: scale(1.45); filter: drop-shadow(0 0 18px var(--glow)) drop-shadow(0 0 6px var(--glow)); } 50% { transform: scale(1.15); filter: drop-shadow(0 0 14px var(--glow)); } 100% { transform: none; filter: drop-shadow(0 2px 6px #0009); } }
+@keyframes logofx3 {
+  0% { transform: scale(1.9) rotate(-8deg); filter: drop-shadow(0 0 30px var(--glow)) drop-shadow(0 0 12px var(--glow)); }
+  15% { transform: scale(1.5) rotate(6deg); filter: drop-shadow(0 0 34px var(--glow)) drop-shadow(0 0 14px var(--glow)); }
+  35% { transform: scale(1.35) rotate(-3deg); filter: drop-shadow(0 0 16px var(--glow)); }
+  55% { transform: scale(1.5) rotate(0); filter: drop-shadow(0 0 32px var(--glow)) drop-shadow(0 0 12px var(--glow)); }
+  100% { transform: none; filter: drop-shadow(0 2px 6px #0009); }
+}
