@@ -833,3 +833,42 @@ html.obs, html.obs body, html.obs #root { background: transparent !important; ov
   55% { transform: scale(1.5) rotate(0); filter: drop-shadow(0 0 32px var(--glow)) drop-shadow(0 0 12px var(--glow)); }
   100% { transform: none; filter: drop-shadow(0 2px 6px #0009); }
 }
+
+/* ---------- Live Stats: TEAM, cờ cú ném, timeout, lỗi ---------- */
+.sp-team-meta { display: flex; align-items: center; gap: 8px; }
+.sp-fouls.bonus { color: #ff6b4a; }
+.sp-tmo { font-size: 11px; font-weight: 700; border: 1px solid var(--line-2); background: var(--panel-3); color: var(--text-2); border-radius: 6px; padding: 2px 7px; cursor: pointer; }
+.sp-tmo:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.sp-tmo.out { color: #ff6b4a; border-color: #ff6b4a66; }
+.sp-player.sp-teamchip { border-style: dashed; }
+.sp-player.sp-teamchip .sp-no { font-size: 13px; letter-spacing: .04em; }
+.sp-pf { position: absolute; left: 3px; top: 3px; font-size: 9px; font-weight: 800; padding: 0 3px; border-radius: 4px; background: #f2c03733; color: #f2c037; }
+.sp-pf.f4, .sp-pf.f5 { background: #ff6b4a33; color: #ff6b4a; }
+.sp-player.on .sp-pf { background: #0003; color: inherit; }
+.sp-mods { display: flex; gap: 6px; }
+.sp-mods button { flex: 1; height: 30px; border-radius: 8px; border: 1px dashed var(--line-2); background: transparent; color: var(--muted); font-weight: 600; font-size: 12px; cursor: pointer; }
+.sp-mods button.on { border-style: solid; border-color: var(--accent); background: #bedf0022; color: var(--accent); }
+.sp-flag { margin-left: 6px; font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 4px; background: var(--panel-3); color: var(--accent); }
+.bs-teamrow td { color: var(--muted); font-style: italic; }
+
+/* ---------- Trang Phân tích ---------- */
+.an { padding-bottom: 12px; }
+.an-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 8px; align-items: start; }
+.an-grid.two { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.an-sec b { font-family: var(--font-display); font-stretch: 112%; text-transform: uppercase; font-size: 13px; letter-spacing: .04em; }
+.an-table, .an-q, .an-units { width: 100%; border-collapse: collapse; font-size: 13px; }
+.an-table td, .an-table th, .an-q td, .an-q th, .an-units td, .an-units th { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.an-table th, .an-q th, .an-units th { font-size: 11px; color: var(--muted); font-weight: 700; text-align: center; }
+.an-l { text-align: center; color: var(--text-2); white-space: nowrap; }
+.an-v { width: 34%; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
+.an-v.win.home { color: var(--accent); } .an-v.win.away { color: #9aa0ff; }
+.an-note { color: var(--accent); margin-left: 3px; cursor: help; }
+.an-q td { text-align: center; font-variant-numeric: tabular-nums; }
+.an-q td.an-team { text-align: left; font-weight: 600; white-space: nowrap; }
+.an-q .st-dot { margin-right: 6px; }
+.an-units td { text-align: center; font-variant-numeric: tabular-nums; }
+.an-five { text-align: left !important; display: flex; gap: 6px; flex-wrap: wrap; }
+.an-five span { background: var(--panel-3); border-radius: 5px; padding: 1px 6px; font-weight: 600; }
+.an-leader { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.an-big { font-family: var(--font-display); font-stretch: 112%; font-weight: 900; font-size: 26px; min-width: 44px; text-align: center; color: var(--accent); }
+.sp-tabs button { white-space: nowrap; }

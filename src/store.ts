@@ -249,7 +249,7 @@ export const useData = create<DataState>((set, get) => {
         gamePlayers: (gpr.data ?? []).map((r: any) => ({ id: r.id, gameId: r.game_id, side: r.side, number: r.number, name: r.name, playerId: r.player_id ?? null })),
         stats: (ser.data ?? []).map((r: any) => ({
           id: r.id, gameId: r.game_id, side: r.side, gamePlayerId: r.game_player_id ?? null, type: r.type, period: r.period,
-          videoId: r.video_id ?? null, videoT: r.video_t ?? null, clockS: r.clock_s ?? null, viaRemote: !!r.via_remote, createdAt: new Date(r.created_at).getTime(),
+          videoId: r.video_id ?? null, videoT: r.video_t ?? null, clockS: r.clock_s ?? null, viaRemote: !!r.via_remote, paint: !!r.paint, fastBreak: !!r.fast_break, createdAt: new Date(r.created_at).getTime(),
         })),
         lineups: (ler.data ?? []).map((r: any) => ({
           id: r.id, gameId: r.game_id, side: r.side, gamePlayerId: r.game_player_id, kind: r.kind, period: r.period, clockS: r.clock_s,
@@ -415,7 +415,7 @@ export const useData = create<DataState>((set, get) => {
       set((s) => ({ stats: [...s.stats, { ...e, id, createdAt: Date.now() }] }))
       supabase.from('stat_events').insert({
         id, game_id: e.gameId, side: e.side, game_player_id: e.gamePlayerId, type: e.type, period: e.period,
-        video_id: e.videoId, video_t: e.videoT, clock_s: e.clockS ?? null,
+        video_id: e.videoId, video_t: e.videoT, clock_s: e.clockS ?? null, paint: !!e.paint, fast_break: !!e.fastBreak,
       }).then(({ error }) => { if (fail(error)) get().loadGame(e.gameId) })
       return id
     },

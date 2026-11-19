@@ -83,7 +83,7 @@ export type TeamSide = 'home' | 'away'
 /** Cầu thủ của một trận (mỗi đội một bên). playerId: nối với cầu thủ của tuyến nếu có. */
 export interface GamePlayer { id: string; gameId: string; side: TeamSide; number: number; name: string; playerId: string | null }
 /** M = trúng (made), X = trượt. */
-export type StatType = '2PM' | '2PX' | '3PM' | '3PX' | 'FTM' | 'FTX' | 'OREB' | 'DREB' | 'AST' | 'STL' | 'BLK' | 'TOV' | 'PF' | 'PFS'
+export type StatType = '2PM' | '2PX' | '3PM' | '3PX' | 'FTM' | 'FTX' | 'OREB' | 'DREB' | 'AST' | 'STL' | 'BLK' | 'TOV' | 'PF' | 'PFS' | 'TMO'
 export interface StatEvent {
   id: string
   gameId: string
@@ -95,6 +95,10 @@ export interface StatEvent {
   videoT: number | null
   clockS?: number | null
   viaRemote?: boolean
+  /** Cú ném trong khu vực sơn (dưới rổ). */
+  paint?: boolean
+  /** Ghi trong tình huống phản công nhanh. */
+  fastBreak?: boolean
   createdAt: number
 }
 /** Vào sân / ra sân, ghi theo đồng hồ thi đấu. */

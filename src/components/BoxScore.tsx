@@ -4,6 +4,7 @@ import { lineOf, pct, periodLabel, STAT_LABEL, type Line } from '../lib/boxscore
 import type { TeamSide } from '../types'
 import { clockNow, mmss, plusMinus, secondsPlayed } from '../lib/minutes'
 import { confirmDialog } from '../lib/dialog'
+import { eff, starters } from '../lib/analytics'
 
 const COLS: { k: string; label: string; v: (l: Line) => string | number }[] = [
   { k: 'pts', label: 'PTS', v: (l) => l.pts },
@@ -14,6 +15,7 @@ const COLS: { k: string; label: string; v: (l: Line) => string | number }[] = [
   { k: 'oreb', label: 'OREB', v: (l) => l.oreb }, { k: 'dreb', label: 'DREB', v: (l) => l.dreb }, { k: 'reb', label: 'REB', v: (l) => l.reb },
   { k: 'ast', label: 'AST', v: (l) => l.ast }, { k: 'stl', label: 'STL', v: (l) => l.stl }, { k: 'blk', label: 'BLK', v: (l) => l.blk },
   { k: 'tov', label: 'TOV', v: (l) => l.tov }, { k: 'pf', label: 'PF', v: (l) => l.pf },
+  { k: 'eff', label: 'EFF', v: (l) => eff(l) },
 ]
 
 /** Box score 2 đội kiểu FIBA (hiển thị ngay trong trang). Bấm một cầu thủ để xem từng pha. */
@@ -35,6 +37,7 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
   const secs = secondsPlayed(lineups, game.periodLen ?? 600, game.clockPeriod ?? 1, clockNow(game))
   const pm = plusMinus(lineups, stats)
   const sign = (v: number) => (v > 0 ? `+${v}` : `${v}`)
+  const start = starters(lineups)
 
   // Sửa số áo / tên: kiểm tra số hợp lệ và không trùng trong đội.
   const numberTaken = (side: TeamSide, n: number, exceptId?: string) => gamePlayers.some((p) => p.side === side && p.number === n && p.id !== exceptId)
@@ -92,7 +95,7 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
                         <td className="bs-name"><input className="bs-in" defaultValue={p.name} key={'m' + p.name}
                           onBlur={(e) => saveName(p.id, e.target.value, p.name)} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} /></td>
                       </>
-                    ) : <><td className="bs-no">{p.number}</td><td className="bs-name">{p.name}</td></>}
+                    ) : <><td className="bs-no">{start.has(p.id) ? '*' : ''}{p.number}</td><td className="bs-name">{p.name}</td></>}
                     <td>{secs.has(p.id) ? mmss(secs.get(p.id)!) : 'DNP'}</td>
                     {COLS.map((c) => <td key={c.k} className={c.k === 'pts' ? 'bs-strong' : ''}>{c.v(l)}</td>)}
                     <td className={(pm.get(p.id) ?? 0) > 0 ? 'bs-plus' : (pm.get(p.id) ?? 0) < 0 ? 'bs-minus' : ''}>{sign(pm.get(p.id) ?? 0)}</td>
@@ -117,7 +120,13 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
                   <td colSpan={COLS.length + 3} style={{ textAlign: 'left' }}><button className="btn sm primary" onClick={() => addRow(side)}>+ Thêm</button></td>
                 </tr>
               )}
-              <tr className="bs-total"><td className="bs-no" /><td className="bs-name">TEAM</td><td>{mmss(ps.reduce((a, p) => a + (secs.get(p.id) ?? 0), 0))}</td>{COLS.map((c) => <td key={c.k}>{c.v(team)}</td>)}<td>{sign(team.pts - lineOf(ev.filter((e) => e.side !== side)).pts)}</td></tr>
+              {(() => {
+                // Dòng TEAM: pha của đội không gắn cầu thủ (team rebound, team turnover).
+                const tl = lineOf(ev.filter((e) => e.side === side && !e.gamePlayerId))
+                if (!tl.reb && !tl.tov) return null
+                return <tr className="bs-teamrow"><td className="bs-no" /><td className="bs-name">Team</td><td />{COLS.map((c) => <td key={c.k}>{c.k === 'oreb' ? tl.oreb : c.k === 'dreb' ? tl.dreb : c.k === 'reb' ? tl.reb : c.k === 'tov' ? tl.tov : ''}</td>)}<td /></tr>
+              })()}
+              <tr className="bs-total"><td className="bs-no" /><td className="bs-name">Totals</td><td>{mmss(ps.reduce((a, p) => a + (secs.get(p.id) ?? 0), 0))}</td>{COLS.map((c) => <td key={c.k}>{c.v(team)}</td>)}<td>{sign(team.pts - lineOf(ev.filter((e) => e.side !== side)).pts)}</td></tr>
             </tbody>
           </table>
         </div>

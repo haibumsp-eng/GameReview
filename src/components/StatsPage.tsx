@@ -14,6 +14,13 @@ import { seekVideo } from '../nav'
 import { confirmDialog, promptDialog, dialogOpen } from '../lib/dialog'
 import { VoicePanel, type VoiceStamp } from './VoicePanel'
 import type { VoiceItem } from '../voice/parse'
+import { Analysis } from './Analysis'
+import { BONUS_AT, teamFouls, timeouts } from '../lib/analytics'
+
+/** Khung video trong Live Stats: tạm tắt (bật lại = true). */
+const VIDEO_ENABLED = false
+const SHOT_TYPES: StatType[] = ['2PM', '2PX', '3PM', '3PX']
+const TEAM_TYPES: StatType[] = ['OREB', 'DREB', 'TOV']
 
 const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'miss' }[] = [
   { type: '2PM', label: '2PT', pts: '+2', tone: 'made' }, { type: '2PX', label: '2PT', pts: 'miss', tone: 'miss' },
@@ -28,10 +35,15 @@ export function StatsPage() {
   const { orgId, squadId, gameId, videoId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, videoId: s.videoId, set: s.set })))
   const L = useLayout()
   const [remoteOpen, setRemoteOpen] = useState(false)
-  const [showVideo, setShowVideo] = useState(() => { try { return localStorage.getItem('gr-sp-video') !== 'off' } catch { return true } })
-  const toggleVideo = () => { setShowVideo(!showVideo); try { localStorage.setItem('gr-sp-video', showVideo ? 'off' : 'on') } catch { /* bỏ qua */ } }
+  const [showVideoPref, setShowVideo] = useState(() => { try { return localStorage.getItem('gr-sp-video') !== 'off' } catch { return true } })
+  const showVideo = VIDEO_ENABLED && showVideoPref
+  const toggleVideo = () => { if (!VIDEO_ENABLED) return; setShowVideo(!showVideo); try { localStorage.setItem('gr-sp-video', showVideo ? 'off' : 'on') } catch { /* bỏ qua */ } }
   const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, addGamePlayers, removeGamePlayer, addStat, removeStat, setClock, addLineup, removeLineup, setStatVideo } = useData()
-  const [tab, setTab] = useState<'record' | 'box'>('record')
+  const [tab, setTab] = useState<'record' | 'box' | 'analysis'>('record')
+  // Chọn TEAM (pha của đội, không gắn cầu thủ): team rebound, team turnover.
+  const [teamSel, setTeamSel] = useState<TeamSide | null>(null)
+  // Cờ cho cú ném tiếp theo: trong sơn / fast break. Tự tắt sau khi ghi.
+  const [mods, setMods] = useState({ paint: false, fb: false })
   const [sel, setSel] = useState<GamePlayer | null>(null)
   const [, tick] = useState(0)
   const [paste, setPaste] = useState<{ side: TeamSide; text: string } | null>(null)
@@ -116,7 +128,7 @@ export function StatsPage() {
   const awayName = game?.awayName || 'AWAY'
   const roster = (side: TeamSide) => gamePlayers.filter((p) => p.side === side).sort((a, b) => a.number - b.number)
   const score = (side: TeamSide) => lineOf(stats.filter((e) => e.side === side)).pts
-  const fouls = (side: TeamSide) => stats.filter((e) => e.side === side && isFoul(e.type) && e.period === period).length
+  const fouls = (side: TeamSide) => teamFouls(stats, side, period)
   const byId = new Map(gamePlayers.map((p) => [p.id, p]))
   const court = onCourt(lineups)
   const secs = secondsPlayed(lineups, len, period, remaining)
@@ -132,12 +144,28 @@ export function StatsPage() {
 
   const record = (type: StatType) => {
     if (!game) return
-    if (!sel) return toast('Chưa chọn cầu thủ trên sân')
+    if (!sel && !teamSel) return toast('Chưa chọn cầu thủ trên sân (hoặc TEAM)')
+    if (teamSel && !TEAM_TYPES.includes(type)) return toast('TEAM chỉ ghi được OREB, DREB, TOV')
     // Đang xem video thì gắn đúng giây trong video để bấm vào pha là xem lại được.
     const onVideo = showVideo && !!videoId && yt.ready()
-    addStat({ gameId: game.id, side: sel.side, gamePlayerId: sel.id, type, period, videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, clockS: remaining })
-    toast(`#${sel.number} ${sel.name} · ${STAT_LABEL[type]}`)
-    setSel(null)
+    const shot = SHOT_TYPES.includes(type)
+    addStat({
+      gameId: game.id, side: sel ? sel.side : teamSel!, gamePlayerId: sel ? sel.id : null, type, period,
+      videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, clockS: remaining,
+      paint: shot && type.startsWith('2') && mods.paint, fastBreak: shot && mods.fb,
+    })
+    const tags = shot ? [type.startsWith('2') && mods.paint ? 'trong sơn' : '', mods.fb ? 'fast break' : ''].filter(Boolean).join(', ') : ''
+    toast(`${sel ? `#${sel.number} ${sel.name}` : `TEAM ${teamSel === 'home' ? homeName : awayName}`} · ${STAT_LABEL[type]}${tags ? ` (${tags})` : ''}`)
+    if (shot) setMods({ paint: false, fb: false })
+    setSel(null); setTeamSel(null)
+  }
+  const timeout = (side: TeamSide) => {
+    if (!game || !canEdit) return
+    const t = timeouts(stats, side, period)
+    if (t.used >= t.max) toast(`Lưu ý: ${side === 'home' ? homeName : awayName} đã dùng hết ${t.max} timeout của giai đoạn này`)
+    if (running) setClock(game.id, { clockRunning: false, clockRemaining: clockNow(game), clockStartedAt: null })
+    addStat({ gameId: game.id, side, gamePlayerId: null, type: 'TMO', period, videoId: null, videoT: null, clockS: clockNow(game) })
+    toast(`${periodLabel(period)} ${mmss(clockNow(game))} · Timeout ${side === 'home' ? homeName : awayName} (đồng hồ đã dừng)`)
   }
   // Ghi các pha từ giọng nói. Giờ / giây video lấy lúc bắt đầu nói.
   const voiceStamp = (): VoiceStamp => {
@@ -204,9 +232,10 @@ export function StatsPage() {
     return (
       <div key={p.id} className={`sp-player ${sel?.id === p.id ? 'on' : ''} ${pf >= 5 ? 'out' : ''} ${isOn ? '' : 'benched'}`}
         title={`#${p.number} ${p.name} · ${pf} PF · ${mmss(secs.get(p.id) ?? 0)} MIN`}
-        onClick={(e) => { if (!canEdit) return; if (e.shiftKey) return deletePlayer(p); if (isOn) setSel(sel?.id === p.id ? null : p) }}>
+        onClick={(e) => { if (!canEdit) return; if (e.shiftKey) return deletePlayer(p); if (isOn) { setTeamSel(null); setSel(sel?.id === p.id ? null : p) } }}>
         <span className="sp-no">{p.number}</span>
         <span className="sp-pname">{p.name}</span>
+        {pf >= 3 && <span className={`sp-pf f${Math.min(pf, 5)}`} title={`${pf} lỗi cá nhân`}>{pf}F</span>}
         {canEdit && <button className="sp-sub" title={court.has(p.id) ? 'Ra sân' : 'Vào sân'} onClick={(e) => { e.stopPropagation(); sub(p) }}>{court.has(p.id) ? '↓' : '↑'}</button>}
       </div>
     )
@@ -218,11 +247,22 @@ export function StatsPage() {
       <div className={`sp-team ${side}`}>
         <div className="sp-team-head">
           <button className="sp-name" disabled={!canEdit} title="Bấm để đổi tên đội" onClick={() => rename(side)}>{side === 'home' ? homeName : awayName}</button>
-          <span className="sp-fouls" title={`Team fouls ${periodLabel(period)}`}>TF {fouls(side)}</span>
+          <span className="sp-team-meta">
+            <span className={`sp-fouls ${fouls(side) >= BONUS_AT ? 'bonus' : ''}`} title={`Lỗi đồng đội ${period >= 4 ? 'Q4 + hiệp phụ' : periodLabel(period)}. Từ lỗi thứ ${BONUS_AT + 1}, đối phương được ném phạt.`}>
+              TF {fouls(side)}{fouls(side) >= BONUS_AT && ' · BONUS'}
+            </span>
+            {(() => { const t = timeouts(stats, side, period); return (
+              <button className={`sp-tmo ${t.used >= t.max ? 'out' : ''}`} disabled={!canEdit} title="Ghi timeout (tự dừng đồng hồ)" onClick={() => timeout(side)}>TO {t.used}/{t.max}</button>
+            ) })()}
+          </span>
         </div>
         <div className="sp-group-label">ON COURT <b>{on.length}/5</b></div>
         <div className="sp-roster">
           {on.map(card)}
+          <div className={`sp-player sp-teamchip ${teamSel === side ? 'on' : ''}`} title="TEAM: team rebound, team turnover (không gắn cầu thủ)"
+            onClick={() => { if (!canEdit) return; setSel(null); setTeamSel(teamSel === side ? null : side) }}>
+            <span className="sp-no">TEAM</span><span className="sp-pname">REB · TOV</span>
+          </div>
         </div>
         <div className="sp-group-label">BENCH</div>
         <div className="sp-roster bench">
@@ -255,13 +295,14 @@ export function StatsPage() {
           const p = byId.get((e ? e.gamePlayerId : l!.gamePlayerId) ?? '')
           const clock = e ? e.clockS : l!.clockS
           return (
-            <li key={ev.id} className={`item ${l ? 'sp-subrow' : ''} ${e?.videoT != null ? 'seekable' : ''}`}
-              title={e?.videoT != null ? 'Bấm để xem lại pha này' : undefined}
-              onClick={() => { if (e?.videoId && e.videoT != null) { if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(e.videoId!, Math.max(0, e.videoT! - 3), true), 50) } }}>
+            <li key={ev.id} className={`item ${l ? 'sp-subrow' : ''} ${VIDEO_ENABLED && e?.videoT != null ? 'seekable' : ''}`}
+              title={VIDEO_ENABLED && e?.videoT != null ? 'Bấm để xem lại pha này' : undefined}
+              onClick={() => { if (VIDEO_ENABLED && e?.videoId && e.videoT != null) { if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(e.videoId!, Math.max(0, e.videoT! - 3), true), 50) } }}>
               <span className={`st-dot ${ev.side}`} />
               <span className="grow">
-                <span className="muted">{periodLabel(ev.period)}{clock != null ? ` ${mmss(clock)}` : ''}</span> <b>#{p?.number} {p?.name}</b>{' '}
+                <span className="muted">{periodLabel(ev.period)}{clock != null ? ` ${mmss(clock)}` : ''}</span> <b>{p ? `#${p.number} ${p.name}` : `TEAM ${ev.side === 'home' ? homeName : awayName}`}</b>{' '}
                 {e ? STAT_LABEL[e.type] : l!.kind === 'in' ? 'SUB IN' : 'SUB OUT'}
+                {e?.paint && <span className="sp-flag">sơn</span>}{e?.fastBreak && <span className="sp-flag">FB</span>}
               </span>
               {canEdit && <button className="icon-btn" onClick={() => (e ? removeStat(e.id) : removeLineup(l!.id))}>×</button>}
             </li>
@@ -272,8 +313,13 @@ export function StatsPage() {
   )
 
   const padBlock = (
-        <div className={`sp-pad ${sel ? '' : 'idle'}`}>
-      <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></> : '—'}</div>
+        <div className={`sp-pad ${sel || teamSel ? '' : 'idle'}`}>
+      <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></>
+        : teamSel ? <>TEAM <span className="muted">· {teamSel === 'home' ? homeName : awayName} (OREB, DREB, TOV)</span></> : '—'}</div>
+      <div className="sp-mods">
+        <button className={mods.paint ? 'on' : ''} title="Cú ném 2 điểm tiếp theo là trong sơn (points in the paint)" onClick={() => setMods({ ...mods, paint: !mods.paint })}>🎯 Trong sơn</button>
+        <button className={mods.fb ? 'on' : ''} title="Cú ném tiếp theo là phản công nhanh (fast break)" onClick={() => setMods({ ...mods, fb: !mods.fb })}>⚡ Fast break</button>
+      </div>
           <div className="sp-actions">
             {ACTIONS.map((a) => (
               <button key={a.type} className={`sp-act ${a.tone ?? ''}`} disabled={!canEdit} onClick={() => record(a.type)}>
@@ -327,13 +373,14 @@ export function StatsPage() {
         {canEdit && <button className="btn primary" disabled={!squadId} onClick={() => setNewGame({ title: '', home: squad?.name ?? '', away: '', date: new Date().toISOString().slice(0, 10), len: 600 })}>+ Trận mới</button>}
         <span className="spacer" />
         {game && canEdit && <button className="btn sm" onClick={() => setRemoteOpen(true)}>📱 Điện thoại</button>}
-        {game && (
+        {game && VIDEO_ENABLED && (
           <button className="btn sm ghost" onClick={toggleVideo}>{showVideo ? 'Ẩn video' : 'Hiện video'}</button>
         )}
         {game && (
           <div className="seg-toggle sp-tabs">
             <button className={tab === 'record' ? 'on' : ''} onClick={() => setTab('record')}>Record</button>
             <button className={tab === 'box' ? 'on' : ''} onClick={() => setTab('box')}>Box score</button>
+            <button className={tab === 'analysis' ? 'on' : ''} onClick={() => setTab('analysis')}>Phân tích</button>
           </div>
         )}
       </div>
@@ -360,7 +407,9 @@ export function StatsPage() {
       {!game ? (
         <div className="placeholder">Chọn một trận ở trên, hoặc bấm <b>+ Trận mới</b> để thống kê một trận (kể cả trận của giải đấu).</div>
       ) : tab === 'box' ? (
-        <div className="sp-box"><BoxScoreView editable={canEdit} onSeek={(vid, t) => { setTab('record'); if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(vid, t, true), 50) }} /></div>
+        <div className="sp-box"><BoxScoreView editable={canEdit} onSeek={VIDEO_ENABLED ? (vid, t) => { setTab('record'); if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(vid, t, true), 50) } : undefined} /></div>
+      ) : tab === 'analysis' ? (
+        <div className="sp-box"><Analysis /></div>
       ) : (
         <div className="sp-work">
           <div className="col center sp-main-col">

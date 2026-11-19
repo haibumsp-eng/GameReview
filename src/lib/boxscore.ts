@@ -25,5 +25,5 @@ export const periodLabel = (n: number) => (n <= 4 ? `Q${n}` : `OT${n - 4}`)
 /** Thuật ngữ thống kê (tiếng Anh, theo FIBA). */
 export const STAT_LABEL: Record<StatType, string> = {
   '2PM': '2PT made', '2PX': '2PT missed', '3PM': '3PT made', '3PX': '3PT missed', FTM: 'FT made', FTX: 'FT missed',
-  OREB: 'OREB', DREB: 'DREB', AST: 'AST', STL: 'STL', BLK: 'BLK', TOV: 'TOV', PF: 'PF', PFS: 'Shooting foul',
+  OREB: 'OREB', DREB: 'DREB', AST: 'AST', STL: 'STL', BLK: 'BLK', TOV: 'TOV', PF: 'PF', PFS: 'Shooting foul', TMO: 'Timeout',
 }

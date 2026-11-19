@@ -767,4 +767,11 @@ begin
 end $$;
 grant execute on function sb_state(text), sb_logos(text) to anon, authenticated;
 
+-- Live Stats mở rộng: cờ "trong sơn" / "fast break" cho cú ném, timeout của đội (TMO, không gắn cầu thủ).
+-- Pha không gắn cầu thủ (game_player_id null) = pha của TEAM: team rebound, team turnover, timeout.
+alter table stat_events add column if not exists paint boolean not null default false;
+alter table stat_events add column if not exists fast_break boolean not null default false;
+alter table stat_events drop constraint if exists stat_events_type_check;
+alter table stat_events add constraint stat_events_type_check check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS','TMO'));
+
 notify pgrst, 'reload schema';
