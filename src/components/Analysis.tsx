@@ -106,7 +106,7 @@ export function Analysis() {
 
       <div className="an-grid">
         {section('Nguồn điểm', [
-          { label: 'Points in the paint', h: src.paint.home, a: src.paint.away, note: 'Cú ném 2 điểm được bật "Trong sơn" khi ghi.' },
+          { label: 'Points in the paint', h: src.paint.home, a: src.paint.away, note: 'Cú ném 2 điểm được bật "Trong paint" khi ghi.' },
           { label: 'Points from turnovers', h: src.offTov.home, a: src.offTov.away, note: EST },
           { label: 'Second chance points', h: src.secondChance.home, a: src.secondChance.away, note: EST },
           { label: 'Fast break points', h: src.fastBreak.home, a: src.fastBreak.away, note: 'Cú ném được bật "Fast break" khi ghi.' },
@@ -167,6 +167,8 @@ export function Analysis() {
         ))}
         {units('home')}
         {units('away')}
+      </div>
+      <div className="an-shots">
         {(['home', 'away'] as TeamSide[]).map((s) => {
           const shots = stats.filter((e) => e.side === s && e.shotX != null && e.shotY != null && ['2PM', '2PX', '3PM', '3PX'].includes(e.type))
           const z = zoneStats(stats.filter((e) => e.side === s))
@@ -185,6 +187,8 @@ export function Analysis() {
             </div>
           )
         })}
+      </div>
+      <div className="an-grid two">
         {(['home', 'away'] as TeamSide[]).map((s) => {
           const pairs = new Map<string, number>()
           for (const e of madeFG(s)) { const a = ast.get(e.id); if (a && e.gamePlayerId) pairs.set(`${a}>${e.gamePlayerId}`, (pairs.get(`${a}>${e.gamePlayerId}`) ?? 0) + 1) }

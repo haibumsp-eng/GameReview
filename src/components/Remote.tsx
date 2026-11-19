@@ -116,7 +116,7 @@ export function RemotePad({ token }: { token: string }) {
     setBusy(false)
     if (error || data !== 'ok') return flash(error?.message ?? String(data))
     navigator.vibrate?.(30)
-    const tags = shot ? [type.startsWith('2') && mods.paint ? 'sơn' : '', mods.fb ? 'FB' : ''].filter(Boolean).join(', ') : ''
+    const tags = shot ? [type.startsWith('2') && mods.paint ? 'paint' : '', mods.fb ? 'FB' : ''].filter(Boolean).join(', ') : ''
     flash(`✓ ${label} · ${NAME[type] ?? type}${tags ? ` (${tags})` : ''}`)
     if (shot) setMods({ paint: false, fb: false })
     setSel(null); setTeam(false); void load()
@@ -188,7 +188,7 @@ export function RemotePad({ token }: { token: string }) {
       </div>
       <div className="rp-sel">{sel ? <>Đang chọn <b>#{sel.number} {sel.name}</b></> : team ? <>Đang chọn <b>TEAM</b> (OREB, DREB, TOV)</> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
       <div className="rp-mods">
-        <button className={mods.paint ? 'on' : ''} onClick={() => setMods({ ...mods, paint: !mods.paint })}>🎯 Trong sơn</button>
+        <button className={mods.paint ? 'on' : ''} onClick={() => setMods({ ...mods, paint: !mods.paint })}>🎯 Trong paint</button>
         <button className={mods.fb ? 'on' : ''} onClick={() => setMods({ ...mods, fb: !mods.fb })}>⚡ Fast break</button>
       </div>
       <div className={`rp-actions ${sel || team ? '' : 'idle'}`}>
@@ -200,7 +200,7 @@ export function RemotePad({ token }: { token: string }) {
       </div>
       <div className="row"><b className="grow">Gần đây</b><button className="btn sm" onClick={undo}>↶ Hoàn tác</button></div>
       <ul className="list rp-recent">
-        {st.recent.slice(0, 5).map((r) => <li key={r.id} className="item"><span className={`st-dot ${r.side}`} /><span className="grow"><b>{r.number != null ? `#${r.number} ${r.name}` : r.type === 'TMO' ? '' : 'TEAM'}</b> {NAME[r.type] ?? r.type}{r.paint ? ' · sơn' : ''}{r.fb ? ' · FB' : ''}</span>{r.remote && <span className="muted small-note">📱</span>}</li>)}
+        {st.recent.slice(0, 5).map((r) => <li key={r.id} className="item"><span className={`st-dot ${r.side}`} /><span className="grow"><b>{r.number != null ? `#${r.number} ${r.name}` : r.type === 'TMO' ? '' : 'TEAM'}</b> {NAME[r.type] ?? r.type}{r.paint ? ' · paint' : ''}{r.fb ? ' · FB' : ''}</span>{r.remote && <span className="muted small-note">📱</span>}</li>)}
       </ul>
       {msg && <div className="toast">{msg}</div>}
     </div>

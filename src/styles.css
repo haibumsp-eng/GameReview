@@ -939,3 +939,11 @@ html.obs, html.obs body, html.obs #root { background: transparent !important; ov
 .an-shot { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 10px; align-items: start; }
 .an-pair { display: flex; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .rp-player.rp-team b { font-size: 18px; letter-spacing: .04em; } .rp-player.rp-team small { font-size: 10px; }
+/* Sân lớn hơn: bàn bấm dùng cả chiều ngang, shot chart chiếm nửa trang mỗi đội */
+.sp-shot { grid-template-columns: 1fr; }
+.sp-shot .court { max-width: 420px; margin: 0 auto; }
+.sp-shot-side .sp-mods { flex-direction: row; }
+.an-shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 8px; align-items: start; }
+.an-shots .an-shot { grid-template-columns: minmax(0, 1fr) 220px; }
+.an-shots .court { max-width: 620px; }
+@media (max-width: 900px) { .an-shots .an-shot { grid-template-columns: 1fr; } }

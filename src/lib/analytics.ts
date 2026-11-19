@@ -4,7 +4,7 @@ import { elapsed, periodLength } from './minutes'
 
 /**
  * Phân tích trận từ các pha đã ghi (theo thứ tự ghi). Không cần bấm thêm gì ngoài các pha thường,
- * trừ: điểm trong sơn / fast break (cờ trên cú ném) và team rebound / team turnover (pha của TEAM).
+ * trừ: điểm trong paint / fast break (cờ trên cú ném) và team rebound / team turnover (pha của TEAM).
  */
 
 const PTS: Partial<Record<StatEvent['type'], number>> = { '2PM': 2, '3PM': 3, FTM: 1 }
@@ -65,7 +65,7 @@ export function flow(stats: StatEvent[], len: number, nowPeriod: number, nowRema
 }
 
 /**
- * Điểm theo nguồn: trong sơn, fast break, dự bị, sau mất bóng, cơ hội thứ hai.
+ * Điểm theo nguồn: trong paint, fast break, dự bị, sau mất bóng, cơ hội thứ hai.
  * "Sau mất bóng" và "cơ hội thứ hai" suy ra từ chuỗi pha (lượt tấn công), nên cần ghi đủ rebound
  * (kể cả TEAM REB) và mất bóng (kể cả TEAM TOV) thì mới chính xác.
  */
@@ -171,7 +171,7 @@ export function assists(stats: StatEvent[]): Map<string, string> {
 export const COURT = { w: 15, h: 14, rim: { x: 7.5, y: 1.575 }, paintW: 4.9, paintH: 5.8, three: 6.75, corner: 0.9 }
 const cornerY = COURT.rim.y + Math.sqrt(COURT.three ** 2 - (COURT.rim.x - COURT.corner) ** 2)
 export type Zone = 'paint' | 'mid' | 'corner3' | 'above3'
-export const ZONE_LABEL: Record<Zone, string> = { paint: 'Trong sơn', mid: 'Tầm trung', corner3: '3 điểm góc', above3: '3 điểm trên vòng' }
+export const ZONE_LABEL: Record<Zone, string> = { paint: 'Trong paint', mid: 'Tầm trung', corner3: '3 điểm góc', above3: '3 điểm trên vòng' }
 /** Vùng ném từ toạ độ 0..1. */
 export function zoneOf(nx: number, ny: number): Zone {
   const x = nx * COURT.w, y = ny * COURT.h

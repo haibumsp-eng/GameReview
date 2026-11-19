@@ -95,7 +95,7 @@ export interface StatEvent {
   videoT: number | null
   clockS?: number | null
   viaRemote?: boolean
-  /** Cú ném trong khu vực sơn (dưới rổ). */
+  /** Cú ném trong khu vực paint (dưới rổ). */
   paint?: boolean
   /** Ghi trong tình huống phản công nhanh. */
   fastBreak?: boolean

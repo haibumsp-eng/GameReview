@@ -46,9 +46,9 @@ export function StatsPage() {
   const [tab, setTab] = useState<'record' | 'box' | 'analysis'>('record')
   // Chọn TEAM (pha của đội, không gắn cầu thủ): team rebound, team turnover.
   const [teamSel, setTeamSel] = useState<TeamSide | null>(null)
-  // Cờ cho cú ném tiếp theo: trong sơn / fast break. Tự tắt sau khi ghi.
+  // Cờ cho cú ném tiếp theo: trong paint / fast break. Tự tắt sau khi ghi.
   const [mods, setMods] = useState({ paint: false, fb: false })
-  // Vị trí cú ném tiếp theo (chạm lên sân nhỏ). Trong sơn thì tự bật cờ "Trong sơn".
+  // Vị trí cú ném tiếp theo (chạm lên sân nhỏ). Trong paint thì tự bật cờ "Trong paint".
   const [loc, setLoc] = useState<{ x: number; y: number } | null>(null)
   // Hỏi tiếp sau một pha: ai bị phạm lỗi / ai kiến tạo.
   const [fu, setFu] = useState<{ kind: 'drawn' | 'assist'; eventId: string; side: TeamSide; exclude?: string } | null>(null)
@@ -163,7 +163,7 @@ export function StatsPage() {
       videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, clockS: remaining,
       paint, fastBreak: shot && mods.fb, shotX: shot && loc ? loc.x : null, shotY: shot && loc ? loc.y : null,
     })
-    const tags = shot ? [type.startsWith('2') && paint ? 'trong sơn' : '', mods.fb ? 'fast break' : '', loc ? 'có vị trí' : ''].filter(Boolean).join(', ') : ''
+    const tags = shot ? [type.startsWith('2') && paint ? 'trong paint' : '', mods.fb ? 'fast break' : '', loc ? 'có vị trí' : ''].filter(Boolean).join(', ') : ''
     if (shot && loc && type.startsWith('2') && isThreeZone(zoneOf(loc.x, loc.y))) toast('Lưu ý: vị trí chọn nằm ngoài vạch 3 điểm mà ghi 2PT')
     else toast(`${sel ? `#${sel.number} ${sel.name}` : `TEAM ${teamSel === 'home' ? homeName : awayName}`} · ${STAT_LABEL[type]}${tags ? ` (${tags})` : ''}`)
     if (shot) { setMods({ paint: false, fb: false }); setLoc(null) }
@@ -328,7 +328,7 @@ export function StatsPage() {
               <span className="grow">
                 <span className="muted">{periodLabel(ev.period)}{clock != null ? ` ${mmss(clock)}` : ''}</span> <b>{p ? `#${p.number} ${p.name}` : `TEAM ${ev.side === 'home' ? homeName : awayName}`}</b>{' '}
                 {e ? STAT_LABEL[e.type] : l!.kind === 'in' ? 'SUB IN' : 'SUB OUT'}
-                {e?.paint && <span className="sp-flag">sơn</span>}{e?.fastBreak && <span className="sp-flag">FB</span>}
+                {e?.paint && <span className="sp-flag">paint</span>}{e?.fastBreak && <span className="sp-flag">FB</span>}
               </span>
               {canEdit && <button className="icon-btn" onClick={() => (e ? removeStat(e.id) : removeLineup(l!.id))}>×</button>}
             </li>
@@ -355,9 +355,9 @@ export function StatsPage() {
       <div className="sp-shot">
         <Court pick={loc} onPick={(x, y) => setLoc(loc && Math.hypot(loc.x - x, loc.y - y) < 0.03 ? null : { x, y })} />
         <div className="sp-shot-side">
-          <div className="muted small-note">{loc ? `Vị trí: ${({ paint: 'trong sơn', mid: 'tầm trung', corner3: '3 điểm góc', above3: '3 điểm' } as const)[zoneOf(loc.x, loc.y)]}` : 'Chạm sân để chọn vị trí ném (tuỳ chọn)'}</div>
+          <div className="muted small-note">{loc ? `Vị trí: ${({ paint: 'trong paint', mid: 'tầm trung', corner3: '3 điểm góc', above3: '3 điểm' } as const)[zoneOf(loc.x, loc.y)]}` : 'Chạm sân để chọn vị trí ném (tuỳ chọn)'}</div>
       <div className="sp-mods">
-        <button className={mods.paint ? 'on' : ''} title="Cú ném 2 điểm tiếp theo là trong sơn (points in the paint)" onClick={() => setMods({ ...mods, paint: !mods.paint })}>🎯 Trong sơn</button>
+        <button className={mods.paint ? 'on' : ''} title="Cú ném 2 điểm tiếp theo là trong paint (points in the paint)" onClick={() => setMods({ ...mods, paint: !mods.paint })}>🎯 Trong paint</button>
         <button className={mods.fb ? 'on' : ''} title="Cú ném tiếp theo là phản công nhanh (fast break)" onClick={() => setMods({ ...mods, fb: !mods.fb })}>⚡ Fast break</button>
       </div>
           {loc && <button className="btn sm ghost" onClick={() => setLoc(null)}>Bỏ vị trí</button>}
