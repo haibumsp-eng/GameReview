@@ -60,6 +60,7 @@ interface DataState {
   updateGamePlayer: (id: string, patch: { number?: number; name?: string }) => void
   addStat: (e: Omit<StatEvent, 'id' | 'createdAt'>) => string
   removeStat: (id: string) => void
+  updateStat: (id: string, patch: { drawnBy?: string | null }) => void
   setStatVideo: (id: string, videoId: string, videoT: number) => void
   setClock: (gameId: string, patch: Partial<Pick<Game, 'periodLen' | 'clockPeriod' | 'clockRemaining' | 'clockRunning' | 'clockStartedAt'>>) => void
   addLineup: (e: Omit<LineupEvent, 'id' | 'createdAt'>) => void
@@ -249,7 +250,7 @@ export const useData = create<DataState>((set, get) => {
         gamePlayers: (gpr.data ?? []).map((r: any) => ({ id: r.id, gameId: r.game_id, side: r.side, number: r.number, name: r.name, playerId: r.player_id ?? null })),
         stats: (ser.data ?? []).map((r: any) => ({
           id: r.id, gameId: r.game_id, side: r.side, gamePlayerId: r.game_player_id ?? null, type: r.type, period: r.period,
-          videoId: r.video_id ?? null, videoT: r.video_t ?? null, clockS: r.clock_s ?? null, viaRemote: !!r.via_remote, paint: !!r.paint, fastBreak: !!r.fast_break, createdAt: new Date(r.created_at).getTime(),
+          videoId: r.video_id ?? null, videoT: r.video_t ?? null, clockS: r.clock_s ?? null, viaRemote: !!r.via_remote, paint: !!r.paint, fastBreak: !!r.fast_break, drawnBy: r.drawn_by ?? null, linkedId: r.linked_id ?? null, shotX: r.shot_x ?? null, shotY: r.shot_y ?? null, createdAt: new Date(r.created_at).getTime(),
         })),
         lineups: (ler.data ?? []).map((r: any) => ({
           id: r.id, gameId: r.game_id, side: r.side, gamePlayerId: r.game_player_id, kind: r.kind, period: r.period, clockS: r.clock_s,
@@ -416,6 +417,7 @@ export const useData = create<DataState>((set, get) => {
       supabase.from('stat_events').insert({
         id, game_id: e.gameId, side: e.side, game_player_id: e.gamePlayerId, type: e.type, period: e.period,
         video_id: e.videoId, video_t: e.videoT, clock_s: e.clockS ?? null, paint: !!e.paint, fast_break: !!e.fastBreak,
+        drawn_by: e.drawnBy ?? null, linked_id: e.linkedId ?? null, shot_x: e.shotX ?? null, shot_y: e.shotY ?? null,
       }).then(({ error }) => { if (fail(error)) get().loadGame(e.gameId) })
       return id
     },
@@ -442,6 +444,12 @@ export const useData = create<DataState>((set, get) => {
     setStatVideo: (id, videoId, videoT) => {
       set((s) => ({ stats: s.stats.map((e) => (e.id === id ? { ...e, videoId, videoT } : e)) }))
       supabase.from('stat_events').update({ video_id: videoId, video_t: videoT }).eq('id', id).then(({ error }) => fail(error))
+    },
+    updateStat: (id, patch) => {
+      set((s) => ({ stats: s.stats.map((e) => (e.id === id ? { ...e, ...patch } : e)) }))
+      const row: Record<string, unknown> = {}
+      if (patch.drawnBy !== undefined) row.drawn_by = patch.drawnBy
+      supabase.from('stat_events').update(row).eq('id', id).then(({ error }) => fail(error))
     },
     removeStat: (id) => {
       set((s) => ({ stats: s.stats.filter((e) => e.id !== id) }))

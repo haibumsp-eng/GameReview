@@ -63,15 +63,20 @@ interface RState {
   game: { title: string; home: string; away: string; period: number; clock: number; running: boolean }
   score: { home: number; away: number }
   players: RPlayer[]
-  recent: { id: string; type: string; side: string; number: number; name: string; remote: boolean }[]
+  recent: { id: string; type: string; side: string; number: number | null; name: string | null; remote: boolean; paint?: boolean; fb?: boolean }[]
+  fouls?: { home: number; away: number }
+  timeouts?: { home: number; away: number; max: number }
 }
+const TEAM_TYPES = ['OREB', 'DREB', 'TOV']
+const SHOTS = ['2PM', '2PX', '3PM', '3PX']
 const ACTIONS: { type: string; label: string; sub?: string; tone?: string }[] = [
   { type: '2PM', label: '2PT', sub: '+2', tone: 'made' }, { type: '3PM', label: '3PT', sub: '+3', tone: 'made' }, { type: 'FTM', label: 'FT', sub: '+1', tone: 'made' },
   { type: '2PX', label: '2PT', sub: 'miss', tone: 'miss' }, { type: '3PX', label: '3PT', sub: 'miss', tone: 'miss' }, { type: 'FTX', label: 'FT', sub: 'miss', tone: 'miss' },
   { type: 'OREB', label: 'OREB' }, { type: 'DREB', label: 'DREB' }, { type: 'AST', label: 'AST' },
   { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV' }, { type: 'PF', label: 'PF' }, { type: 'PFS', label: 'SF' },
+  { type: 'PFT', label: 'TF', sub: 'technical' }, { type: 'PFU', label: 'UF', sub: 'unsport.' },
 ]
-const NAME: Record<string, string> = { '2PM': '2PT made', '2PX': '2PT missed', '3PM': '3PT made', '3PX': '3PT missed', FTM: 'FT made', FTX: 'FT missed', PFS: 'Shooting foul' }
+const NAME: Record<string, string> = { '2PM': '2PT made', '2PX': '2PT missed', '3PM': '3PT made', '3PX': '3PT missed', FTM: 'FT made', FTX: 'FT missed', PFS: 'Shooting foul', PFT: 'Technical foul', PFU: 'Unsportsmanlike foul', PFD: 'Disqualifying foul', TMO: 'Timeout' }
 const mmss = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`
 const qLabel = (n: number) => (n <= 4 ? `Q${n}` : `OT${n - 4}`)
 
@@ -80,6 +85,8 @@ export function RemotePad({ token }: { token: string }) {
   const [err, setErr] = useState('')
   const [side, setSide] = useState<'home' | 'away'>('home')
   const [sel, setSel] = useState<RPlayer | null>(null)
+  const [team, setTeam] = useState(false) // chọn TEAM của đội đang xem
+  const [mods, setMods] = useState({ paint: false, fb: false })
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const fetchedAt = useRef(Date.now())
@@ -99,16 +106,30 @@ export function RemotePad({ token }: { token: string }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 1800) }
-  const act = async (type: string) => {
-    if (!sel) return flash('Chọn cầu thủ trước')
+  const send = async (player: string | null, type: string, forSide: 'home' | 'away', label: string) => {
     setBusy(true)
-    const { data, error } = await supabase.rpc('remote_add_stat', { p_token: token, p_player: sel.id, p_type: type })
+    const shot = SHOTS.includes(type)
+    const { data, error } = await supabase.rpc('remote_add_event', {
+      p_token: token, p_player: player, p_type: type, p_side: forSide,
+      p_paint: shot && type.startsWith('2') && mods.paint, p_fb: shot && mods.fb,
+    })
     setBusy(false)
     if (error || data !== 'ok') return flash(error?.message ?? String(data))
     navigator.vibrate?.(30)
-    flash(`✓ #${sel.number} ${sel.name} · ${NAME[type] ?? type}`)
-    setSel(null); void load()
+    const tags = shot ? [type.startsWith('2') && mods.paint ? 'sơn' : '', mods.fb ? 'FB' : ''].filter(Boolean).join(', ') : ''
+    flash(`✓ ${label} · ${NAME[type] ?? type}${tags ? ` (${tags})` : ''}`)
+    if (shot) setMods({ paint: false, fb: false })
+    setSel(null); setTeam(false); void load()
   }
+  const act = (type: string) => {
+    if (team) {
+      if (!TEAM_TYPES.includes(type)) return flash('TEAM chỉ ghi được OREB, DREB, TOV')
+      return send(null, type, side, `TEAM ${side === 'home' ? st?.game.home : st?.game.away}`)
+    }
+    if (!sel) return flash('Chọn cầu thủ (hoặc TEAM) trước')
+    return send(sel.id, type, sel.side, `#${sel.number} ${sel.name}`)
+  }
+  const timeout = (s: 'home' | 'away') => send(null, 'TMO', s, s === 'home' ? st?.game.home ?? 'HOME' : st?.game.away ?? 'AWAY')
   const undo = async () => {
     const { data, error } = await supabase.rpc('remote_undo', { p_token: token })
     flash(error ? error.message : data === 'ok' ? '↶ Đã hoàn tác' : String(data)); void load()
@@ -136,21 +157,41 @@ export function RemotePad({ token }: { token: string }) {
         <b className="away">{st.score.away}</b>
         <span className="rp-tname">{st.game.away}</span>
       </div>
+      <div className="rp-meta">
+        {(['home', 'away'] as const).map((s) => {
+          const f = st.fouls?.[s] ?? 0, tu = st.timeouts?.[s] ?? 0, tm = st.timeouts?.max ?? 0
+          return (
+            <div key={s} className={`rp-meta-side ${s}`}>
+              <span className={f >= 4 ? 'bonus' : ''}>TF {f}{f >= 4 ? ' · BONUS' : ''}</span>
+              <button className={`rp-tmo ${tu >= tm ? 'out' : ''}`} disabled={busy} onClick={() => timeout(s)}>Timeout {tu}/{tm}</button>
+            </div>
+          )
+        })}
+      </div>
       {err && <div className="err">{err}</div>}
       <div className="seg-toggle rp-sides">
-        <button className={side === 'home' ? 'on atk' : ''} onClick={() => { setSide('home'); setSel(null) }}>{st.game.home}</button>
-        <button className={side === 'away' ? 'on' : ''} onClick={() => { setSide('away'); setSel(null) }}>{st.game.away}</button>
+        <button className={side === 'home' ? 'on atk' : ''} onClick={() => { setSide('home'); setSel(null); setTeam(false) }}>{st.game.home}</button>
+        <button className={side === 'away' ? 'on' : ''} onClick={() => { setSide('away'); setSel(null); setTeam(false) }}>{st.game.away}</button>
       </div>
       <div className="rp-players">
         {on.map((p) => (
-          <button key={p.id} className={`rp-player oncourt ${sel?.id === p.id ? 'sel' : ''} ${p.pf >= 5 ? 'out' : ''}`} onClick={() => setSel(sel?.id === p.id ? null : p)}>
+          <button key={p.id} className={`rp-player oncourt ${sel?.id === p.id ? 'sel' : ''} ${p.pf >= 5 ? 'out' : ''}`} onClick={() => { setTeam(false); setSel(sel?.id === p.id ? null : p) }}>
             <b>{p.number}</b><span>{p.name}</span><small>{p.pts} PTS · {p.pf} PF</small>
           </button>
         ))}
+        {on.length > 0 && (
+          <button className={`rp-player oncourt rp-team ${team ? 'sel' : ''}`} onClick={() => { setSel(null); setTeam(!team) }}>
+            <b>TEAM</b><span>REB · TOV</span><small>không gắn cầu thủ</small>
+          </button>
+        )}
         {on.length === 0 && <div className="rp-empty muted">Chưa có cầu thủ trên sân. Hãy đưa đội hình vào sân trên máy tính.</div>}
       </div>
-      <div className="rp-sel">{sel ? <>Đang chọn <b>#{sel.number} {sel.name}</b></> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
-      <div className={`rp-actions ${sel ? '' : 'idle'}`}>
+      <div className="rp-sel">{sel ? <>Đang chọn <b>#{sel.number} {sel.name}</b></> : team ? <>Đang chọn <b>TEAM</b> (OREB, DREB, TOV)</> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
+      <div className="rp-mods">
+        <button className={mods.paint ? 'on' : ''} onClick={() => setMods({ ...mods, paint: !mods.paint })}>🎯 Trong sơn</button>
+        <button className={mods.fb ? 'on' : ''} onClick={() => setMods({ ...mods, fb: !mods.fb })}>⚡ Fast break</button>
+      </div>
+      <div className={`rp-actions ${sel || team ? '' : 'idle'}`}>
         {ACTIONS.map((a) => (
           <button key={a.type} disabled={busy} className={`rp-act ${a.tone ?? ''}`} onClick={() => act(a.type)}>
             <span>{a.label}</span>{a.sub && <small>{a.sub}</small>}
@@ -159,7 +200,7 @@ export function RemotePad({ token }: { token: string }) {
       </div>
       <div className="row"><b className="grow">Gần đây</b><button className="btn sm" onClick={undo}>↶ Hoàn tác</button></div>
       <ul className="list rp-recent">
-        {st.recent.slice(0, 5).map((r) => <li key={r.id} className="item"><span className={`st-dot ${r.side}`} /><span className="grow"><b>#{r.number} {r.name}</b> {NAME[r.type] ?? r.type}</span>{r.remote && <span className="muted small-note">📱</span>}</li>)}
+        {st.recent.slice(0, 5).map((r) => <li key={r.id} className="item"><span className={`st-dot ${r.side}`} /><span className="grow"><b>{r.number != null ? `#${r.number} ${r.name}` : r.type === 'TMO' ? '' : 'TEAM'}</b> {NAME[r.type] ?? r.type}{r.paint ? ' · sơn' : ''}{r.fb ? ' · FB' : ''}</span>{r.remote && <span className="muted small-note">📱</span>}</li>)}
       </ul>
       {msg && <div className="toast">{msg}</div>}
     </div>

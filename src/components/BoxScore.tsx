@@ -4,7 +4,8 @@ import { lineOf, pct, periodLabel, STAT_LABEL, type Line } from '../lib/boxscore
 import type { TeamSide } from '../types'
 import { clockNow, mmss, plusMinus, secondsPlayed } from '../lib/minutes'
 import { confirmDialog } from '../lib/dialog'
-import { eff, starters } from '../lib/analytics'
+import { eff, foulStatus, starters } from '../lib/analytics'
+import { Scoresheet } from './Scoresheet'
 
 const COLS: { k: string; label: string; v: (l: Line) => string | number }[] = [
   { k: 'pts', label: 'PTS', v: (l) => l.pts },
@@ -17,6 +18,8 @@ const COLS: { k: string; label: string; v: (l: Line) => string | number }[] = [
   { k: 'tov', label: 'TOV', v: (l) => l.tov }, { k: 'pf', label: 'PF', v: (l) => l.pf },
   { k: 'eff', label: 'EFF', v: (l) => eff(l) },
 ]
+// FD (fouls drawn: số lần bị phạm lỗi) chèn sau PF, tính riêng vì không nằm trong pha của cầu thủ.
+const FD_AFTER = 'pf'
 
 /** Box score 2 đội kiểu FIBA (hiển thị ngay trong trang). Bấm một cầu thủ để xem từng pha. */
 export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => void; editable?: boolean }) {
@@ -28,6 +31,7 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
   const [draft, setDraft] = useState({ number: '', name: '' })
   const [open, setOpen] = useState<string | null>(null)
   const [period, setPeriod] = useState(0) // 0 = cả trận
+  const [sheet, setSheet] = useState(false)
   if (!game) return null
   const ev = period ? stats.filter((e) => e.period === period) : stats
   const periods = [...new Set(stats.map((e) => e.period))].sort((a, b) => a - b)
@@ -79,7 +83,7 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
         </div>
         <div className="bs-scroll">
           <table className="bs-table">
-            <thead><tr><th className="bs-no">No</th><th className="bs-name">Player</th><th>MIN</th>{COLS.map((c) => <th key={c.k}>{c.label}</th>)}<th>+/-</th>{edit && <th />}</tr></thead>
+            <thead><tr><th className="bs-no">No</th><th className="bs-name">Player</th><th>MIN</th>{COLS.map((c) => [<th key={c.k}>{c.label}</th>, c.k === FD_AFTER && <th key="fd" title="Fouls drawn: số lần bị phạm lỗi">FD</th>])}<th>+/-</th>{edit && <th />}</tr></thead>
             <tbody>
               {ps.map((p) => {
                 const mine = ev.filter((e) => e.gamePlayerId === p.id)
@@ -97,12 +101,13 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
                       </>
                     ) : <><td className="bs-no">{start.has(p.id) ? '*' : ''}{p.number}</td><td className="bs-name">{p.name}</td></>}
                     <td>{secs.has(p.id) ? mmss(secs.get(p.id)!) : 'DNP'}</td>
-                    {COLS.map((c) => <td key={c.k} className={c.k === 'pts' ? 'bs-strong' : ''}>{c.v(l)}</td>)}
+                    {COLS.map((c) => [<td key={c.k} className={c.k === 'pts' ? 'bs-strong' : c.k === 'pf' && foulStatus(stats, p.id).out ? 'bs-minus' : ''}>{c.v(l)}{c.k === 'pf' && foulStatus(stats, p.id).out ? ' DQ' : ''}</td>,
+                      c.k === FD_AFTER && <td key="fd">{ev.filter((e) => e.drawnBy === p.id).length}</td>])}
                     <td className={(pm.get(p.id) ?? 0) > 0 ? 'bs-plus' : (pm.get(p.id) ?? 0) < 0 ? 'bs-minus' : ''}>{sign(pm.get(p.id) ?? 0)}</td>
                     {edit && <td><button className="icon-btn" title="Xoá cầu thủ" onClick={() => remove(p.id, `#${p.number} ${p.name}`)}>×</button></td>}
                   </tr>,
                   open === p.id && (
-                    <tr key={p.id + '-ev'} className="bs-events"><td colSpan={COLS.length + 4}>
+                    <tr key={p.id + '-ev'} className="bs-events"><td colSpan={COLS.length + 5}>
                       {mine.length === 0 ? <span className="muted">Chưa có pha nào.</span> : [...mine].sort((a, b) => a.createdAt - b.createdAt).map((e) => (
                         <button key={e.id} className="tag bs-ev" disabled={!e.videoId || e.videoT == null || !props.onSeek}
                           onClick={() => e.videoId && e.videoT != null && props.onSeek?.(e.videoId, Math.max(0, e.videoT - 3))}>
@@ -117,16 +122,16 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
                 <tr className="bs-add">
                   <td className="bs-no"><input className="bs-in num" placeholder="#" inputMode="numeric" value={draft.number} onChange={(e) => setDraft({ ...draft, number: e.target.value.replace(/\D/g, '').slice(0, 2) })} onKeyDown={(e) => e.key === 'Enter' && addRow(side)} /></td>
                   <td className="bs-name"><input className="bs-in" placeholder="Tên cầu thủ mới" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && addRow(side)} /></td>
-                  <td colSpan={COLS.length + 3} style={{ textAlign: 'left' }}><button className="btn sm primary" onClick={() => addRow(side)}>+ Thêm</button></td>
+                  <td colSpan={COLS.length + 4} style={{ textAlign: 'left' }}><button className="btn sm primary" onClick={() => addRow(side)}>+ Thêm</button></td>
                 </tr>
               )}
               {(() => {
                 // Dòng TEAM: pha của đội không gắn cầu thủ (team rebound, team turnover).
                 const tl = lineOf(ev.filter((e) => e.side === side && !e.gamePlayerId))
                 if (!tl.reb && !tl.tov) return null
-                return <tr className="bs-teamrow"><td className="bs-no" /><td className="bs-name">Team</td><td />{COLS.map((c) => <td key={c.k}>{c.k === 'oreb' ? tl.oreb : c.k === 'dreb' ? tl.dreb : c.k === 'reb' ? tl.reb : c.k === 'tov' ? tl.tov : ''}</td>)}<td /></tr>
+                return <tr className="bs-teamrow"><td className="bs-no" /><td className="bs-name">Team</td><td />{COLS.map((c) => [<td key={c.k}>{c.k === 'oreb' ? tl.oreb : c.k === 'dreb' ? tl.dreb : c.k === 'reb' ? tl.reb : c.k === 'tov' ? tl.tov : ''}</td>, c.k === FD_AFTER && <td key="fd" />])}<td /></tr>
               })()}
-              <tr className="bs-total"><td className="bs-no" /><td className="bs-name">Totals</td><td>{mmss(ps.reduce((a, p) => a + (secs.get(p.id) ?? 0), 0))}</td>{COLS.map((c) => <td key={c.k}>{c.v(team)}</td>)}<td>{sign(team.pts - lineOf(ev.filter((e) => e.side !== side)).pts)}</td></tr>
+              <tr className="bs-total"><td className="bs-no" /><td className="bs-name">Totals</td><td>{mmss(ps.reduce((a, p) => a + (secs.get(p.id) ?? 0), 0))}</td>{COLS.map((c) => [<td key={c.k}>{c.v(team)}</td>, c.k === FD_AFTER && <td key="fd">{ev.filter((e) => e.side !== side && e.drawnBy).length}</td>])}<td>{sign(team.pts - lineOf(ev.filter((e) => e.side !== side)).pts)}</td></tr>
             </tbody>
           </table>
         </div>
@@ -138,6 +143,7 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
     <div className="bs-view stack">
       <div className="row">
         <div className="bs-score grow">{name('home')} <b>{pts('home')}</b> – <b>{pts('away')}</b> {name('away')}</div>
+        <button className="btn sm" onClick={() => setSheet(true)}>🖨 Biên bản</button>
         <select style={{ width: 140 }} value={period} onChange={(e) => setPeriod(+e.target.value)}>
           <option value={0}>Full game</option>
           {periods.map((n) => <option key={n} value={n}>{periodLabel(n)}</option>)}
@@ -145,6 +151,7 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
       </div>
       {table('home')}
       {table('away')}
+      {sheet && <Scoresheet onClose={() => setSheet(false)} />}
     </div>
   )
 }

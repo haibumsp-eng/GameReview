@@ -774,4 +774,79 @@ alter table stat_events add column if not exists fast_break boolean not null def
 alter table stat_events drop constraint if exists stat_events_type_check;
 alter table stat_events add constraint stat_events_type_check check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS','TMO'));
 
+-- ===== Live Stats mở rộng 2: loại lỗi (T/U/D), người bị phạm lỗi, kiến tạo gắn với cú ghi điểm, vị trí ném =====
+-- PFT = lỗi kỹ thuật (gắn cầu thủ; không gắn cầu thủ = lỗi kỹ thuật HLV/ghế), PFU = lỗi phản tinh thần thể thao, PFD = lỗi truất quyền.
+alter table stat_events add column if not exists drawn_by uuid references game_players on delete set null; -- người bị phạm lỗi
+alter table stat_events add column if not exists linked_id uuid;                                         -- AST → cú ghi điểm được kiến tạo
+alter table stat_events add column if not exists shot_x real;                                            -- vị trí ném trên nửa sân (0..1)
+alter table stat_events add column if not exists shot_y real;
+alter table stat_events drop constraint if exists stat_events_type_check;
+alter table stat_events add constraint stat_events_type_check check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS','PFT','PFU','PFD','TMO'));
+
+-- Bảng bấm điện thoại: thêm lỗi đồng đội (Q4 + hiệp phụ cộng dồn) và timeout đã dùng / được phép.
+create or replace function remote_state(p_token text) returns jsonb
+language plpgsql security definer stable set search_path = public as $$
+declare gid uuid; g games; res jsonb; cp int;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return jsonb_build_object('error', 'Mã QR không hợp lệ hoặc đã hết hạn.'); end if;
+  select * into g from games where id = gid;
+  cp := coalesce(g.clock_period, 1);
+  with ev as (select * from stat_events where game_id = gid),
+       last_in as (select distinct on (game_player_id) game_player_id, kind from lineup_events where game_id = gid order by game_player_id, created_at desc),
+       tf as (select side, count(*) n from ev where game_player_id is not null and type in ('PF','PFS','PFT','PFU','PFD')
+              and (case when cp >= 4 then period >= 4 else period = cp end) group by side),
+       tmo as (select side, count(*) n from ev where type = 'TMO'
+              and (case when cp <= 2 then period <= 2 when cp <= 4 then period between 3 and 4 else period = cp end) group by side)
+  select jsonb_build_object(
+    'game', jsonb_build_object('title', g.title, 'home', coalesce(nullif(g.home_name, ''), (select name from squads where id = g.squad_id)), 'away', coalesce(nullif(g.away_name, ''), 'AWAY'),
+      'period', g.clock_period, 'clock', game_clock_now(g), 'running', g.clock_running),
+    'score', jsonb_build_object(
+      'home', (select coalesce(sum(case type when '2PM' then 2 when '3PM' then 3 when 'FTM' then 1 else 0 end), 0) from ev where side = 'home'),
+      'away', (select coalesce(sum(case type when '2PM' then 2 when '3PM' then 3 when 'FTM' then 1 else 0 end), 0) from ev where side = 'away')),
+    'fouls', jsonb_build_object('home', coalesce((select n from tf where side = 'home'), 0), 'away', coalesce((select n from tf where side = 'away'), 0)),
+    'timeouts', jsonb_build_object('home', coalesce((select n from tmo where side = 'home'), 0), 'away', coalesce((select n from tmo where side = 'away'), 0),
+      'max', case when cp <= 2 then 2 when cp <= 4 then 3 else 1 end),
+    'players', coalesce((select jsonb_agg(jsonb_build_object('id', p.id, 'side', p.side, 'number', p.number, 'name', p.name,
+        'on', coalesce((select kind = 'in' from last_in li where li.game_player_id = p.id), false),
+        'pts', (select coalesce(sum(case type when '2PM' then 2 when '3PM' then 3 when 'FTM' then 1 else 0 end), 0) from ev where ev.game_player_id = p.id),
+        'pf', (select count(*) from ev where ev.game_player_id = p.id and type in ('PF','PFS','PFT','PFU','PFD'))) order by p.side, p.number)
+      from game_players p where p.game_id = gid), '[]'::jsonb),
+    'recent', coalesce((select jsonb_agg(x order by x->>'at' desc) from (
+        select jsonb_build_object('id', e.id, 'type', e.type, 'side', e.side, 'number', p.number, 'name', p.name, 'remote', e.via_remote, 'at', e.created_at,
+          'paint', e.paint, 'fb', e.fast_break) x
+        from ev e left join game_players p on p.id = e.game_player_id order by e.created_at desc limit 8) t), '[]'::jsonb)
+  ) into res;
+  return res;
+end $$;
+
+-- Ghi pha từ điện thoại (bản mở rộng): p_player null = pha của TEAM (OREB, DREB, TOV) hoặc timeout (TMO, tự dừng đồng hồ).
+create or replace function remote_add_event(p_token text, p_player uuid, p_type text, p_side text default null,
+                                            p_paint boolean default false, p_fb boolean default false) returns text
+language plpgsql security definer set search_path = public as $$
+declare gid uuid; g games; ps text; c real;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return 'Mã QR không hợp lệ hoặc đã hết hạn.'; end if;
+  if p_player is not null then
+    select side into ps from game_players where id = p_player and game_id = gid;
+    if ps is null then return 'Cầu thủ không thuộc trận này.'; end if;
+    if p_type not in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS','PFT','PFU','PFD') then return 'Loại pha không hợp lệ.'; end if;
+  else
+    ps := p_side;
+    if ps not in ('home','away') then return 'Thiếu đội.'; end if;
+    if p_type not in ('OREB','DREB','TOV','TMO') then return 'TEAM chỉ ghi được OREB, DREB, TOV, timeout.'; end if;
+  end if;
+  select * into g from games where id = gid for update;
+  c := game_clock_now(g);
+  if p_type = 'TMO' and g.clock_running then
+    update games set clock_running = false, clock_remaining = c, clock_started_at = null where id = gid;
+  end if;
+  insert into stat_events (game_id, side, game_player_id, type, period, clock_s, via_remote, author, paint, fast_break)
+    values (gid, ps, p_player, p_type, g.clock_period, c, true, null,
+            coalesce(p_paint, false) and p_type in ('2PM','2PX'), coalesce(p_fb, false) and p_type in ('2PM','2PX','3PM','3PX'));
+  return 'ok';
+end $$;
+grant execute on function remote_state(text), remote_add_event(text, uuid, text, text, boolean, boolean) to anon, authenticated;
+
 notify pgrst, 'reload schema';

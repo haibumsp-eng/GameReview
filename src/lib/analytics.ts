@@ -81,7 +81,7 @@ export function pointSources(stats: StatEvent[], lineups: LineupEvent[]) {
   for (const e of byTime(stats)) {
     const p = PTS[e.type] ?? 0
     if (p && e.gamePlayerId && !start.has(e.gamePlayerId)) bench[e.side] += p
-    if (e.type === '2PM' && e.paint) paint[e.side] += 2
+    if (e.type === '2PM' && (e.paint || (e.shotX != null && e.shotY != null && zoneOf(e.shotX, e.shotY) === 'paint'))) paint[e.side] += 2
     if ((e.type === '2PM' || e.type === '3PM') && e.fastBreak) fastBreak[e.side] += p
 
     switch (e.type) {
@@ -136,7 +136,60 @@ export function advanced(mine: StatEvent[], theirs: StatEvent[]) {
 /** Lỗi đồng đội tính cho hiệp: hiệp phụ cộng dồn với hiệp 4 (theo FIBA). Từ lỗi thứ 5 đối phương được ném phạt. */
 export function teamFouls(stats: StatEvent[], side: TeamSide, period: number) {
   const inP = (p: number) => (period >= 4 ? p >= 4 : p === period)
-  return stats.filter((e) => e.side === side && (e.type === 'PF' || e.type === 'PFS') && inP(e.period)).length
+  // Chỉ lỗi của cầu thủ trên sân (lỗi kỹ thuật của HLV / ghế không tính là lỗi đồng đội).
+  return stats.filter((e) => e.side === side && e.gamePlayerId && PLAYER_FOULS.includes(e.type) && inP(e.period)).length
+}
+export const PLAYER_FOULS: StatEvent['type'][] = ['PF', 'PFS', 'PFT', 'PFU', 'PFD']
+
+/**
+ * Tình trạng lỗi của cầu thủ (FIBA): 5 lỗi; hoặc 2 lỗi kỹ thuật; hoặc 2 lỗi phản tinh thần thể thao;
+ * hoặc 1 kỹ thuật + 1 phản tinh thần thể thao; hoặc 1 lỗi truất quyền → phải rời sân.
+ */
+export function foulStatus(stats: StatEvent[], playerId: string) {
+  const mine = stats.filter((e) => e.gamePlayerId === playerId)
+  const n = (t: StatEvent['type']) => mine.filter((e) => e.type === t).length
+  const total = mine.filter((e) => PLAYER_FOULS.includes(e.type)).length
+  const t = n('PFT'), u = n('PFU'), d = n('PFD')
+  const out = total >= 5 || t >= 2 || u >= 2 || (t >= 1 && u >= 1) || d >= 1
+  return { total, t, u, d, out }
+}
+
+/** Ghép mỗi AST với cú ghi điểm được kiến tạo: theo liên kết đã lưu, nếu không có thì cú ghi điểm gần nhất cùng đội (±15 giây). */
+export function assists(stats: StatEvent[]): Map<string, string> {
+  const res = new Map<string, string>() // id cú ghi điểm → id cầu thủ kiến tạo
+  const made = stats.filter((e) => e.type === '2PM' || e.type === '3PM')
+  for (const a of stats.filter((e) => e.type === 'AST' && e.gamePlayerId && e.linkedId)) res.set(a.linkedId!, a.gamePlayerId!)
+  for (const a of byTime(stats.filter((e) => e.type === 'AST' && e.gamePlayerId && !e.linkedId))) {
+    const fg = made.filter((m) => m.side === a.side && m.gamePlayerId !== a.gamePlayerId && m.period === a.period && !res.has(m.id) && Math.abs(m.createdAt - a.createdAt) <= 15000)
+      .sort((x, y) => Math.abs(x.createdAt - a.createdAt) - Math.abs(y.createdAt - a.createdAt))[0]
+    if (fg) res.set(fg.id, a.gamePlayerId!)
+  }
+  return res
+}
+
+/* ---------- Vị trí ném (nửa sân FIBA 15 × 14 m, rổ cách đường biên cuối 1,575 m) ---------- */
+export const COURT = { w: 15, h: 14, rim: { x: 7.5, y: 1.575 }, paintW: 4.9, paintH: 5.8, three: 6.75, corner: 0.9 }
+const cornerY = COURT.rim.y + Math.sqrt(COURT.three ** 2 - (COURT.rim.x - COURT.corner) ** 2)
+export type Zone = 'paint' | 'mid' | 'corner3' | 'above3'
+export const ZONE_LABEL: Record<Zone, string> = { paint: 'Trong sơn', mid: 'Tầm trung', corner3: '3 điểm góc', above3: '3 điểm trên vòng' }
+/** Vùng ném từ toạ độ 0..1. */
+export function zoneOf(nx: number, ny: number): Zone {
+  const x = nx * COURT.w, y = ny * COURT.h
+  const inPaint = Math.abs(x - COURT.rim.x) <= COURT.paintW / 2 && y <= COURT.paintH
+  if (inPaint) return 'paint'
+  if (y <= cornerY) return x <= COURT.corner || x >= COURT.w - COURT.corner ? 'corner3' : 'mid'
+  return Math.hypot(x - COURT.rim.x, y - COURT.rim.y) > COURT.three ? 'above3' : 'mid'
+}
+export const isThreeZone = (z: Zone) => z === 'corner3' || z === 'above3'
+/** FG theo vùng của một đội. */
+export function zoneStats(stats: StatEvent[]) {
+  const z: Record<Zone, { m: number; a: number }> = { paint: { m: 0, a: 0 }, mid: { m: 0, a: 0 }, corner3: { m: 0, a: 0 }, above3: { m: 0, a: 0 } }
+  for (const e of stats) {
+    if (e.shotX == null || e.shotY == null || !['2PM', '2PX', '3PM', '3PX'].includes(e.type)) continue
+    const k = zoneOf(e.shotX, e.shotY)
+    z[k].a++; if (e.type.endsWith('M')) z[k].m++
+  }
+  return z
 }
 export const BONUS_AT = 4 // sau 4 lỗi đồng đội, lỗi tiếp theo bị phạt ném
 

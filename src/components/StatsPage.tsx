@@ -15,12 +15,15 @@ import { confirmDialog, promptDialog, dialogOpen } from '../lib/dialog'
 import { VoicePanel, type VoiceStamp } from './VoicePanel'
 import type { VoiceItem } from '../voice/parse'
 import { Analysis } from './Analysis'
-import { BONUS_AT, teamFouls, timeouts } from '../lib/analytics'
+import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, zoneOf } from '../lib/analytics'
+import { Court } from './Court'
 
 /** Khung video trong Live Stats: tạm tắt (bật lại = true). */
 const VIDEO_ENABLED = false
 const SHOT_TYPES: StatType[] = ['2PM', '2PX', '3PM', '3PX']
-const TEAM_TYPES: StatType[] = ['OREB', 'DREB', 'TOV']
+const TEAM_TYPES: StatType[] = ['OREB', 'DREB', 'TOV', 'PFT']
+// Lỗi có người bị phạm (hỏi tiếp "ai bị phạm lỗi"). Lỗi kỹ thuật thì không.
+const DRAWN_TYPES: StatType[] = ['PF', 'PFS', 'PFU', 'PFD']
 
 const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'miss' }[] = [
   { type: '2PM', label: '2PT', pts: '+2', tone: 'made' }, { type: '2PX', label: '2PT', pts: 'miss', tone: 'miss' },
@@ -28,6 +31,7 @@ const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'm
   { type: 'FTM', label: 'FT', pts: '+1', tone: 'made' }, { type: 'FTX', label: 'FT', pts: 'miss', tone: 'miss' },
   { type: 'OREB', label: 'OREB' }, { type: 'DREB', label: 'DREB' }, { type: 'AST', label: 'AST' },
   { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV' }, { type: 'PF', label: 'PF' }, { type: 'PFS', label: 'SF' },
+  { type: 'PFT', label: 'TF', pts: 'technical' }, { type: 'PFU', label: 'UF', pts: 'unsport.' }, { type: 'PFD', label: 'DF', pts: 'disqualif.' },
 ]
 
 /** Trang Live Stats riêng: ghi thống kê 2 đội (dùng cho trận của đội hoặc giải đấu), không cần video. */
@@ -38,12 +42,16 @@ export function StatsPage() {
   const [showVideoPref, setShowVideo] = useState(() => { try { return localStorage.getItem('gr-sp-video') !== 'off' } catch { return true } })
   const showVideo = VIDEO_ENABLED && showVideoPref
   const toggleVideo = () => { if (!VIDEO_ENABLED) return; setShowVideo(!showVideo); try { localStorage.setItem('gr-sp-video', showVideo ? 'off' : 'on') } catch { /* bỏ qua */ } }
-  const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, addGamePlayers, removeGamePlayer, addStat, removeStat, setClock, addLineup, removeLineup, setStatVideo } = useData()
+  const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, addGamePlayers, removeGamePlayer, addStat, updateStat, removeStat, setClock, addLineup, removeLineup, setStatVideo } = useData()
   const [tab, setTab] = useState<'record' | 'box' | 'analysis'>('record')
   // Chọn TEAM (pha của đội, không gắn cầu thủ): team rebound, team turnover.
   const [teamSel, setTeamSel] = useState<TeamSide | null>(null)
   // Cờ cho cú ném tiếp theo: trong sơn / fast break. Tự tắt sau khi ghi.
   const [mods, setMods] = useState({ paint: false, fb: false })
+  // Vị trí cú ném tiếp theo (chạm lên sân nhỏ). Trong sơn thì tự bật cờ "Trong sơn".
+  const [loc, setLoc] = useState<{ x: number; y: number } | null>(null)
+  // Hỏi tiếp sau một pha: ai bị phạm lỗi / ai kiến tạo.
+  const [fu, setFu] = useState<{ kind: 'drawn' | 'assist'; eventId: string; side: TeamSide; exclude?: string } | null>(null)
   const [sel, setSel] = useState<GamePlayer | null>(null)
   const [, tick] = useState(0)
   const [paste, setPaste] = useState<{ side: TeamSide; text: string } | null>(null)
@@ -145,19 +153,35 @@ export function StatsPage() {
   const record = (type: StatType) => {
     if (!game) return
     if (!sel && !teamSel) return toast('Chưa chọn cầu thủ trên sân (hoặc TEAM)')
-    if (teamSel && !TEAM_TYPES.includes(type)) return toast('TEAM chỉ ghi được OREB, DREB, TOV')
+    if (teamSel && !TEAM_TYPES.includes(type)) return toast('TEAM chỉ ghi được OREB, DREB, TOV, TF (lỗi kỹ thuật HLV / ghế)')
     // Đang xem video thì gắn đúng giây trong video để bấm vào pha là xem lại được.
     const onVideo = showVideo && !!videoId && yt.ready()
     const shot = SHOT_TYPES.includes(type)
-    addStat({
+    const paint = shot && type.startsWith('2') && (mods.paint || (!!loc && zoneOf(loc.x, loc.y) === 'paint'))
+    const id = addStat({
       gameId: game.id, side: sel ? sel.side : teamSel!, gamePlayerId: sel ? sel.id : null, type, period,
       videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, clockS: remaining,
-      paint: shot && type.startsWith('2') && mods.paint, fastBreak: shot && mods.fb,
+      paint, fastBreak: shot && mods.fb, shotX: shot && loc ? loc.x : null, shotY: shot && loc ? loc.y : null,
     })
-    const tags = shot ? [type.startsWith('2') && mods.paint ? 'trong sơn' : '', mods.fb ? 'fast break' : ''].filter(Boolean).join(', ') : ''
-    toast(`${sel ? `#${sel.number} ${sel.name}` : `TEAM ${teamSel === 'home' ? homeName : awayName}`} · ${STAT_LABEL[type]}${tags ? ` (${tags})` : ''}`)
-    if (shot) setMods({ paint: false, fb: false })
+    const tags = shot ? [type.startsWith('2') && paint ? 'trong sơn' : '', mods.fb ? 'fast break' : '', loc ? 'có vị trí' : ''].filter(Boolean).join(', ') : ''
+    if (shot && loc && type.startsWith('2') && isThreeZone(zoneOf(loc.x, loc.y))) toast('Lưu ý: vị trí chọn nằm ngoài vạch 3 điểm mà ghi 2PT')
+    else toast(`${sel ? `#${sel.number} ${sel.name}` : `TEAM ${teamSel === 'home' ? homeName : awayName}`} · ${STAT_LABEL[type]}${tags ? ` (${tags})` : ''}`)
+    if (shot) { setMods({ paint: false, fb: false }); setLoc(null) }
+    // Hỏi tiếp: lỗi → ai bị phạm lỗi; ghi điểm → ai kiến tạo.
+    if (sel && DRAWN_TYPES.includes(type)) setFu({ kind: 'drawn', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
+    else if (sel && (type === '2PM' || type === '3PM')) setFu({ kind: 'assist', eventId: id, side: sel.side, exclude: sel.id })
+    else setFu(null)
     setSel(null); setTeamSel(null)
+  }
+  const answerFu = (playerId: string | null) => {
+    if (!fu || !game) return setFu(null)
+    const ev = stats.find((e) => e.id === fu.eventId)
+    if (playerId && fu.kind === 'drawn') updateStat(fu.eventId, { drawnBy: playerId })
+    if (playerId && fu.kind === 'assist' && ev) {
+      addStat({ gameId: game.id, side: fu.side, gamePlayerId: playerId, type: 'AST', period: ev.period, videoId: ev.videoId, videoT: ev.videoT, clockS: ev.clockS, linkedId: ev.id })
+      const p = byId.get(playerId); toast(`#${p?.number} ${p?.name} · AST`)
+    }
+    setFu(null)
   }
   const timeout = (side: TeamSide) => {
     if (!game || !canEdit) return
@@ -227,15 +251,17 @@ export function StatsPage() {
     toast(`Đã xoá #${p.number} ${p.name}`)
   }
   const card = (p: GamePlayer) => {
-    const pf = stats.filter((e) => e.gamePlayerId === p.id && isFoul(e.type)).length
+    const fs = foulStatus(stats, p.id)
+    const pf = fs.total
     const isOn = court.has(p.id)
+    const fTip = [fs.t ? `${fs.t} kỹ thuật` : '', fs.u ? `${fs.u} phản TTTT` : '', fs.d ? 'truất quyền' : ''].filter(Boolean).join(', ')
     return (
-      <div key={p.id} className={`sp-player ${sel?.id === p.id ? 'on' : ''} ${pf >= 5 ? 'out' : ''} ${isOn ? '' : 'benched'}`}
-        title={`#${p.number} ${p.name} · ${pf} PF · ${mmss(secs.get(p.id) ?? 0)} MIN`}
+      <div key={p.id} className={`sp-player ${sel?.id === p.id ? 'on' : ''} ${fs.out ? 'out' : ''} ${isOn ? '' : 'benched'}`}
+        title={`#${p.number} ${p.name} · ${pf} PF${fTip ? ` (${fTip})` : ''}${fs.out ? ' · PHẢI RỜI SÂN' : ''} · ${mmss(secs.get(p.id) ?? 0)} MIN`}
         onClick={(e) => { if (!canEdit) return; if (e.shiftKey) return deletePlayer(p); if (isOn) { setTeamSel(null); setSel(sel?.id === p.id ? null : p) } }}>
         <span className="sp-no">{p.number}</span>
         <span className="sp-pname">{p.name}</span>
-        {pf >= 3 && <span className={`sp-pf f${Math.min(pf, 5)}`} title={`${pf} lỗi cá nhân`}>{pf}F</span>}
+        {(pf >= 3 || fs.out) && <span className={`sp-pf f${fs.out ? 5 : Math.min(pf, 5)}`}>{fs.out ? 'DQ' : `${pf}F`}</span>}
         {canEdit && <button className="sp-sub" title={court.has(p.id) ? 'Ra sân' : 'Vào sân'} onClick={(e) => { e.stopPropagation(); sub(p) }}>{court.has(p.id) ? '↓' : '↑'}</button>}
       </div>
     )
@@ -316,9 +342,26 @@ export function StatsPage() {
         <div className={`sp-pad ${sel || teamSel ? '' : 'idle'}`}>
       <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></>
         : teamSel ? <>TEAM <span className="muted">· {teamSel === 'home' ? homeName : awayName} (OREB, DREB, TOV)</span></> : '—'}</div>
+      {fu && (() => {
+        const opts = roster(fu.side).filter((x) => court.has(x.id) && x.id !== fu.exclude)
+        return (
+          <div className={`sp-fu ${fu.side}`}>
+            <span className="sp-fu-q">{fu.kind === 'drawn' ? 'Ai bị phạm lỗi?' : 'Ai kiến tạo?'}</span>
+            {opts.map((x) => <button key={x.id} onClick={() => answerFu(x.id)} title={x.name}>#{x.number}</button>)}
+            <button className="skip" onClick={() => answerFu(null)}>{fu.kind === 'drawn' ? 'Bỏ qua' : 'Không có'}</button>
+          </div>
+        )
+      })()}
+      <div className="sp-shot">
+        <Court pick={loc} onPick={(x, y) => setLoc(loc && Math.hypot(loc.x - x, loc.y - y) < 0.03 ? null : { x, y })} />
+        <div className="sp-shot-side">
+          <div className="muted small-note">{loc ? `Vị trí: ${({ paint: 'trong sơn', mid: 'tầm trung', corner3: '3 điểm góc', above3: '3 điểm' } as const)[zoneOf(loc.x, loc.y)]}` : 'Chạm sân để chọn vị trí ném (tuỳ chọn)'}</div>
       <div className="sp-mods">
         <button className={mods.paint ? 'on' : ''} title="Cú ném 2 điểm tiếp theo là trong sơn (points in the paint)" onClick={() => setMods({ ...mods, paint: !mods.paint })}>🎯 Trong sơn</button>
         <button className={mods.fb ? 'on' : ''} title="Cú ném tiếp theo là phản công nhanh (fast break)" onClick={() => setMods({ ...mods, fb: !mods.fb })}>⚡ Fast break</button>
+      </div>
+          {loc && <button className="btn sm ghost" onClick={() => setLoc(null)}>Bỏ vị trí</button>}
+        </div>
       </div>
           <div className="sp-actions">
             {ACTIONS.map((a) => (

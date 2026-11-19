@@ -872,3 +872,70 @@ html.obs, html.obs body, html.obs #root { background: transparent !important; ov
 .an-leader { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .an-big { font-family: var(--font-display); font-stretch: 112%; font-weight: 900; font-size: 26px; min-width: 44px; text-align: center; color: var(--accent); }
 .sp-tabs button { white-space: nowrap; }
+/* Điện thoại: lỗi đồng đội, timeout, TEAM, cờ cú ném */
+.rp-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rp-meta-side { display: flex; align-items: center; justify-content: space-between; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.rp-meta-side .bonus { color: #ff6b4a; }
+.rp-tmo { border: 1px solid var(--line-2); background: var(--panel-3); color: var(--text); border-radius: 8px; padding: 8px 10px; font-weight: 700; font-size: 12px; }
+.rp-tmo.out { color: #ff6b4a; border-color: #ff6b4a66; }
+.rp-player.rp-team { border-style: dashed; }
+.rp-mods { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rp-mods button { height: 40px; border-radius: 10px; border: 1px dashed var(--line-2); background: transparent; color: var(--muted); font-weight: 700; }
+.rp-mods button.on { border-style: solid; border-color: var(--accent); background: #bedf0022; color: var(--accent); }
+
+/* Sân nhỏ: chọn vị trí ném / shot chart */
+.court { display: block; width: 100%; height: auto; background: #1a1712; border-radius: 8px; }
+.court.pickable { cursor: crosshair; }
+.court-line { fill: none; stroke: #ffffff59; stroke-width: 1; }
+.court-paint { fill: #ffffff0a; }
+.court-pick { fill: none; stroke: var(--accent); stroke-width: 2; }
+.sp-shot { display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: start; }
+.sp-shot-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sp-shot-side .sp-mods { flex-direction: column; }
+/* Hỏi tiếp: ai bị phạm lỗi / ai kiến tạo */
+.sp-fu { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 6px; border-radius: 10px; border: 1px solid var(--accent-line); background: #bedf0012; }
+.sp-fu.away { border-color: #9aa0ff66; background: #9aa0ff12; }
+.sp-fu-q { font-size: 12px; font-weight: 700; margin-right: 4px; }
+.sp-fu button { border: 1px solid var(--line-2); background: var(--panel-3); border-radius: 7px; padding: 4px 8px; font-weight: 700; cursor: pointer; }
+.sp-fu button:hover { border-color: var(--accent); }
+.sp-fu button.skip { background: transparent; color: var(--muted); font-weight: 500; }
+
+/* ---------- Biên bản (in được) ---------- */
+.ss-back { position: fixed; inset: 0; z-index: 80; background: #000c; overflow: auto; padding: 16px; }
+.ss-tools { max-width: 1100px; margin: 0 auto 10px; display: flex; gap: 8px; align-items: center; color: #fff; }
+.ss-print { max-width: 1100px; margin: 0 auto; background: #fff; color: #111; padding: 18px; border-radius: 6px; font: 400 11px/1.3 var(--font-ui); }
+.ss-print b { font-weight: 700; }
+.ss-title { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #111; padding-bottom: 6px; margin-bottom: 8px; font-size: 13px; }
+.ss-final { font-size: 18px; }
+.ss-print table { border-collapse: collapse; }
+.ss-print th, .ss-print td { border: 1px solid #999; padding: 2px 4px; text-align: center; }
+.ss-print .l { text-align: left; }
+.ss-q { width: 100%; margin-bottom: 10px; }
+.ss-cols { display: grid; grid-template-columns: 1.25fr 1fr; gap: 14px; }
+.ss-team { margin-bottom: 12px; }
+.ss-team-head { display: flex; justify-content: space-between; border-bottom: 1px solid #111; margin-bottom: 4px; font-size: 12px; }
+.ss-row { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 3px 0; }
+.ss-lbl { font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: .05em; color: #555; margin-right: 4px; }
+.ss-tf { margin-right: 8px; }
+.ss-players { width: 100%; }
+.ss-f { width: 30px; } .ss-f sub { font-size: 8px; margin-left: 1px; }
+.ss-run { display: flex; gap: 6px; }
+.ss-rs td, .ss-rs th { padding: 0 3px; height: 13px; font-size: 9px; min-width: 16px; }
+.rs-n { color: #888; }
+.rs-no.three { font-weight: 700; } .rs-no.three:not(:empty) { outline: 1.5px solid #111; outline-offset: -3px; border-radius: 50%; }
+.rs-no.ft::after { content: '·'; font-weight: 900; }
+.rs-no.two { font-weight: 700; }
+.rs-no.skip { background: repeating-linear-gradient(135deg, transparent 0 4px, #bbb 4px 5px); }
+.rs-no.endq { border-bottom: 3px solid #111; }
+.ss-legend { margin-top: 6px; font-size: 9px; color: #555; }
+@media print {
+  body * { visibility: hidden; }
+  .ss-print, .ss-print * { visibility: visible; }
+  .ss-back { position: static; padding: 0; background: none; overflow: visible; }
+  .ss-print { position: absolute; left: 0; top: 0; max-width: none; width: 100%; border-radius: 0; padding: 0; }
+  .ss-tools { display: none; }
+  @page { size: A4 landscape; margin: 8mm; }
+}
+.an-shot { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 10px; align-items: start; }
+.an-pair { display: flex; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.rp-player.rp-team b { font-size: 18px; letter-spacing: .04em; } .rp-player.rp-team small { font-size: 10px; }

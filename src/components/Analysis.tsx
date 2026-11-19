@@ -1,7 +1,8 @@
 import { useData, useUi } from '../store'
 import { lineOf, pct, periodLabel } from '../lib/boxscore'
 import { clockNow, mmss } from '../lib/minutes'
-import { advanced, eff, flow, lineupUnits, periodScores, pointSources, starters, timeouts } from '../lib/analytics'
+import { advanced, assists, eff, flow, lineupUnits, periodScores, pointSources, starters, timeouts, zoneStats, ZONE_LABEL, type Zone } from '../lib/analytics'
+import { Court } from './Court'
 import type { TeamSide } from '../types'
 
 const p1 = (x: number | null) => (x == null ? '–' : `${(x * 100).toFixed(1)}%`)
@@ -28,6 +29,10 @@ export function Analysis() {
   const start = starters(lineups)
   const L = { home: adv.home.line, away: adv.away.line }
   const tmo = (s: TeamSide) => stats.filter((e) => e.side === s && e.type === 'TMO').length
+  const ast = assists(stats)
+  const madeFG = (s: TeamSide) => stats.filter((e) => e.side === s && (e.type === '2PM' || e.type === '3PM'))
+  const assisted = (s: TeamSide) => madeFG(s).filter((e) => ast.has(e.id)).length
+  const fd = (s: TeamSide) => stats.filter((e) => e.side !== s && e.drawnBy).length
 
   // Một dòng so sánh: giá trị HOME | tên chỉ số | giá trị AWAY. better: bên nào tốt hơn (số lớn hơn / nhỏ hơn).
   type Row = { label: string; h: string | number; a: string | number; hv?: number | null; av?: number | null; lower?: boolean; note?: string }
@@ -90,7 +95,7 @@ export function Analysis() {
       <div className="card stack an-sec">
         <b>Điểm theo hiệp</b>
         <table className="an-q">
-          <thead><tr><th /> {qs.map((q) => <th key={q.period}>{periodLabel(q.period)}</th>)}<th>Tổng</th></tr></thead>
+          <thead><tr><th />{qs.map((q) => <th key={q.period}>{periodLabel(q.period)}</th>)}<th>Tổng</th></tr></thead>
           <tbody>
             {(['home', 'away'] as TeamSide[]).map((s) => (
               <tr key={s}><td className="an-team"><span className={`st-dot ${s}`} />{name(s)}</td>{qs.map((q) => <td key={q.period}>{q[s] || (q.period > period ? '' : 0)}</td>)}<td className="bs-strong">{L[s].pts}</td></tr>
@@ -120,6 +125,7 @@ export function Analysis() {
           { label: '3PT', h: `${L.home.p3m}/${L.home.p3a} · ${pct(L.home.p3m, L.home.p3a)}`, a: `${L.away.p3m}/${L.away.p3a} · ${pct(L.away.p3m, L.away.p3a)}`, hv: L.home.p3a ? L.home.p3m / L.home.p3a : null, av: L.away.p3a ? L.away.p3m / L.away.p3a : null },
           { label: 'FT', h: `${L.home.ftm}/${L.home.fta} · ${pct(L.home.ftm, L.home.fta)}`, a: `${L.away.ftm}/${L.away.fta} · ${pct(L.away.ftm, L.away.fta)}`, hv: L.home.fta ? L.home.ftm / L.home.fta : null, av: L.away.fta ? L.away.ftm / L.away.fta : null },
           { label: 'eFG%', h: p1(adv.home.efg), a: p1(adv.away.efg), hv: adv.home.efg, av: adv.away.efg, note: 'FG% có tính thêm giá trị của cú 3 điểm: (FGM + 0.5 × 3PM) / FGA.' },
+          { label: 'Assisted FGM', h: `${assisted('home')}/${madeFG('home').length}`, a: `${assisted('away')}/${madeFG('away').length}`, hv: madeFG('home').length ? assisted('home') / madeFG('home').length : null, av: madeFG('away').length ? assisted('away') / madeFG('away').length : null, note: 'Số cú ghi điểm có người kiến tạo / tổng cú ghi điểm (không tính ném phạt).' },
           { label: 'TS%', h: p1(adv.home.ts), a: p1(adv.away.ts), hv: adv.home.ts, av: adv.away.ts, note: 'Hiệu quả ghi điểm tính cả ném phạt: PTS / (2 × (FGA + 0.44 × FTA)).' },
         ])}
         {section('Four Factors', [
@@ -142,6 +148,7 @@ export function Analysis() {
           { label: 'STL', h: L.home.stl, a: L.away.stl },
           { label: 'BLK', h: L.home.blk, a: L.away.blk },
           { label: 'PF', h: L.home.pf, a: L.away.pf, lower: true },
+          { label: 'Fouls drawn', h: fd('home'), a: fd('away'), note: 'Số lần cầu thủ của đội bị phạm lỗi (đã chọn người bị phạm lỗi khi ghi).' },
           { label: 'Timeouts', h: `${tmo('home')} · còn ${Math.max(0, timeouts(stats, 'home', period).max - timeouts(stats, 'home', period).used)}`, a: `${tmo('away')} · còn ${Math.max(0, timeouts(stats, 'away', period).max - timeouts(stats, 'away', period).used)}`, hv: null },
         ])}
       </div>
@@ -160,6 +167,38 @@ export function Analysis() {
         ))}
         {units('home')}
         {units('away')}
+        {(['home', 'away'] as TeamSide[]).map((s) => {
+          const shots = stats.filter((e) => e.side === s && e.shotX != null && e.shotY != null && ['2PM', '2PX', '3PM', '3PX'].includes(e.type))
+          const z = zoneStats(stats.filter((e) => e.side === s))
+          return (
+            <div key={'sc' + s} className="card stack an-sec">
+              <b>Shot chart · {name(s)}</b>
+              {shots.length === 0 ? <div className="muted small-note">Chưa có cú ném nào được chọn vị trí. Chạm lên sân nhỏ ở tab Record trước khi bấm cú ném.</div> : (
+                <div className="an-shot">
+                  <Court shots={shots.map((e) => ({ id: e.id, x: e.shotX!, y: e.shotY!, made: e.type.endsWith('M'), color: s === 'home' ? 'var(--accent)' : '#9aa0ff', title: `${byId.get(e.gamePlayerId ?? '') ? '#' + byId.get(e.gamePlayerId ?? '')!.number : ''} ${e.type} ${periodLabel(e.period)}` }))} />
+                  <table className="an-units">
+                    <thead><tr><th>Vùng</th><th>FG</th><th>%</th></tr></thead>
+                    <tbody>{(Object.keys(z) as Zone[]).map((k) => <tr key={k}><td style={{ textAlign: 'left' }}>{ZONE_LABEL[k]}</td><td>{z[k].m}/{z[k].a}</td><td>{pct(z[k].m, z[k].a)}</td></tr>)}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {(['home', 'away'] as TeamSide[]).map((s) => {
+          const pairs = new Map<string, number>()
+          for (const e of madeFG(s)) { const a = ast.get(e.id); if (a && e.gamePlayerId) pairs.set(`${a}>${e.gamePlayerId}`, (pairs.get(`${a}>${e.gamePlayerId}`) ?? 0) + 1) }
+          const list = [...pairs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
+          return (
+            <div key={'as' + s} className="card stack an-sec">
+              <b>Ai kiến tạo cho ai · {name(s)}</b>
+              {list.length === 0 ? <div className="muted small-note">Chưa có kiến tạo gắn với cú ghi điểm.</div> : list.map(([k, n]) => {
+                const [a, b] = k.split('>').map((id) => byId.get(id))
+                return <div key={k} className="an-pair"><span>#{a?.number} {a?.name}</span><span className="muted">→</span><span>#{b?.number} {b?.name}</span><b className="grow" style={{ textAlign: 'right' }}>{n}</b></div>
+              })}
+            </div>
+          )
+        })}
       </div>
 
       <div className="muted small-note">
