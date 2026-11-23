@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useData, useUi, toast } from '../store'
+import { useData, useUi, toast, useSquadPlayers } from '../store'
 import { PLAY_TYPES } from '../types'
 import { yt } from '../youtube'
 import { fmt } from '../util'
@@ -62,7 +62,7 @@ export function MarkPanel() {
   const { gameId, clipId, squadId, inPoint, set } = useUi(useShallow((s) => ({ gameId: s.gameId, clipId: s.clipId, squadId: s.squadId, inPoint: s.inPoint, set: s.set })))
   const clip = useData((s) => s.clips.find((c) => c.id === clipId))
   const allClips = useData((s) => s.clips)
-  const players = useData((s) => s.players).filter((p) => p.squadId === squadId).sort((a, b) => a.number - b.number)
+  const players = useSquadPlayers(squadId)
   const { updateClip, removeClip } = useData()
 
   const used = [...new Set(allClips.filter((c) => c.gameId === gameId).map((c) => c.playType).filter(Boolean))]
@@ -173,8 +173,8 @@ function SpotlightControls({ clip }: { clip: Clip }) {
   const spotEdit = useUi((s) => s.spotEdit)
   const set = useUi((s) => s.set)
   const updateClip = useData((s) => s.updateClip)
-  const allPlayers = useData((s) => s.players)
   const squadId = useUi((s) => s.squadId)
+  const squadPlayers = useSquadPlayers(squadId)
   const editing = spotEdit && spotEdit.clipId === clip.id ? spotEdit : null
   const sp = clip.spotlight
 
@@ -184,7 +184,7 @@ function SpotlightControls({ clip }: { clip: Clip }) {
     if (e && e.clipId !== clip.id) useUi.getState().set({ spotEdit: null })
   }, [clip.id])
 
-  const players = [...allPlayers.filter((p) => p.squadId === squadId)].sort((a, b) =>
+  const players = [...squadPlayers].sort((a, b) =>
     (clip.playerIds.includes(b.id) ? 1 : 0) - (clip.playerIds.includes(a.id) ? 1 : 0) || a.number - b.number)
   const within = (t: number) => Math.min(clip.end - 0.3, Math.max(clip.start, t))
 

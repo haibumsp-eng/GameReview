@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useState } from 'react'
-import { useData, useUi, matches, toast } from '../store'
+import { useData, useUi, matches, toast, useSquadPlayers, playerLabel } from '../store'
 import { ExportModal } from './ExportModal'
 import { PLAY_TYPES } from '../types'
 import { yt } from '../youtube'
@@ -24,8 +24,7 @@ export function useFilteredClips() {
 export function ClipList() {
   const { gameId, clipId, filter, squadId, playlist, playlistId, set } = useUi(useShallow((s) => ({ gameId: s.gameId, clipId: s.clipId, filter: s.filter, squadId: s.squadId, playlist: s.playlist, playlistId: s.playlistId, set: s.set })))
   const { playlists, addPlaylist, removePlaylist } = useData()
-  const players = useData((s) => s.players).filter((p) => p.squadId === squadId).sort((a, b) => a.number - b.number)
-  const allPlayers = useData((s) => s.players)
+  const players = useSquadPlayers(squadId)
   const total = useData((s) => s.clips).filter((c) => c.gameId === gameId).length
   const list = useFilteredClips()
   const videos = useData((s) => s.videos).filter((v) => v.gameId === gameId)
@@ -45,7 +44,7 @@ export function ClipList() {
     goToClip(list[0], true)
   }
   const label = (ids: string[]) =>
-    ids.map((id) => allPlayers.find((p) => p.id === id)).filter((p) => !!p).map((p) => `#${p!.number} ${p!.name}`).join(', ')
+    ids.map((id) => playerLabel(id)).filter(Boolean).join(', ')
 
   return (
     <Panel

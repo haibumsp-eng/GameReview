@@ -17,6 +17,7 @@ import type { VoiceItem } from '../voice/parse'
 import { Analysis } from './Analysis'
 import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, zoneOf } from '../lib/analytics'
 import { Court } from './Court'
+import { GameRosterModal } from './GameRoster'
 
 /** Khung video trong Live Stats: tạm tắt (bật lại = true). */
 const VIDEO_ENABLED = false
@@ -39,6 +40,7 @@ export function StatsPage() {
   const { orgId, squadId, gameId, videoId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, videoId: s.videoId, set: s.set })))
   const L = useLayout()
   const [remoteOpen, setRemoteOpen] = useState(false)
+  const [rosterOpen, setRosterOpen] = useState(false)
   const [showVideoPref, setShowVideo] = useState(() => { try { return localStorage.getItem('gr-sp-video') !== 'off' } catch { return true } })
   const showVideo = VIDEO_ENABLED && showVideoPref
   const toggleVideo = () => { if (!VIDEO_ENABLED) return; setShowVideo(!showVideo); try { localStorage.setItem('gr-sp-video', showVideo ? 'off' : 'on') } catch { /* bỏ qua */ } }
@@ -295,9 +297,9 @@ export function StatsPage() {
           {bench.map(card)}
           {canEdit && (
             <div className="row">
-              {side === 'home' && roster('home').length === 0 && players.some((p) => p.squadId === squadId) && (
-                <button className="btn sm" onClick={() => game && addGamePlayers(game.id, 'home', players.filter((p) => p.squadId === squadId).map((p) => ({ number: p.number, name: p.name, playerId: p.id })))}>
-                  Lấy cầu thủ của tuyến
+              {side === 'home' && players.some((p) => p.squadId === squadId) && (
+                <button className={`btn sm ${roster('home').length === 0 ? 'primary' : ''}`} title="Ai ra sân trận này và mặc số áo nào" onClick={() => setRosterOpen(true)}>
+                  {roster('home').length === 0 ? 'Lấy cầu thủ của tuyến' : 'Danh sách trận / số áo'}
                 </button>
               )}
               <button className="btn sm ghost" onClick={() => setPaste({ side, text: '' })}>+ Thêm cầu thủ</button>
@@ -428,6 +430,7 @@ export function StatsPage() {
         )}
       </div>
 
+      {rosterOpen && game && <GameRosterModal onClose={() => setRosterOpen(false)} />}
       {remoteOpen && game && <RemoteModal gameId={game.id} onClose={() => setRemoteOpen(false)} />}
       {newGame && (
         <div className="modal-back" onClick={() => setNewGame(null)}>

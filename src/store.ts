@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useMemo } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { alertDialog } from './lib/dialog'
@@ -587,4 +588,24 @@ export function myOrgRole(orgId: string): OrgMember['role'] | null {
 }
 export function orgExpired(o: Org | undefined): boolean {
   return !!o?.expiresOn && o.expiresOn < new Date().toISOString().slice(0, 10)
+}
+
+/* ---------- Số áo theo trận ---------- */
+/** Số áo của cầu thủ (tuyến) trong trận đang mở: theo danh sách trận nếu đã đặt, không thì số mặc định của tuyến. */
+export function numberIn(p: Player, gps: GamePlayer[]): number {
+  return gps.find((g) => g.playerId === p.id)?.number ?? p.number
+}
+/** Cầu thủ của tuyến, số áo đã đổi theo trận đang mở (baseNumber = số mặc định). */
+export function useSquadPlayers(squadId: string): (Player & { baseNumber: number })[] {
+  const players = useData((s) => s.players)
+  const gps = useData((s) => s.gamePlayers)
+  return useMemo(() => players.filter((p) => p.squadId === squadId)
+    .map((p) => ({ ...p, number: numberIn(p, gps), baseNumber: p.number }))
+    .sort((a, b) => a.number - b.number), [players, gps, squadId])
+}
+/** "#số tên" theo số áo của trận đang mở. */
+export function playerLabel(id: string): string | undefined {
+  const d = useData.getState()
+  const p = d.players.find((x) => x.id === id)
+  return p ? `#${numberIn(p, d.gamePlayers)} ${p.name}` : undefined
 }

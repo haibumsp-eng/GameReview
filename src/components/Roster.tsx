@@ -1,11 +1,18 @@
 import { useState } from 'react'
-import { useData, useUi } from '../store'
+import { useData, useUi, useSquadPlayers } from '../store'
+import { GameRosterModal } from './GameRoster'
 import { Panel } from './Panel'
 import { confirmDialog } from '../lib/dialog'
 
 export function Roster() {
   const { players, addPlayer, addPlayers, removePlayer } = useData()
   const squadId = useUi((s) => s.squadId)
+  const gameId = useUi((s) => s.gameId)
+  const shown = useSquadPlayers(squadId)
+  const gamePlayers = useData((s) => s.gamePlayers)
+  const inGame = new Set(gamePlayers.filter((g) => g.side === 'home' && g.playerId).map((g) => g.playerId))
+  const hasGameRoster = inGame.size > 0
+  const [rosterOpen, setRosterOpen] = useState(false)
   const [num, setNum] = useState('')
   const [name, setName] = useState('')
   const [bulk, setBulk] = useState(false)
@@ -39,7 +46,10 @@ export function Roster() {
     <Panel
       title="Cầu thủ"
 
-      actions={<button className="btn sm" onClick={() => setBulk((v) => !v)}>Nhập danh sách</button>}
+      actions={<>
+        {gameId && <button className="btn sm primary" title="Ai ra sân trận này và mặc số áo nào" onClick={() => setRosterOpen(true)}>Số áo trận này</button>}
+        <button className="btn sm" onClick={() => setBulk((v) => !v)}>Nhập danh sách</button>
+      </>}
     >
       {bulk && (
         <div className="card stack">
@@ -68,13 +78,14 @@ export function Roster() {
         <button className="btn sm" onClick={add}>+</button>
       </div>
       <ul className="list">
-        {list.map((p) => (
-          <li key={p.id} className="item">
-            <span><b className="jersey">{p.number}</b> {p.name}</span>
+        {shown.map((p) => (
+          <li key={p.id} className={`item ${hasGameRoster && !inGame.has(p.id) ? 'gr-absent' : ''}`} title={hasGameRoster && !inGame.has(p.id) ? 'Không có trong danh sách trận này' : undefined}>
+            <span><b className="jersey">{p.number}</b> {p.name}{p.number !== p.baseNumber && <span className="muted small-note"> · mặc định #{p.baseNumber}</span>}</span>
             <button className="icon-btn" onClick={async () => { if (await confirmDialog({ title: `Xoá #${p.number} ${p.name}?`, message: 'Cầu thủ sẽ bị gỡ khỏi danh sách của tuyến và khỏi các tình huống đã gắn.', okText: 'Xoá', danger: true })) removePlayer(p.id) }}>×</button>
           </li>
         ))}
       </ul>
+      {rosterOpen && <GameRosterModal onClose={() => setRosterOpen(false)} />}
     </Panel>
   )
 }

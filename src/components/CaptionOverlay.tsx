@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useData, useUi, matches } from '../store'
+import { useData, useUi, matches, playerLabel } from '../store'
 
 /**
  * Thẻ nhận xét của HLV đặt ở 1 trong 4 góc khung video.
@@ -11,7 +11,6 @@ export function CaptionOverlay() {
     caption: s.caption, rec: s.rec, playlist: s.playlist, gameId: s.gameId, videoId: s.videoId, time: s.time, filter: s.filter,
   })))
   const clips = useData((s) => s.clips)
-  const players = useData((s) => s.players)
   const recording = !!rec && (rec.phase === 'recording' || rec.phase === 'waiting')
   if (!caption.on || !(recording || playlist)) return null
 
@@ -22,8 +21,7 @@ export function CaptionOverlay() {
   if (!c) return null
 
   const who = c.teamWide ? 'Cả đội' : c.playerIds
-    .map((id) => players.find((p) => p.id === id)).filter(Boolean)
-    .map((p) => `#${p!.number} ${p!.name}`).join(', ')
+    .map((id) => playerLabel(id)).filter(Boolean).join(', ')
 
   return (
     <div className={`caption caption-${caption.pos}`}>

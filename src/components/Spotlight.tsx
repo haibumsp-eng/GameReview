@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useData, useUi, matches } from '../store'
+import { useData, useUi, matches, playerLabel } from '../store'
 import { yt } from '../youtube'
 import type { SpotBox } from '../types'
 
@@ -133,8 +133,7 @@ export function SpotlightLayer() {
 function defaultLabel(clipId: string, i: number): string | undefined {
   const d = useData.getState()
   const c = d.clips.find((x) => x.id === clipId)
-  const p = c && d.players.find((x) => x.id === c.playerIds[i])
-  return p ? `#${p.number} ${p.name}` : undefined
+  return c && c.playerIds[i] ? playerLabel(c.playerIds[i]) : undefined
 }
 
 /**

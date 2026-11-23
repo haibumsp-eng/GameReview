@@ -947,3 +947,13 @@ html.obs, html.obs body, html.obs #root { background: transparent !important; ov
 .an-shots .an-shot { grid-template-columns: minmax(0, 1fr) 220px; }
 .an-shots .court { max-width: 620px; }
 @media (max-width: 900px) { .an-shots .an-shot { grid-template-columns: 1fr; } }
+
+/* Danh sách trận / số áo theo trận */
+.gr-modal { width: 520px; }
+.gr-list { display: flex; flex-direction: column; gap: 4px; max-height: 52vh; overflow: auto; }
+.gr-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
+.gr-row.off { opacity: .5; }
+.gr-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.gr-num { width: 52px; text-align: center; font-weight: 700; font-size: 15px; padding: 4px; flex: none; }
+.gr-num.bad { border-color: #ff6b4a; color: #ff6b4a; }
+.list .item.gr-absent { opacity: .45; }

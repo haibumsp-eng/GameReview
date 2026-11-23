@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useData, useUi } from '../store'
+import { useData, useUi, playerLabel } from '../store'
 import { fmt } from '../util'
 import { goToClip } from '../nav'
 import { AutoTextarea } from './AutoTextarea'
@@ -7,7 +7,7 @@ import { Panel } from './Panel'
 
 export function Comments() {
   const clipId = useUi((s) => s.clipId)
-  const { comments, addComment, profiles, players } = useData()
+  const { comments, addComment, profiles } = useData()
   const clip = useData((s) => s.clips.find((c) => c.id === clipId))
   const [text, setText] = useState('')
   const list = comments.filter((c) => c.clipId === clipId).sort((a, b) => a.createdAt - b.createdAt)
@@ -33,7 +33,7 @@ export function Comments() {
               </div>
               <div>
                 {clip.teamWide ? <b>Cả đội</b> : clip.playerIds.length
-                  ? clip.playerIds.map((id) => players.find((p) => p.id === id)).filter(Boolean).map((p) => `#${p!.number} ${p!.name}`).join(', ')
+                  ? clip.playerIds.map((id) => playerLabel(id)).filter(Boolean).join(', ')
                   : <span className="muted">Chưa gắn cầu thủ</span>}
               </div>
               {clip.note && <div className="clip-note">{clip.note}</div>}
