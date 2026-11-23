@@ -40,11 +40,11 @@ export function StatsPage() {
   const { orgId, squadId, gameId, videoId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, videoId: s.videoId, set: s.set })))
   const L = useLayout()
   const [remoteOpen, setRemoteOpen] = useState(false)
-  const [rosterOpen, setRosterOpen] = useState(false)
+  const [rosterOpen, setRosterOpen] = useState<TeamSide | null>(null)
   const [showVideoPref, setShowVideo] = useState(() => { try { return localStorage.getItem('gr-sp-video') !== 'off' } catch { return true } })
   const showVideo = VIDEO_ENABLED && showVideoPref
   const toggleVideo = () => { if (!VIDEO_ENABLED) return; setShowVideo(!showVideo); try { localStorage.setItem('gr-sp-video', showVideo ? 'off' : 'on') } catch { /* bỏ qua */ } }
-  const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, addGamePlayers, removeGamePlayer, addStat, updateStat, removeStat, setClock, addLineup, removeLineup, setStatVideo } = useData()
+  const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, removeGamePlayer, addStat, updateStat, removeStat, setClock, addLineup, removeLineup, setStatVideo } = useData()
   const [tab, setTab] = useState<'record' | 'box' | 'analysis'>('record')
   // Chọn TEAM (pha của đội, không gắn cầu thủ): team rebound, team turnover.
   const [teamSel, setTeamSel] = useState<TeamSide | null>(null)
@@ -56,7 +56,6 @@ export function StatsPage() {
   const [fu, setFu] = useState<{ kind: 'drawn' | 'assist'; eventId: string; side: TeamSide; exclude?: string } | null>(null)
   const [sel, setSel] = useState<GamePlayer | null>(null)
   const [, tick] = useState(0)
-  const [paste, setPaste] = useState<{ side: TeamSide; text: string } | null>(null)
   const [newGame, setNewGame] = useState<{ title: string; home: string; away: string; date: string; len: number } | null>(null)
   const orgSquads = squads.filter((s) => s.orgId === orgId)
   const squadGames = games.filter((g) => g.squadId === squadId)
@@ -228,14 +227,6 @@ export function StatsPage() {
       validate: (x) => (x.trim() ? null : 'Nhập tên đội') })
     if (n) setTeamNames(game.id, side === 'home' ? n : homeName, side === 'away' ? n : awayName)
   }
-  const savePaste = () => {
-    if (!paste || !game) return
-    const have = new Set(roster(paste.side).map((p) => p.number))
-    const list = paste.text.split('\n').map((l) => l.trim().match(/^#?(\d{1,3})\s*[\t,;.\-–:]*\s*(.*)$/)).filter(Boolean)
-      .map((m) => ({ number: +m![1], name: m![2].trim() || `No ${m![1]}` })).filter((p) => !have.has(p.number))
-    if (list.length) addGamePlayers(game.id, paste.side, list)
-    setPaste(null)
-  }
   const createGame = () => {
     if (!newGame || !squadId) return
     const { gameId: gid } = addGame({ squadId, title: newGame.title.trim() || `${newGame.home || 'HOME'} vs ${newGame.away || 'AWAY'}`, date: newGame.date }, [])
@@ -297,12 +288,9 @@ export function StatsPage() {
           {bench.map(card)}
           {canEdit && (
             <div className="row">
-              {side === 'home' && players.some((p) => p.squadId === squadId) && (
-                <button className={`btn sm ${roster('home').length === 0 ? 'primary' : ''}`} title="Ai ra sân trận này và mặc số áo nào" onClick={() => setRosterOpen(true)}>
-                  {roster('home').length === 0 ? 'Lấy cầu thủ của tuyến' : 'Danh sách trận / số áo'}
-                </button>
-              )}
-              <button className="btn sm ghost" onClick={() => setPaste({ side, text: '' })}>+ Thêm cầu thủ</button>
+              <button className={`btn sm ${roster(side).length === 0 ? 'primary' : ''}`} title="Ai có mặt trận này và mặc số áo nào" onClick={() => setRosterOpen(side)}>
+                {roster(side).length === 0 ? (side === 'home' && players.some((p) => p.squadId === squadId) ? 'Lấy cầu thủ của tuyến' : '+ Nhập danh sách đội') : 'Danh sách trận / số áo'}
+              </button>
             </div>
           )}
         </div>
@@ -395,13 +383,6 @@ export function StatsPage() {
                 <span className="sp-sname">{awayName}</span>
               </div>
               <div className="sp-deck">{team('home')}{padBlock}{team('away')}</div>
-              {paste && (
-                <div className="card stack">
-                  <label className="field-label">Thêm cầu thủ {paste.side === 'home' ? homeName : awayName}: mỗi dòng “số tên”</label>
-                  <textarea rows={5} autoFocus placeholder={'4 Minh\n7 Nam\n(dán được từ Excel)'} value={paste.text} onChange={(e) => setPaste({ ...paste, text: e.target.value })} />
-                  <div className="row"><button className="btn" onClick={() => setPaste(null)}>Huỷ</button><button className="btn primary grow-btn" onClick={savePaste}>Thêm</button></div>
-                </div>
-              )}
     </div>
   )
 
@@ -430,7 +411,7 @@ export function StatsPage() {
         )}
       </div>
 
-      {rosterOpen && game && <GameRosterModal onClose={() => setRosterOpen(false)} />}
+      {rosterOpen && game && <GameRosterModal side={rosterOpen} onClose={() => setRosterOpen(null)} />}
       {remoteOpen && game && <RemoteModal gameId={game.id} onClose={() => setRemoteOpen(false)} />}
       {newGame && (
         <div className="modal-back" onClick={() => setNewGame(null)}>
