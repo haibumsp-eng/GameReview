@@ -61,7 +61,7 @@ interface DataState {
   updateGamePlayer: (id: string, patch: { number?: number; name?: string }) => void
   addStat: (e: Omit<StatEvent, 'id' | 'createdAt'>) => string
   removeStat: (id: string) => void
-  updateStat: (id: string, patch: { drawnBy?: string | null }) => void
+  updateStat: (id: string, patch: StatPatch) => void
   setStatVideo: (id: string, videoId: string, videoT: number) => void
   setClock: (gameId: string, patch: Partial<Pick<Game, 'periodLen' | 'clockPeriod' | 'clockRemaining' | 'clockRunning' | 'clockStartedAt'>>) => void
   addLineup: (e: Omit<LineupEvent, 'id' | 'createdAt'>) => void
@@ -450,7 +450,21 @@ export const useData = create<DataState>((set, get) => {
       set((s) => ({ stats: s.stats.map((e) => (e.id === id ? { ...e, ...patch } : e)) }))
       const row: Record<string, unknown> = {}
       if (patch.drawnBy !== undefined) row.drawn_by = patch.drawnBy
-      supabase.from('stat_events').update(row).eq('id', id).then(({ error }) => fail(error))
+      if (patch.gamePlayerId !== undefined) row.game_player_id = patch.gamePlayerId
+      if (patch.side !== undefined) row.side = patch.side
+      if (patch.type !== undefined) row.type = patch.type
+      if (patch.paint !== undefined) row.paint = patch.paint
+      if (patch.fastBreak !== undefined) row.fast_break = patch.fastBreak
+      if (patch.shotX !== undefined) row.shot_x = patch.shotX
+      if (patch.shotY !== undefined) row.shot_y = patch.shotY
+      if (patch.clockS !== undefined) row.clock_s = patch.clockS
+      if (patch.period !== undefined) row.period = patch.period
+      // Trong lúc đang ghi sửa, bỏ qua kết quả tải lại cũ để không làm chữ / số nhảy về giá trị trước.
+      editSeq++; inflight++
+      supabase.from('stat_events').update(row).eq('id', id).then(({ error }) => {
+        inflight--; editSeq++
+        if (fail(error)) get().loadGame(useUi.getState().gameId)
+      })
     },
     removeStat: (id) => {
       set((s) => ({ stats: s.stats.filter((e) => e.id !== id) }))
@@ -589,6 +603,9 @@ export function myOrgRole(orgId: string): OrgMember['role'] | null {
 export function orgExpired(o: Org | undefined): boolean {
   return !!o?.expiresOn && o.expiresOn < new Date().toISOString().slice(0, 10)
 }
+
+/** Các trường của một pha có thể sửa sau khi ghi. */
+export type StatPatch = Partial<Pick<StatEvent, 'gamePlayerId' | 'side' | 'type' | 'paint' | 'fastBreak' | 'drawnBy' | 'shotX' | 'shotY' | 'clockS' | 'period'>>
 
 /* ---------- Số áo theo trận ---------- */
 /** Số áo của cầu thủ (tuyến) trong trận đang mở: theo danh sách trận nếu đã đặt, không thì số mặc định của tuyến. */

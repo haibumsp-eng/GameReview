@@ -18,6 +18,7 @@ import { Analysis } from './Analysis'
 import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, zoneOf } from '../lib/analytics'
 import { Court } from './Court'
 import { GameRosterModal } from './GameRoster'
+import { StatEditor } from './StatEditor'
 
 /** Khung video trong Live Stats: tạm tắt (bật lại = true). */
 const VIDEO_ENABLED = false
@@ -41,6 +42,11 @@ export function StatsPage() {
   const L = useLayout()
   const [remoteOpen, setRemoteOpen] = useState(false)
   const [rosterOpen, setRosterOpen] = useState<TeamSide | null>(null)
+  // Sửa pha: dòng Play-by-play đang mở trình sửa, và pha vừa ghi (hiện thanh sửa / hoàn tác nhanh).
+  const [editId, setEditId] = useState<string | null>(null)
+  const [lastId, setLastId] = useState<string | null>(null)
+  const lastTimer = useRef<ReturnType<typeof setTimeout>>()
+  const flashLast = (id: string) => { setLastId(id); clearTimeout(lastTimer.current); lastTimer.current = setTimeout(() => setLastId(null), 12000) }
   const [showVideoPref, setShowVideo] = useState(() => { try { return localStorage.getItem('gr-sp-video') !== 'off' } catch { return true } })
   const showVideo = VIDEO_ENABLED && showVideoPref
   const toggleVideo = () => { if (!VIDEO_ENABLED) return; setShowVideo(!showVideo); try { localStorage.setItem('gr-sp-video', showVideo ? 'off' : 'on') } catch { /* bỏ qua */ } }
@@ -114,8 +120,11 @@ export function StatsPage() {
     const onKey = (e: KeyboardEvent) => {
       if (dialogOpen()) return
       const t = e.target as HTMLElement
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || e.ctrlKey || e.metaKey || e.altKey) return
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || e.altKey) return
       const k = e.key.toLowerCase()
+      // Ctrl/Cmd + Z: hoàn tác pha / thay người vừa ghi.
+      if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (canEdit) undo(); return }
+      if (e.ctrlKey || e.metaKey) return
       if (k === ' ') { e.preventDefault(); toggleClock() }
       else if (k === 'k') yt.toggle()
       else if (k === 'j') yt.seek(yt.time() - 5)
@@ -172,6 +181,7 @@ export function StatsPage() {
     if (sel && DRAWN_TYPES.includes(type)) setFu({ kind: 'drawn', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
     else if (sel && (type === '2PM' || type === '3PM')) setFu({ kind: 'assist', eventId: id, side: sel.side, exclude: sel.id })
     else setFu(null)
+    flashLast(id)
     setSel(null); setTeamSel(null)
   }
   const answerFu = (playerId: string | null) => {
@@ -202,7 +212,7 @@ export function StatsPage() {
     let n = 0
     for (const it of items) {
       if (it.kind === 'stat' && !it.error && it.gamePlayerId && it.side) {
-        addStat({ gameId: game.id, side: it.side, gamePlayerId: it.gamePlayerId, type: it.type, period: st.period, videoId: st.videoId, videoT: st.videoT, clockS: st.clockS })
+        flashLast(addStat({ gameId: game.id, side: it.side, gamePlayerId: it.gamePlayerId, type: it.type, period: st.period, videoId: st.videoId, videoT: st.videoT, clockS: st.clockS }))
         n++
       } else if (it.kind === 'clock') {
         const g = useData.getState().games.find((x) => x.id === game.id)
@@ -220,7 +230,16 @@ export function StatsPage() {
     const ll = [...lineups].sort((a, b) => b.createdAt - a.createdAt)[0]
     if (ll && (!ls || ll.createdAt > ls.createdAt)) removeLineup(ll.id)
     else if (ls) removeStat(ls.id)
+    setLastId(null); setEditId(null)
   }
+  const lastStat = lastId ? stats.find((e) => e.id === lastId) : undefined
+  // Câu hỏi tiếp (ai bị phạm lỗi / ai kiến tạo) hết ý nghĩa nếu pha đó đã bị xoá hoặc đổi sang loại khác.
+  useEffect(() => {
+    if (!fu) return
+    const ev = stats.find((e) => e.id === fu.eventId)
+    const ok = ev && (fu.kind === 'assist' ? ev.type === '2PM' || ev.type === '3PM' : DRAWN_TYPES.includes(ev.type))
+    if (!ok) setFu(null)
+  }, [stats, fu])
   const rename = async (side: TeamSide) => {
     if (!game) return
     const n = await promptDialog({ title: side === 'home' ? 'Tên đội nhà (HOME)' : 'Tên đội khách (AWAY)', value: side === 'home' ? homeName : awayName,
@@ -302,7 +321,7 @@ export function StatsPage() {
   <div className="sp-log">
     <div className="row">
       <b className="grow">Play-by-play ({stats.length + lineups.length})</b>
-      <button className="btn sm" disabled={!(stats.length + lineups.length) || !canEdit} onClick={undo}>↶ Undo</button>
+      <button className="btn sm" disabled={!(stats.length + lineups.length) || !canEdit} title="Hoàn tác pha vừa ghi (Ctrl + Z)" onClick={undo}>↶ Undo</button>
     </div>
     <ul className="list">
       {[...stats.map((e) => ({ at: e.createdAt, s: e, l: undefined })), ...lineups.map((e) => ({ at: e.createdAt, s: undefined, l: e }))]
@@ -311,16 +330,22 @@ export function StatsPage() {
           const p = byId.get((e ? e.gamePlayerId : l!.gamePlayerId) ?? '')
           const clock = e ? e.clockS : l!.clockS
           return (
-            <li key={ev.id} className={`item ${l ? 'sp-subrow' : ''} ${VIDEO_ENABLED && e?.videoT != null ? 'seekable' : ''}`}
+            <li key={ev.id} className={`item ${l ? 'sp-subrow' : ''} ${VIDEO_ENABLED && e?.videoT != null ? 'seekable' : ''} ${e && editId === e.id ? 'editing' : ''}`}
               title={VIDEO_ENABLED && e?.videoT != null ? 'Bấm để xem lại pha này' : undefined}
-              onClick={() => { if (VIDEO_ENABLED && e?.videoId && e.videoT != null) { if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(e.videoId!, Math.max(0, e.videoT! - 3), true), 50) } }}>
+              onClick={() => { if (VIDEO_ENABLED && e?.videoId && e.videoT != null) { if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(e.videoId!, Math.max(0, e.videoT! - 3), true), 50) } else if (canEdit && e) setEditId(editId === e.id ? null : e.id) }}>
               <span className={`st-dot ${ev.side}`} />
               <span className="grow">
                 <span className="muted">{periodLabel(ev.period)}{clock != null ? ` ${mmss(clock)}` : ''}</span> <b>{p ? `#${p.number} ${p.name}` : `TEAM ${ev.side === 'home' ? homeName : awayName}`}</b>{' '}
                 {e ? STAT_LABEL[e.type] : l!.kind === 'in' ? 'SUB IN' : 'SUB OUT'}
                 {e?.paint && <span className="sp-flag">paint</span>}{e?.fastBreak && <span className="sp-flag">FB</span>}
               </span>
-              {canEdit && <button className="icon-btn" onClick={() => (e ? removeStat(e.id) : removeLineup(l!.id))}>×</button>}
+              {canEdit && e && <button className={`icon-btn ${editId === e.id ? 'on' : ''}`} title="Sửa pha này" onClick={(ev) => { ev.stopPropagation(); setEditId(editId === e.id ? null : e.id) }}>✎</button>}
+              {canEdit && <button className="icon-btn" title="Xoá" onClick={(ev) => { ev.stopPropagation(); if (e) { if (editId === e.id) setEditId(null); if (lastId === e.id) setLastId(null); removeStat(e.id) } else removeLineup(l!.id) }}>×</button>}
+              {canEdit && e && editId === e.id && (
+                <StatEditor e={e} players={gamePlayers} onCourt={court} homeName={homeName} awayName={awayName}
+                  update={(patch) => updateStat(e.id, patch)} say={toast}
+                  remove={() => { removeStat(e.id); setEditId(null); if (lastId === e.id) setLastId(null) }} close={() => setEditId(null)} />
+              )}
             </li>
           )
         })}
@@ -330,6 +355,13 @@ export function StatsPage() {
 
   const padBlock = (
         <div className={`sp-pad ${sel || teamSel ? '' : 'idle'}`}>
+      {lastStat && canEdit && (
+        <div className="sp-last">
+          <span className="grow">Vừa ghi: <b>{(() => { const p = byId.get(lastStat.gamePlayerId ?? ''); return p ? `#${p.number} ${p.name}` : `TEAM ${lastStat.side === 'home' ? homeName : awayName}` })()}</b> {STAT_LABEL[lastStat.type]}</span>
+          <button onClick={() => { setEditId(lastStat.id); setLastId(null) }}>✎ Sửa</button>
+          <button onClick={() => { removeStat(lastStat.id); setLastId(null) }}>↶ Hoàn tác</button>
+        </div>
+      )}
       <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></>
         : teamSel ? <>TEAM <span className="muted">· {teamSel === 'home' ? homeName : awayName} (OREB, DREB, TOV)</span></> : '—'}</div>
       {fu && (() => {
