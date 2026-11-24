@@ -6,6 +6,8 @@
   // Bật địa chỉ <tên>.<tài khoản>.workers.dev mỗi lần triển khai.
   "workers_dev": true,
   "preview_urls": true,
+  // Khớp với cài đặt trên bảng điều khiển (tắt nhật ký) để Cloudflare không cảnh báo lệch cấu hình.
+  "observability": { "enabled": false },
   "assets": {
     "directory": "./dist",
     // Mở trực tiếp một địa chỉ bất kỳ vẫn trả về trang chính (app là SPA).
