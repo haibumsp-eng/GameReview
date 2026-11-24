@@ -1,0 +1,11 @@
+{
+  // Cloudflare Workers (Static Assets): web tĩnh, không có code chạy phía máy chủ.
+  // "name" phải trùng Project name trên Cloudflare.
+  "name": "gamereview",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    // Mở trực tiếp một địa chỉ bất kỳ vẫn trả về trang chính (app là SPA).
+    "not_found_handling": "single-page-application"
+  }
+}
