@@ -3,6 +3,9 @@
   // "name" phải trùng Project name trên Cloudflare.
   "name": "gamereview",
   "compatibility_date": "2026-11-01",
+  // Bật địa chỉ <tên>.<tài khoản>.workers.dev mỗi lần triển khai.
+  "workers_dev": true,
+  "preview_urls": true,
   "assets": {
     "directory": "./dist",
     // Mở trực tiếp một địa chỉ bất kỳ vẫn trả về trang chính (app là SPA).
