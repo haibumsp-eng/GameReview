@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "postinstall": "node scripts/copy-ffmpeg.mjs"
+    "postbuild": "node scripts/check-dist-size.mjs",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.6",

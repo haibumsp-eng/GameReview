@@ -15,18 +15,34 @@ export function mergeSegs(segs: Seg[]): Seg[] {
   return out
 }
 
+/**
+ * Lõi ffmpeg.wasm nặng ~32 MB nên không đóng gói cùng trang (Cloudflare Pages giới hạn 25 MiB mỗi file).
+ * Tải từ CDN công cộng, thử lần lượt các nguồn; trình duyệt lưu cache nên chỉ tải một lần.
+ * Phiên bản phải khớp gói @ffmpeg/core trong package.json.
+ */
+const CORE_VERSION = '0.12.6'
+const CORE_BASES = [
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm/`,
+  `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm/`,
+]
+
 let ff: FFmpeg | null = null
 async function load(onLog: (m: string) => void): Promise<FFmpeg> {
   if (ff) return ff
-  const f = new FFmpeg()
-  f.on('log', ({ message }) => onLog(message))
-  const base = `${import.meta.env.BASE_URL}ffmpeg/`
-  await f.load({
-    coreURL: await toBlobURL(`${base}ffmpeg-core.js`, 'text/javascript'),
-    wasmURL: await toBlobURL(`${base}ffmpeg-core.wasm`, 'application/wasm'),
-  })
-  ff = f
-  return f
+  let lastErr: unknown = null
+  for (const base of CORE_BASES) {
+    const f = new FFmpeg()
+    f.on('log', ({ message }) => onLog(message))
+    try {
+      await f.load({
+        coreURL: await toBlobURL(`${base}ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${base}ffmpeg-core.wasm`, 'application/wasm'),
+      })
+      ff = f
+      return f
+    } catch (e) { lastErr = e }
+  }
+  throw new Error(`Không tải được bộ cắt video (ffmpeg) từ CDN: ${(lastErr as Error)?.message ?? lastErr}. Kiểm tra kết nối mạng rồi thử lại.`)
 }
 
 export interface ExportOpts {
