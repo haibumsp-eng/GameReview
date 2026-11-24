@@ -1,6 +1,6 @@
 import type { LineupEvent, StatEvent, TeamSide } from '../types'
 import { lineOf, type Line } from './boxscore'
-import { elapsed, periodLength } from './minutes'
+import { byGameTime, elapsed, periodLength } from './minutes'
 
 /**
  * Phân tích trận từ các pha đã ghi (theo thứ tự ghi). Không cần bấm thêm gì ngoài các pha thường,
@@ -9,7 +9,7 @@ import { elapsed, periodLength } from './minutes'
 
 const PTS: Partial<Record<StatEvent['type'], number>> = { '2PM': 2, '3PM': 3, FTM: 1 }
 export const other = (s: TeamSide): TeamSide => (s === 'home' ? 'away' : 'home')
-const byTime = <T extends { createdAt: number }>(a: T[]) => [...a].sort((x, y) => x.createdAt - y.createdAt)
+const byTime = <T extends { period: number; clockS?: number | null; createdAt: number }>(a: T[]) => byGameTime(a)
 const pair = () => ({ home: 0, away: 0 })
 
 /** Điểm từng hiệp của 2 đội. */
@@ -214,8 +214,11 @@ export function lineupUnits(side: TeamSide, lineups: LineupEvent[], stats: StatE
     if (key && !units.has(key)) units.set(key, { ids: [...on], secs: 0, pf: 0, pa: 0 })
     since = t
   }
-  type Ev = { at: number; l?: LineupEvent; s?: StatEvent }
-  const evs: Ev[] = [...lineups.filter((l) => l.side === side).map((l) => ({ at: l.createdAt, l })), ...stats.map((s) => ({ at: s.createdAt, s }))].sort((a, b) => a.at - b.at)
+  type Ev = { period: number; clockS?: number | null; createdAt: number; l?: LineupEvent; s?: StatEvent }
+  const evs: Ev[] = byTime<Ev>([
+    ...lineups.filter((l) => l.side === side).map((l) => ({ period: l.period, clockS: l.clockS, createdAt: l.createdAt, l })),
+    ...stats.map((s) => ({ period: s.period, clockS: s.clockS, createdAt: s.createdAt, s })),
+  ])
   for (const e of evs) {
     if (e.l) {
       const t = elapsed(e.l.period, e.l.clockS, len)

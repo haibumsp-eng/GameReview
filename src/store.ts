@@ -66,6 +66,7 @@ interface DataState {
   setClock: (gameId: string, patch: Partial<Pick<Game, 'periodLen' | 'clockPeriod' | 'clockRemaining' | 'clockRunning' | 'clockStartedAt'>>) => void
   addLineup: (e: Omit<LineupEvent, 'id' | 'createdAt'>) => void
   removeLineup: (id: string) => void
+  updateLineup: (id: string, patch: LineupPatch) => void
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -438,6 +439,20 @@ export const useData = create<DataState>((set, get) => {
       supabase.from('lineup_events').insert({ id, game_id: e.gameId, side: e.side, game_player_id: e.gamePlayerId, kind: e.kind, period: e.period, clock_s: e.clockS })
         .then(({ error }) => { if (fail(error)) get().loadGame(e.gameId) })
     },
+    updateLineup: (id, patch) => {
+      set((s) => ({ lineups: s.lineups.map((e) => (e.id === id ? { ...e, ...patch } : e)) }))
+      const row: Record<string, unknown> = {}
+      if (patch.gamePlayerId !== undefined) row.game_player_id = patch.gamePlayerId
+      if (patch.side !== undefined) row.side = patch.side
+      if (patch.kind !== undefined) row.kind = patch.kind
+      if (patch.period !== undefined) row.period = patch.period
+      if (patch.clockS !== undefined) row.clock_s = patch.clockS
+      editSeq++; inflight++
+      supabase.from('lineup_events').update(row).eq('id', id).then(({ error }) => {
+        inflight--; editSeq++
+        if (fail(error)) get().loadGame(useUi.getState().gameId)
+      })
+    },
     removeLineup: (id) => {
       set((s) => ({ lineups: s.lineups.filter((e) => e.id !== id) }))
       supabase.from('lineup_events').delete().eq('id', id).then(({ error }) => fail(error))
@@ -604,6 +619,8 @@ export function orgExpired(o: Org | undefined): boolean {
   return !!o?.expiresOn && o.expiresOn < new Date().toISOString().slice(0, 10)
 }
 
+/** Các trường của một lần vào / ra sân có thể sửa. */
+export type LineupPatch = Partial<Pick<LineupEvent, 'gamePlayerId' | 'side' | 'kind' | 'period' | 'clockS'>>
 /** Các trường của một pha có thể sửa sau khi ghi. */
 export type StatPatch = Partial<Pick<StatEvent, 'gamePlayerId' | 'side' | 'type' | 'paint' | 'fastBreak' | 'drawnBy' | 'shotX' | 'shotY' | 'clockS' | 'period'>>
 

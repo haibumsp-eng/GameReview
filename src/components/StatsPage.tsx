@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useData, useUi, selectGame, myOrgRole, toast } from '../store'
 import { isFoul, lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
-import { clockNow, mmss, onCourt, periodLength, secondsPlayed } from '../lib/minutes'
+import { clockNow, mmss, offCourtStats, onCourt, periodLength, secondsPlayed } from '../lib/minutes'
 import type { GamePlayer, StatType, TeamSide } from '../types'
 import { BoxScoreView } from './BoxScore'
 import { PlayerPanel } from './PlayerPanel'
@@ -19,6 +19,7 @@ import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, zoneOf } from '
 import { Court } from './Court'
 import { GameRosterModal } from './GameRoster'
 import { StatEditor } from './StatEditor'
+import { SubEditor, SubForm } from './SubEditor'
 
 /** Khung video trong Live Stats: tạm tắt (bật lại = true). */
 const VIDEO_ENABLED = false
@@ -45,12 +46,13 @@ export function StatsPage() {
   // Sửa pha: dòng Play-by-play đang mở trình sửa, và pha vừa ghi (hiện thanh sửa / hoàn tác nhanh).
   const [editId, setEditId] = useState<string | null>(null)
   const [lastId, setLastId] = useState<string | null>(null)
+  const [subForm, setSubForm] = useState(false)
   const lastTimer = useRef<ReturnType<typeof setTimeout>>()
   const flashLast = (id: string) => { setLastId(id); clearTimeout(lastTimer.current); lastTimer.current = setTimeout(() => setLastId(null), 12000) }
   const [showVideoPref, setShowVideo] = useState(() => { try { return localStorage.getItem('gr-sp-video') !== 'off' } catch { return true } })
   const showVideo = VIDEO_ENABLED && showVideoPref
   const toggleVideo = () => { if (!VIDEO_ENABLED) return; setShowVideo(!showVideo); try { localStorage.setItem('gr-sp-video', showVideo ? 'off' : 'on') } catch { /* bỏ qua */ } }
-  const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, removeGamePlayer, addStat, updateStat, removeStat, setClock, addLineup, removeLineup, setStatVideo } = useData()
+  const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, removeGamePlayer, addStat, updateStat, removeStat, setClock, addLineup, updateLineup, removeLineup, setStatVideo } = useData()
   const [tab, setTab] = useState<'record' | 'box' | 'analysis'>('record')
   // Chọn TEAM (pha của đội, không gắn cầu thủ): team rebound, team turnover.
   const [teamSel, setTeamSel] = useState<TeamSide | null>(null)
@@ -232,6 +234,7 @@ export function StatsPage() {
     else if (ls) removeStat(ls.id)
     setLastId(null); setEditId(null)
   }
+  const suspicious = useMemo(() => offCourtStats(stats, lineups), [stats, lineups])
   const lastStat = lastId ? stats.find((e) => e.id === lastId) : undefined
   // Câu hỏi tiếp (ai bị phạm lỗi / ai kiến tạo) hết ý nghĩa nếu pha đó đã bị xoá hoặc đổi sang loại khác.
   useEffect(() => {
@@ -321,26 +324,38 @@ export function StatsPage() {
   <div className="sp-log">
     <div className="row">
       <b className="grow">Play-by-play ({stats.length + lineups.length})</b>
+      {canEdit && <button className={`btn sm ${subForm ? 'primary' : ''}`} title="Bổ sung một lần thay người đã quên ghi, ở giờ tuỳ chọn" onClick={() => setSubForm(!subForm)}>+ Thay người</button>}
       <button className="btn sm" disabled={!(stats.length + lineups.length) || !canEdit} title="Hoàn tác pha vừa ghi (Ctrl + Z)" onClick={undo}>↶ Undo</button>
     </div>
+    {subForm && canEdit && (
+      <SubForm players={gamePlayers} lineups={lineups} homeName={homeName} awayName={awayName} period={period} clockS={remaining}
+        add={(side, kind, pid, per, clk) => addLineup({ gameId: game!.id, side, gamePlayerId: pid, kind, period: per, clockS: clk })}
+        close={() => setSubForm(false)} say={toast} />
+    )}
+    {suspicious.size > 0 && <div className="sp-warn" title="Cầu thủ có pha nhưng không ở trên sân vào giờ đó. Thường do quên ghi một lần thay người.">⚠ {suspicious.size} pha của cầu thủ không ở trên sân lúc đó. Bấm + Thay người để bổ sung, hoặc ✎ để đổi cầu thủ.</div>}
     <ul className="list">
       {[...stats.map((e) => ({ at: e.createdAt, s: e, l: undefined })), ...lineups.map((e) => ({ at: e.createdAt, s: undefined, l: e }))]
-        .sort((a, b) => b.at - a.at).map(({ s: e, l }) => {
+        .sort((a, b) => { const x = (a.s ?? a.l)!, y = (b.s ?? b.l)!; return y.period - x.period || ((x.clockS ?? 1e9) - (y.clockS ?? 1e9)) || b.at - a.at }).map(({ s: e, l }) => {
           const ev = (e ?? l)!
           const p = byId.get((e ? e.gamePlayerId : l!.gamePlayerId) ?? '')
           const clock = e ? e.clockS : l!.clockS
           return (
-            <li key={ev.id} className={`item ${l ? 'sp-subrow' : ''} ${VIDEO_ENABLED && e?.videoT != null ? 'seekable' : ''} ${e && editId === e.id ? 'editing' : ''}`}
+            <li key={ev.id} className={`item ${l ? 'sp-subrow' : ''} ${VIDEO_ENABLED && e?.videoT != null ? 'seekable' : ''} ${editId === ev.id ? 'editing' : ''}`}
               title={VIDEO_ENABLED && e?.videoT != null ? 'Bấm để xem lại pha này' : undefined}
-              onClick={() => { if (VIDEO_ENABLED && e?.videoId && e.videoT != null) { if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(e.videoId!, Math.max(0, e.videoT! - 3), true), 50) } else if (canEdit && e) setEditId(editId === e.id ? null : e.id) }}>
+              onClick={() => { if (VIDEO_ENABLED && e?.videoId && e.videoT != null) { if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(e.videoId!, Math.max(0, e.videoT! - 3), true), 50) } else if (canEdit) setEditId(editId === ev.id ? null : ev.id) }}>
               <span className={`st-dot ${ev.side}`} />
               <span className="grow">
                 <span className="muted">{periodLabel(ev.period)}{clock != null ? ` ${mmss(clock)}` : ''}</span> <b>{p ? `#${p.number} ${p.name}` : `TEAM ${ev.side === 'home' ? homeName : awayName}`}</b>{' '}
                 {e ? STAT_LABEL[e.type] : l!.kind === 'in' ? 'SUB IN' : 'SUB OUT'}
                 {e?.paint && <span className="sp-flag">paint</span>}{e?.fastBreak && <span className="sp-flag">FB</span>}
+                {e && suspicious.has(e.id) && <span className="sp-flag warn" title="Cầu thủ không ở trên sân lúc này">⚠ ngoài sân</span>}
               </span>
-              {canEdit && e && <button className={`icon-btn ${editId === e.id ? 'on' : ''}`} title="Sửa pha này" onClick={(ev) => { ev.stopPropagation(); setEditId(editId === e.id ? null : e.id) }}>✎</button>}
+              {canEdit && <button className={`icon-btn ${editId === ev.id ? 'on' : ''}`} title="Sửa" onClick={(x) => { x.stopPropagation(); setEditId(editId === ev.id ? null : ev.id) }}>✎</button>}
               {canEdit && <button className="icon-btn" title="Xoá" onClick={(ev) => { ev.stopPropagation(); if (e) { if (editId === e.id) setEditId(null); if (lastId === e.id) setLastId(null); removeStat(e.id) } else removeLineup(l!.id) }}>×</button>}
+              {canEdit && l && editId === l.id && (
+                <SubEditor e={l} players={gamePlayers} update={(patch) => updateLineup(l.id, patch)} say={toast}
+                  remove={() => { removeLineup(l.id); setEditId(null) }} close={() => setEditId(null)} />
+              )}
               {canEdit && e && editId === e.id && (
                 <StatEditor e={e} players={gamePlayers} onCourt={court} homeName={homeName} awayName={awayName}
                   update={(patch) => updateStat(e.id, patch)} say={toast}

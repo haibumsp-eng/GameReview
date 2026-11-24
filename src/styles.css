@@ -979,3 +979,8 @@ html.obs, html.obs body, html.obs #root { background: transparent !important; ov
 .se-time { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); font-weight: 600; }
 .se-time select, .se-time input { width: 74px; padding: 3px 6px; font-size: 12px; }
 .se-court { max-width: 300px; }
+.sp-flag.warn { color: #f2c037; background: #f2c03722; }
+.sp-warn { font-size: 12px; padding: 6px 8px; border-radius: 8px; border: 1px solid #f2c03766; background: #f2c03714; color: #f2c037; }
+.sf-title { font-family: var(--font-display); font-stretch: 112%; text-transform: uppercase; font-size: 13px; }
+.sf { padding: 10px; border: 1px solid var(--accent-line); border-radius: 10px; background: #bedf0010; }
+.sf-warn { color: #ff6b4a; }
