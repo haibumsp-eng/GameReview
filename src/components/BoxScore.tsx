@@ -6,6 +6,7 @@ import { clockNow, mmss, plusMinus, secondsPlayed } from '../lib/minutes'
 import { confirmDialog } from '../lib/dialog'
 import { eff, foulStatus, starters } from '../lib/analytics'
 import { Scoresheet } from './Scoresheet'
+import { downloadCsv, type Cell } from '../lib/csv'
 
 const COLS: { k: string; label: string; v: (l: Line) => string | number }[] = [
   { k: 'pts', label: 'PTS', v: (l) => l.pts },
@@ -66,6 +67,27 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
     if (!game) return
     addGamePlayers(game.id, side, [{ number: n, name: draft.name.trim() || `No ${n}` }])
     setDraft({ number: '', name: '' })
+  }
+
+  // Xuất CSV: 2 đội trong một file, mỗi cột một số (ném trúng / ném / %) để dùng được trong Excel, Google Sheets.
+  const exportCsv = () => {
+    const pctN = (m: number, a: number) => (a ? Math.round((m / a) * 1000) / 10 : '')
+    const head: Cell[] = ['Đội', 'No', 'Cầu thủ', 'Đá chính', 'MIN (phút)', 'PTS', 'FGM', 'FGA', 'FG%', '2PM', '2PA', '2P%', '3PM', '3PA', '3P%', 'FTM', 'FTA', 'FT%', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'PF', 'FD', 'EFF', 'Plus/Minus']
+    const line = (l: ReturnType<typeof lineOf>): Cell[] => [l.pts, l.fgm, l.fga, pctN(l.fgm, l.fga), l.p2m, l.p2a, pctN(l.p2m, l.p2a), l.p3m, l.p3a, pctN(l.p3m, l.p3a), l.ftm, l.fta, pctN(l.ftm, l.fta), l.oreb, l.dreb, l.reb, l.ast, l.stl, l.blk, l.tov, l.pf]
+    const rows: Cell[][] = [[`Box score: ${game.title}`, game.date || '', period ? periodLabel(period) : 'Full game'], [`${name('home')} ${pts('home')} - ${pts('away')} ${name('away')}`], [], head]
+    for (const side of ['home', 'away'] as TeamSide[]) {
+      const ps = gamePlayers.filter((p) => p.side === side).sort((a, b) => a.number - b.number)
+      for (const p of ps) {
+        const l = lineOf(ev.filter((e) => e.gamePlayerId === p.id))
+        rows.push([name(side), p.number, p.name, start.has(p.id) ? 'x' : '', secs.has(p.id) ? Math.round((secs.get(p.id)! / 60) * 100) / 100 : 'DNP', ...line(l), ev.filter((e) => e.drawnBy === p.id).length, eff(l), pm.get(p.id) ?? 0])
+      }
+      const tl = lineOf(ev.filter((e) => e.side === side && !e.gamePlayerId))
+      if (tl.reb || tl.tov) rows.push([name(side), '', 'Team', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', tl.oreb, tl.dreb, tl.reb, '', '', '', tl.tov, '', '', '', ''])
+      const t = lineOf(ev.filter((e) => e.side === side))
+      const other = lineOf(ev.filter((e) => e.side !== side))
+      rows.push([name(side), '', 'Totals', '', Math.round((ps.reduce((a, p) => a + (secs.get(p.id) ?? 0), 0) / 60) * 100) / 100, ...line(t), ev.filter((e) => e.side !== side && e.drawnBy).length, eff(t), t.pts - other.pts], [])
+    }
+    downloadCsv(`${game.title} - boxscore${period ? ' ' + periodLabel(period) : ''}`, rows)
   }
 
   const table = (side: TeamSide) => {
@@ -143,6 +165,7 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
     <div className="bs-view stack">
       <div className="row">
         <div className="bs-score grow">{name('home')} <b>{pts('home')}</b> – <b>{pts('away')}</b> {name('away')}</div>
+        <button className="btn sm" onClick={exportCsv} title="Tải box score 2 đội dạng CSV (mở bằng Excel / Google Sheets)">⬇ CSV</button>
         <button className="btn sm" onClick={() => setSheet(true)}>🖨 Biên bản</button>
         <select style={{ width: 140 }} value={period} onChange={(e) => setPeriod(+e.target.value)}>
           <option value={0}>Full game</option>

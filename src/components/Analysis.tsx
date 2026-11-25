@@ -3,6 +3,7 @@ import { lineOf, pct, periodLabel } from '../lib/boxscore'
 import { clockNow, mmss } from '../lib/minutes'
 import { advanced, assists, eff, flow, lineupUnits, periodScores, pointSources, starters, timeouts, zoneStats, ZONE_LABEL, type Zone } from '../lib/analytics'
 import { Court } from './Court'
+import { downloadCsv, type Cell } from '../lib/csv'
 import type { TeamSide } from '../types'
 
 const p1 = (x: number | null) => (x == null ? '–' : `${(x * 100).toFixed(1)}%`)
@@ -47,7 +48,9 @@ export function Analysis() {
       </tr>
     )
   }
+  const sections: { title: string; rows: Row[] }[] = [] // gom lại khi vẽ, dùng cho xuất CSV
   const section = (title: string, rows: Row[]) => (
+    sections.push({ title, rows }),
     <div className="card stack an-sec">
       <b>{title}</b>
       <table className="an-table">
@@ -56,6 +59,12 @@ export function Analysis() {
       </table>
     </div>
   )
+  // Cặp kiến tạo → ghi điểm của một đội, nhiều nhất trước.
+  const pairsOf = (s: TeamSide) => {
+    const pairs = new Map<string, number>()
+    for (const e of madeFG(s)) { const a = ast.get(e.id); if (a && e.gamePlayerId) pairs.set(`${a}>${e.gamePlayerId}`, (pairs.get(`${a}>${e.gamePlayerId}`) ?? 0) + 1) }
+    return [...pairs.entries()].sort((a, b) => b[1] - a[1])
+  }
   const EST = 'Ước tính từ thứ tự các pha: cần ghi đủ rebound (kể cả TEAM REB) và mất bóng (kể cả TEAM TOV) thì mới chính xác.'
   const mm = (s: number) => mmss(s)
 
@@ -90,8 +99,33 @@ export function Analysis() {
     )
   }
 
+  // Xuất CSV: mỗi khối là một bảng nhỏ, cách nhau một dòng trống.
+  const exportCsv = () => {
+    const lab = (p?: { number: number; name: string }) => (p ? `#${p.number} ${p.name}` : '')
+    const rows: Cell[][] = [[`Phân tích: ${game.title}`, game.date || ''], [`${name('home')} ${L.home.pts} - ${L.away.pts} ${name('away')}`], []]
+    rows.push(['Điểm theo hiệp'], ['Đội', ...qs.map((q) => periodLabel(q.period)), 'Tổng'])
+    for (const s of ['home', 'away'] as TeamSide[]) rows.push([name(s), ...qs.map((q) => q[s]), L[s].pts])
+    rows.push([])
+    for (const sec of sections) {
+      rows.push([sec.title], ['Chỉ số', name('home'), name('away'), 'Ghi chú'])
+      for (const r of sec.rows) rows.push([r.label, r.h, r.a, r.note ?? ''])
+      rows.push([])
+    }
+    rows.push(['Hiệu quả cao nhất (EFF)'], ['Đội', 'No', 'Cầu thủ', 'Đá chính', 'EFF', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FGM', 'FGA'])
+    for (const s of ['home', 'away'] as TeamSide[]) for (const { p, l } of leaders(s)) rows.push([name(s), p.number, p.name, start.has(p.id) ? 'x' : '', eff(l), l.pts, l.reb, l.ast, l.stl, l.blk, l.tov, l.fgm, l.fga])
+    rows.push([], ['Đội hình 5 người'], ['Đội', 'Đội hình', 'MIN (phút)', 'Ghi', 'Thủng', 'Plus/Minus'])
+    for (const s of ['home', 'away'] as TeamSide[]) for (const x of lineupUnits(s, lineups, stats, len, period, remaining))
+      rows.push([name(s), x.ids.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => a!.number - b!.number).map((p) => `#${p!.number}`).join(' '), Math.round((x.secs / 60) * 100) / 100, x.pf, x.pa, x.pf - x.pa])
+    rows.push([], ['Ném rổ theo vùng (cú đã chọn vị trí)'], ['Đội', 'Vùng', 'FGM', 'FGA', 'FG%'])
+    for (const s of ['home', 'away'] as TeamSide[]) { const z = zoneStats(stats.filter((e) => e.side === s)); for (const k of Object.keys(z) as Zone[]) rows.push([name(s), ZONE_LABEL[k], z[k].m, z[k].a, z[k].a ? Math.round((z[k].m / z[k].a) * 1000) / 10 : '']) }
+    rows.push([], ['Kiến tạo → ghi điểm'], ['Đội', 'Kiến tạo', 'Ghi điểm', 'Số lần'])
+    for (const s of ['home', 'away'] as TeamSide[]) for (const [k, n] of pairsOf(s)) { const [a, b] = k.split('>').map((id) => byId.get(id)); rows.push([name(s), lab(a), lab(b), n]) }
+    downloadCsv(`${game.title} - phan tich`, rows)
+  }
+
   return (
     <div className="an stack">
+      <div className="row"><span className="grow" /><button className="btn sm" onClick={exportCsv} title="Tải toàn bộ bảng phân tích dạng CSV (mở bằng Excel / Google Sheets)">⬇ CSV</button></div>
       <div className="card stack an-sec">
         <b>Điểm theo hiệp</b>
         <table className="an-q">
@@ -190,9 +224,7 @@ export function Analysis() {
       </div>
       <div className="an-grid two">
         {(['home', 'away'] as TeamSide[]).map((s) => {
-          const pairs = new Map<string, number>()
-          for (const e of madeFG(s)) { const a = ast.get(e.id); if (a && e.gamePlayerId) pairs.set(`${a}>${e.gamePlayerId}`, (pairs.get(`${a}>${e.gamePlayerId}`) ?? 0) + 1) }
-          const list = [...pairs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
+          const list = pairsOf(s).slice(0, 6)
           return (
             <div key={'as' + s} className="card stack an-sec">
               <b>Ai kiến tạo cho ai · {name(s)}</b>
