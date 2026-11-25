@@ -458,7 +458,7 @@ create table if not exists stat_events (
   game_id uuid not null references games on delete cascade,
   side text not null check (side in ('home','away')),
   game_player_id uuid references game_players on delete cascade,
-  type text not null check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS')),
+  type text not null check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS','PFT','PFU','PFD','TMO')),
   period int not null default 1,
   video_id uuid references game_videos on delete set null,
   video_t real,
@@ -518,7 +518,7 @@ end $$;
 alter table stat_events add column if not exists via_remote boolean not null default false;
 -- PFS = shooting foul (lỗi khi ném, đối phương được ném phạt). Vẫn tính là 1 PF.
 alter table stat_events drop constraint if exists stat_events_type_check;
-alter table stat_events add constraint stat_events_type_check check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS'));
+alter table stat_events add constraint stat_events_type_check check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS','PFT','PFU','PFD','TMO'));
 create table if not exists remote_tokens (
   token text primary key,
   game_id uuid not null references games on delete cascade,
@@ -772,7 +772,7 @@ grant execute on function sb_state(text), sb_logos(text) to anon, authenticated;
 alter table stat_events add column if not exists paint boolean not null default false;
 alter table stat_events add column if not exists fast_break boolean not null default false;
 alter table stat_events drop constraint if exists stat_events_type_check;
-alter table stat_events add constraint stat_events_type_check check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS','TMO'));
+alter table stat_events add constraint stat_events_type_check check (type in ('2PM','2PX','3PM','3PX','FTM','FTX','OREB','DREB','AST','STL','BLK','TOV','PF','PFS','PFT','PFU','PFD','TMO'));
 
 -- ===== Live Stats mở rộng 2: loại lỗi (T/U/D), người bị phạm lỗi, kiến tạo gắn với cú ghi điểm, vị trí ném =====
 -- PFT = lỗi kỹ thuật (gắn cầu thủ; không gắn cầu thủ = lỗi kỹ thuật HLV/ghế), PFU = lỗi phản tinh thần thể thao, PFD = lỗi truất quyền.
