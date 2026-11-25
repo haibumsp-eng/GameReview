@@ -416,11 +416,19 @@ export const useData = create<DataState>((set, get) => {
     addStat: (e) => {
       const id = uid()
       set((s) => ({ stats: [...s.stats, { ...e, id, createdAt: Date.now() }] }))
-      supabase.from('stat_events').insert({
+      // Chỉ gửi các cột mở rộng khi thật sự có giá trị: pha thường vẫn lưu được kể cả khi chưa chạy lại schema mới nhất.
+      const row: Record<string, unknown> = {
         id, game_id: e.gameId, side: e.side, game_player_id: e.gamePlayerId, type: e.type, period: e.period,
-        video_id: e.videoId, video_t: e.videoT, clock_s: e.clockS ?? null, paint: !!e.paint, fast_break: !!e.fastBreak,
-        drawn_by: e.drawnBy ?? null, linked_id: e.linkedId ?? null, tov_kind: e.tovKind ?? null, shot_x: e.shotX ?? null, shot_y: e.shotY ?? null,
-      }).then(({ error }) => { if (fail(error)) get().loadGame(e.gameId) })
+        video_id: e.videoId, video_t: e.videoT, clock_s: e.clockS ?? null,
+      }
+      if (e.paint) row.paint = true
+      if (e.fastBreak) row.fast_break = true
+      if (e.drawnBy) row.drawn_by = e.drawnBy
+      if (e.linkedId) row.linked_id = e.linkedId
+      if (e.tovKind) row.tov_kind = e.tovKind
+      if (e.shotX != null) row.shot_x = e.shotX
+      if (e.shotY != null) row.shot_y = e.shotY
+      supabase.from('stat_events').insert(row).then(({ error }) => { if (fail(error)) get().loadGame(e.gameId) })
       return id
     },
     setClock: (gameId, p) => {
