@@ -501,13 +501,26 @@ export const useData = create<DataState>((set, get) => {
 
 /* ---------- Trạng thái giao diện (không lưu) ---------- */
 export type Corner = 'tl' | 'tr' | 'bl' | 'br'
-export interface Caption { on: boolean; pos: Corner }
+/**
+ * hold: số giây dừng hình ở khung đầu của tình huống để hiện ĐẦY ĐỦ lời nhận xét trước khi chạy (0 = không dừng, -1 = tự tính theo độ dài chữ).
+ * after: khi tình huống đang chạy, thẻ nhận xét ở góc: thu gọn (chỉ tên người, loại), giữ nguyên lời nhận xét, hoặc ẩn.
+ */
+export interface Caption { on: boolean; pos: Corner; hold: number; after: 'compact' | 'full' | 'hide' }
 function loadCaption(): Caption {
+  const d: Caption = { on: true, pos: 'bl', hold: 3, after: 'compact' }
   try {
     const c = JSON.parse(localStorage.getItem('gr-caption') ?? '')
-    if (c && typeof c.on === 'boolean' && ['tl', 'tr', 'bl', 'br'].includes(c.pos)) return c
+    if (c && typeof c.on === 'boolean' && ['tl', 'tr', 'bl', 'br'].includes(c.pos)) {
+      return { ...d, on: c.on, pos: c.pos, hold: typeof c.hold === 'number' ? c.hold : d.hold, after: ['compact', 'full', 'hide'].includes(c.after) ? c.after : d.after }
+    }
   } catch { /* chưa lưu hoặc trình duyệt chặn */ }
-  return { on: true, pos: 'bl' }
+  return d
+}
+/** Số giây dừng để đọc lời nhận xét của một tình huống (0 nếu không có lời nhận xét hoặc đã tắt). */
+export function introSeconds(c: { note: string }, cap: Caption): number {
+  if (!cap.on || cap.hold === 0 || !c.note.trim()) return 0
+  if (cap.hold < 0) return Math.min(15, Math.max(3, 3 + c.note.trim().length / 60))
+  return cap.hold
 }
 export function setCaption(c: Caption) {
   useUi.getState().set({ caption: c })
@@ -542,6 +555,7 @@ interface UiState {
   inPoint: number | null // điểm Vào (phím I) đang chờ điểm Ra
   spotEdit: { clipId: string; t: number; hold: number; boxes: SpotBox[] } | null // đang vẽ khung khoanh
   spotHold: { boxes: SpotBox[]; frame: string | null } | null // đang dừng hình tại điểm khoanh
+  captionHold: { clipId: string } | null // đang dừng ở khung đầu để hiện đầy đủ lời nhận xét
   spotPreview: string | null // clipId đang xem thử khoanh
   lastSide: Side
   pending: { t: number; play: boolean } | null // tua tới đây sau khi video mới tải xong
@@ -569,6 +583,7 @@ export const useUi = create<UiState>((set) => ({
   inPoint: null,
   spotEdit: null,
   spotHold: null,
+  captionHold: null,
   spotPreview: null,
   lastSide: 'ATK',
   pending: null,

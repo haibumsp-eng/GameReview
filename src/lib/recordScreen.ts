@@ -74,7 +74,9 @@ function grabFrame(): string | null {
 }
 
 /** Một đoạn cần quay, kèm các điểm khoanh nằm trong đoạn (mỗi điểm dừng hình đúng một lần). */
-export type RecClip = Clip & { spots?: Spotlight[] }
+/** Một lần dừng ở khung đầu của tình huống để hiện đầy đủ lời nhận xét (sec giây) trước khi chạy. */
+export interface Intro { t: number; clipId: string; sec: number }
+export type RecClip = Clip & { spots?: Spotlight[]; intros?: Intro[] }
 export function cancelRecording() { cancelled = true }
 
 /** Phát lần lượt từng đoạn và chỉ ghi khi video thật sự đang chạy (tự dừng khi YouTube đang tải hoặc khi rời tab). */
@@ -135,7 +137,11 @@ export async function runRecording(stream: MediaStream, clips: RecClip[], title:
       }
       // Ghi tới hết đoạn.
       let lastMove = performance.now()
-      const spots = [...(c.spots ?? [])].sort((a, b) => a.t - b.t)
+      // Các lần dừng hình trong đoạn này, theo thời gian: đọc nhận xét (đầu mỗi tình huống) và điểm khoanh cầu thủ.
+      const stops = [
+        ...(c.intros ?? []).map((x) => ({ t: x.t, hold: x.sec, boxes: [] as Spotlight['boxes'], clipId: x.clipId as string | null })),
+        ...(c.spots ?? []).map((sp) => ({ t: sp.t, hold: Math.max(0.5, sp.hold), boxes: sp.boxes, clipId: null as string | null })),
+      ].sort((a, b) => a.t - b.t)
       let si = 0
       while (!cancelled && !userStopped) {
         if (document.hidden) {
@@ -149,16 +155,16 @@ export async function runRecording(stream: MediaStream, clips: RecClip[], title:
         }
         const t = yt.time()
         if (t >= c.end) break
-        // Tới điểm khoanh: dừng hình đúng một lần.
-        if (si < spots.length && t >= spots[si].t && yt.state() === 1) {
-          const sp = spots[si++]
+        // Tới khung đầu của tình huống có nhận xét, hoặc điểm khoanh: dừng hình đúng một lần.
+        if (si < stops.length && t >= stops[si].t && yt.state() === 1) {
+          const sp = stops[si++]
           const frame = grabFrame()
-          ui().set({ spotHold: { boxes: sp.boxes, frame } })
+          ui().set({ spotHold: { boxes: sp.boxes, frame }, ...(sp.clipId ? { captionHold: { clipId: sp.clipId } } : {}) })
           await sleep(60) // chờ ảnh khung hình hiện ra rồi mới tạm dừng YouTube
           yt.pause()
           resumeRec()
           setRec({ phase: 'recording', msg: '' })
-          const until = Date.now() + Math.max(0.5, sp.hold) * 1000
+          const until = Date.now() + sp.hold * 1000
           while (Date.now() < until && !cancelled && !userStopped) await sleep(50)
           // Ngưng ghi trong lúc YouTube chạy lại, chỉ bỏ ảnh đứng yên khi hình đã chạy thật.
           pauseRec()
@@ -166,7 +172,7 @@ export async function runRecording(stream: MediaStream, clips: RecClip[], title:
           yt.play()
           const giveUp = Date.now() + 8000
           while (Date.now() < giveUp && !cancelled && !(yt.state() === 1 && yt.time() > t0 + 0.08)) await sleep(30)
-          ui().set({ spotHold: null })
+          ui().set({ spotHold: null, captionHold: null })
           await sleep(60)
           lastMove = performance.now(); lastT = yt.time()
           continue
@@ -191,7 +197,7 @@ export async function runRecording(stream: MediaStream, clips: RecClip[], title:
     if (rec.state !== 'inactive') rec.stop()
     stream.getTracks().forEach((t) => t.stop())
     setRec({ phase: 'error', msg: e instanceof Error ? e.message : String(e) })
-    ui().set({ clipId: null, spotHold: null })
+    ui().set({ clipId: null, spotHold: null, captionHold: null })
     if (frameVideo) { frameVideo.srcObject = null; frameVideo = null }
     return
   }
@@ -200,7 +206,7 @@ export async function runRecording(stream: MediaStream, clips: RecClip[], title:
   if (rec.state !== 'inactive') rec.stop()
   await stopped
   stream.getTracks().forEach((t) => t.stop())
-  ui().set({ clipId: null, spotHold: null }) // bỏ chọn tình huống tạm dùng khi quay
+  ui().set({ clipId: null, spotHold: null, captionHold: null }) // bỏ chọn tình huống tạm dùng khi quay
   if (frameVideo) { frameVideo.srcObject = null; frameVideo = null }
   if (cancelled) return ui().set({ rec: null })
   const blob = new Blob(chunks, { type: rec.mimeType || mime || 'video/webm' })

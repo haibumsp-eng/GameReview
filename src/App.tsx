@@ -4,7 +4,7 @@ import { Logo } from './components/Logo'
 import { useEffect, useRef, useState } from 'react'
 import { useData, useUi, selectGame, myOrgRole, orgExpired } from './store'
 import { OrgAdminModal, OrgMembersModal } from './components/Orgs'
-import { goToClip } from './nav'
+import { playClip, cancelIntro } from './nav'
 import { yt } from './youtube'
 import { Library } from './components/Library'
 import { Roster } from './components/Roster'
@@ -75,12 +75,14 @@ function PlaylistRunner() {
     if (c.videoId !== videoId) return
     if (time >= c.end) {
       const next = list[i + 1]
-      if (next) goToClip(next, true)
+      if (next) playClip(next)
       else { set({ playlist: false }); yt.pause() }
     } else if (time < c.start - 1) {
       yt.seek(c.start)
     }
   }, [time, playlist, clipId, videoId, pending, list, set])
+  // Tắt playlist giữa chừng thì huỷ luôn lần dừng đọc nhận xét đang chạy.
+  useEffect(() => { if (!playlist) cancelIntro() }, [playlist])
   return null
 }
 

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { exportVideo, mergeSegs } from '../lib/exportVideo'
 import { canRecord, pickFormat, runRecording, startCapture } from '../lib/recordScreen'
-import { useUi, setCaption, type Corner } from '../store'
+import { useUi, setCaption, introSeconds, type Corner } from '../store'
+import { CaptionOptions } from './CaptionOptions'
 import { fmt } from '../util'
 import type { Clip, GameVideo } from '../types'
 
@@ -47,8 +48,11 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
     ...props.clips.find((c) => c.videoId === g.video.id)!, id: `${g.video.id}-${i}`, start: sg.start, end: sg.end,
     // Điểm khoanh của các tình huống nằm trong đoạn này: dừng hình đúng một lần tại mỗi điểm.
     spots: props.clips.filter((c) => c.videoId === g.video.id && c.spotlight && c.spotlight.t >= sg.start && c.spotlight.t < sg.end).map((c) => c.spotlight!),
+    // Tình huống có lời nhận xét: dừng ở khung đầu để hiện đầy đủ lời nhận xét trước khi chạy.
+    intros: props.clips.filter((c) => c.videoId === g.video.id && c.start >= sg.start - 0.01 && c.start < sg.end)
+      .map((c) => ({ t: c.start, clipId: c.id, sec: introSeconds(c, caption) })).filter((i) => i.sec > 0),
   })))
-  const holdTotal = recClips.reduce((a, c) => a + c.spots.reduce((x, s) => x + s.hold, 0), 0)
+  const holdTotal = recClips.reduce((a, c) => a + c.spots.reduce((x, s) => x + s.hold, 0) + c.intros.reduce((x, i) => x + i.sec, 0), 0)
 
   const startRec = async () => {
     setRecErr('')
@@ -114,6 +118,7 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
                   <div className="muted small-note">Mẹo: bấm “▶ Phát” danh sách ở module Tình huống để xem trước vị trí trên video thật.</div>
                 </div>
               )}
+              <CaptionOptions />
             </div>
             {recErr && <div className="err">{recErr}</div>}
             <button className="btn primary" disabled={!canRecord() || !count} onClick={startRec}>● Bắt đầu quay</button>

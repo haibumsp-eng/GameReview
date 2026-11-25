@@ -4,7 +4,8 @@ import { useData, useUi, matches, toast, useSquadPlayers, playerLabel } from '..
 import { ExportModal } from './ExportModal'
 import { PLAY_TYPES } from '../types'
 import { yt } from '../youtube'
-import { goToClip } from '../nav'
+import { goToClip, playClip } from '../nav'
+import { CaptionOptions } from './CaptionOptions'
 import { fmt } from '../util'
 import { Panel } from './Panel'
 import { confirmDialog, promptDialog } from '../lib/dialog'
@@ -41,7 +42,7 @@ export function ClipList() {
   const startPlaylist = () => {
     if (!list.length) return
     set({ playlist: true })
-    goToClip(list[0], true)
+    playClip(list[0])
   }
   const label = (ids: string[]) =>
     ids.map((id) => playerLabel(id)).filter(Boolean).join(', ')
@@ -61,6 +62,10 @@ export function ClipList() {
     >
       {exporting && <ExportModal clips={list} videos={videos} title={plName ?? (active ? 'Tình huống đã lọc' : 'Tất cả tình huống')} onClose={() => setExporting(false)} />}
       <div className="filters">
+        <details className="cap-details">
+          <summary>⚙ Nhận xét trên video khi phát</summary>
+          <CaptionOptions showToggle />
+        </details>
         {playlists.length > 0 && (
           <div className="row">
             <select
