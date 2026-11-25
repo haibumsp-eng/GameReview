@@ -1,20 +1,25 @@
 import { useData, useUi } from '../store'
 import { lineOf, pct, periodLabel } from '../lib/boxscore'
 import { clockNow, mmss } from '../lib/minutes'
-import { advanced, assists, eff, flow, lineupUnits, periodScores, pointSources, starters, timeouts, zoneStats, ZONE_LABEL, type Zone } from '../lib/analytics'
+import { advanced, assists, turnoverInfo, eff, flow, lineupUnits, periodScores, pointSources, starters, timeouts, zoneStats, ZONE_LABEL, type Zone } from '../lib/analytics'
 import { Court } from './Court'
 import { downloadCsv, type Cell } from '../lib/csv'
+import { SnapshotsModal } from './Snapshots'
+import { ReportModal } from './Report'
+import { useState } from 'react'
 import type { TeamSide } from '../types'
 
 const p1 = (x: number | null) => (x == null ? '–' : `${(x * 100).toFixed(1)}%`)
 const n1 = (x: number | null) => (x == null ? '–' : x.toFixed(1))
 
 /** Trang Phân tích: các chỉ số kiểu FIBA tính từ những pha đã ghi, giúp HLV đọc trận. */
-export function Analysis() {
+export function Analysis({ editable = true, print = false }: { editable?: boolean; print?: boolean }) {
   const gameId = useUi((s) => s.gameId)
   const game = useData((s) => s.games.find((g) => g.id === gameId))
   const squad = useData((s) => s.squads.find((x) => x.id === game?.squadId))
   const { stats, lineups, gamePlayers } = useData()
+  const [snaps, setSnaps] = useState(false)
+  const [report, setReport] = useState(false)
   if (!game) return null
 
   const len = game.periodLen ?? 600
@@ -31,6 +36,8 @@ export function Analysis() {
   const L = { home: adv.home.line, away: adv.away.line }
   const tmo = (s: TeamSide) => stats.filter((e) => e.side === s && e.type === 'TMO').length
   const ast = assists(stats)
+  const tinfo = turnoverInfo(stats)
+  const tovKind = (s: TeamSide, k: 'self' | 'stolen') => stats.filter((e) => e.side === s && e.type === 'TOV' && tinfo.get(e.id)?.kind === k).length
   const madeFG = (s: TeamSide) => stats.filter((e) => e.side === s && (e.type === '2PM' || e.type === '3PM'))
   const assisted = (s: TeamSide) => madeFG(s).filter((e) => ast.has(e.id)).length
   const fd = (s: TeamSide) => stats.filter((e) => e.side !== s && e.drawnBy).length
@@ -125,7 +132,7 @@ export function Analysis() {
 
   return (
     <div className="an stack">
-      <div className="row"><span className="grow" /><button className="btn sm" onClick={exportCsv} title="Tải toàn bộ bảng phân tích dạng CSV (mở bằng Excel / Google Sheets)">⬇ CSV</button></div>
+      {!print && <div className="row"><span className="grow" /><button className="btn sm primary" onClick={() => setReport(true)} title="Báo cáo để coach đọc: box score + phân tích + shot chart. In hoặc lưu PDF">📄 PDF</button>{editable && <button className="btn sm" onClick={() => setSnaps(true)} title="Khôi phục trận về một bản đã lưu (khi bị bấm nhầm, xoá nhầm)">↺ Khôi phục bản cũ</button>}<button className="btn sm" onClick={exportCsv} title="Tải bảng phân tích dạng CSV để nhập liệu (Excel / Google Sheets)">⬇ CSV</button></div>}
       <div className="card stack an-sec">
         <b>Điểm theo hiệp</b>
         <table className="an-q">
@@ -178,6 +185,8 @@ export function Analysis() {
           { label: 'REB (O / D)', h: `${L.home.reb} (${L.home.oreb}/${L.home.dreb})`, a: `${L.away.reb} (${L.away.oreb}/${L.away.dreb})`, hv: L.home.reb, av: L.away.reb },
           { label: 'Team rebounds', h: adv.home.teamReb, a: adv.away.teamReb, hv: null },
           { label: 'Turnovers', h: L.home.tov, a: L.away.tov, lower: true },
+          { label: 'TOV tự mất bóng', h: tovKind('home', 'self'), a: tovKind('away', 'self'), lower: true, note: 'Mất bóng không có pha cướp bóng (STL) của đối thủ ngay gần đó.' },
+          { label: 'TOV bị steal', h: tovKind('home', 'stolen'), a: tovKind('away', 'stolen'), lower: true, note: 'Mất bóng có STL của đối thủ ghi ngay gần đó (hoặc chọn "bị steal" khi ghi). STL chưa nối được tự ghép khi cùng hiệp và lệch giờ đồng hồ không quá 3 giây.' },
           { label: 'Team turnovers', h: adv.home.teamTov, a: adv.away.teamTov, hv: null },
           { label: 'STL', h: L.home.stl, a: L.away.stl },
           { label: 'BLK', h: L.home.blk, a: L.away.blk },
@@ -208,7 +217,7 @@ export function Analysis() {
           const z = zoneStats(stats.filter((e) => e.side === s))
           return (
             <div key={'sc' + s} className="card stack an-sec">
-              <b>Shot chart · {name(s)}</b>
+              <div className="row"><b className="grow">Shot chart · {name(s)}</b><span className="court-legend"><i className="court-dot" style={{ background: s === 'home' ? 'var(--accent)' : '#9aa0ff' }} /> ghi điểm <i className="court-x">✕</i> trượt</span></div>
               {shots.length === 0 ? <div className="muted small-note">Chưa có cú ném nào được chọn vị trí. Chạm lên sân nhỏ ở tab Record trước khi bấm cú ném.</div> : (
                 <div className="an-shot">
                   <Court shots={shots.map((e) => ({ id: e.id, x: e.shotX!, y: e.shotY!, made: e.type.endsWith('M'), color: s === 'home' ? 'var(--accent)' : '#9aa0ff', title: `${byId.get(e.gamePlayerId ?? '') ? '#' + byId.get(e.gamePlayerId ?? '')!.number : ''} ${e.type} ${periodLabel(e.period)}` }))} />
@@ -237,10 +246,12 @@ export function Analysis() {
         })}
       </div>
 
-      <div className="muted small-note">
+      {!print && <div className="muted small-note">
         * Rê chuột lên dấu sao để xem cách tính. "Points from turnovers" và "Second chance" suy ra từ thứ tự các pha: ghi đủ mọi rebound (bóng ra ngoài thì chọn TEAM) và mọi lần mất bóng thì số liệu mới đúng.
         Tên các chỉ số giữ theo thuật ngữ FIBA / quốc tế.
-      </div>
+      </div>}
+      {snaps && <SnapshotsModal onClose={() => setSnaps(false)} />}
+      {report && <ReportModal onClose={() => setReport(false)} />}
     </div>
   )
 }

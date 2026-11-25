@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useData, useUi, selectGame, myOrgRole, toast } from '../store'
 import { isFoul, lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
 import { clockNow, mmss, offCourtStats, onCourt, periodLength, secondsPlayed } from '../lib/minutes'
-import type { GamePlayer, StatType, TeamSide } from '../types'
+import type { GamePlayer, StatEvent, StatType, TeamSide } from '../types'
 import { BoxScoreView } from './BoxScore'
 import { PlayerPanel } from './PlayerPanel'
 import { Gutter, SplitV } from './Gutter'
@@ -15,7 +15,7 @@ import { confirmDialog, promptDialog, dialogOpen } from '../lib/dialog'
 import { VoicePanel, type VoiceStamp } from './VoicePanel'
 import type { VoiceItem } from '../voice/parse'
 import { Analysis } from './Analysis'
-import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, zoneOf } from '../lib/analytics'
+import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, turnoverInfo, zoneOf } from '../lib/analytics'
 import { Court } from './Court'
 import { GameRosterModal } from './GameRoster'
 import { StatEditor } from './StatEditor'
@@ -28,12 +28,12 @@ const TEAM_TYPES: StatType[] = ['OREB', 'DREB', 'TOV', 'PFT']
 // Lỗi có người bị phạm (hỏi tiếp "ai bị phạm lỗi"). Lỗi kỹ thuật thì không.
 const DRAWN_TYPES: StatType[] = ['PF', 'PFS', 'PFU', 'PFD']
 
-const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'miss' }[] = [
+const ACTIONS: { type: StatType; label: string; pts?: string; tone?: 'made' | 'miss'; tov?: 'self' | 'stolen' }[] = [
   { type: '2PM', label: '2PT', pts: '+2', tone: 'made' }, { type: '2PX', label: '2PT', pts: 'miss', tone: 'miss' },
   { type: '3PM', label: '3PT', pts: '+3', tone: 'made' }, { type: '3PX', label: '3PT', pts: 'miss', tone: 'miss' },
   { type: 'FTM', label: 'FT', pts: '+1', tone: 'made' }, { type: 'FTX', label: 'FT', pts: 'miss', tone: 'miss' },
   { type: 'OREB', label: 'OREB' }, { type: 'DREB', label: 'DREB' }, { type: 'AST', label: 'AST' },
-  { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV' }, { type: 'PF', label: 'PF' }, { type: 'PFS', label: 'SF' },
+  { type: 'STL', label: 'STL' }, { type: 'BLK', label: 'BLK' }, { type: 'TOV', label: 'TOV', pts: 'tự mất', tov: 'self' }, { type: 'TOV', label: 'TOV', pts: 'bị steal', tov: 'stolen' }, { type: 'PF', label: 'PF' }, { type: 'PFS', label: 'SF' },
   { type: 'PFT', label: 'TF', pts: 'technical' }, { type: 'PFU', label: 'UF', pts: 'unsport.' }, { type: 'PFD', label: 'DF', pts: 'disqualif.' },
 ]
 
@@ -61,7 +61,7 @@ export function StatsPage() {
   // Vị trí cú ném tiếp theo (chạm lên sân nhỏ). Trong paint thì tự bật cờ "Trong paint".
   const [loc, setLoc] = useState<{ x: number; y: number } | null>(null)
   // Hỏi tiếp sau một pha: ai bị phạm lỗi / ai kiến tạo.
-  const [fu, setFu] = useState<{ kind: 'drawn' | 'assist'; eventId: string; side: TeamSide; exclude?: string } | null>(null)
+  const [fu, setFu] = useState<{ kind: 'drawn' | 'assist' | 'steal'; eventId: string; side: TeamSide; exclude?: string } | null>(null)
   const [sel, setSel] = useState<GamePlayer | null>(null)
   const [, tick] = useState(0)
   const [newGame, setNewGame] = useState<{ title: string; home: string; away: string; date: string; len: number } | null>(null)
@@ -162,7 +162,7 @@ export function StatsPage() {
     toast(`${periodLabel(period)} ${mmss(remaining)} · #${p.number} ${p.name} ${isOn ? 'ra sân' : 'vào sân'}`)
   }
 
-  const record = (type: StatType) => {
+  const record = (type: StatType, tov?: 'self' | 'stolen') => {
     if (!game) return
     if (!sel && !teamSel) return toast('Chưa chọn cầu thủ trên sân (hoặc TEAM)')
     if (teamSel && !TEAM_TYPES.includes(type)) return toast('TEAM chỉ ghi được OREB, DREB, TOV, TF (lỗi kỹ thuật HLV / ghế)')
@@ -174,6 +174,7 @@ export function StatsPage() {
       gameId: game.id, side: sel ? sel.side : teamSel!, gamePlayerId: sel ? sel.id : null, type, period,
       videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, clockS: remaining,
       paint, fastBreak: shot && mods.fb, shotX: shot && loc ? loc.x : null, shotY: shot && loc ? loc.y : null,
+      tovKind: type === 'TOV' ? tov ?? null : null,
     })
     const tags = shot ? [type.startsWith('2') && paint ? 'trong paint' : '', mods.fb ? 'fast break' : '', loc ? 'có vị trí' : ''].filter(Boolean).join(', ') : ''
     if (shot && loc && type.startsWith('2') && isThreeZone(zoneOf(loc.x, loc.y))) toast('Lưu ý: vị trí chọn nằm ngoài vạch 3 điểm mà ghi 2PT')
@@ -182,14 +183,44 @@ export function StatsPage() {
     // Hỏi tiếp: lỗi → ai bị phạm lỗi; ghi điểm → ai kiến tạo.
     if (sel && DRAWN_TYPES.includes(type)) setFu({ kind: 'drawn', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
     else if (sel && (type === '2PM' || type === '3PM')) setFu({ kind: 'assist', eventId: id, side: sel.side, exclude: sel.id })
+    else if (type === 'TOV' && tov === 'stolen') setFu({ kind: 'steal', eventId: id, side: (sel ? sel.side : teamSel!) === 'home' ? 'away' : 'home' })
     else setFu(null)
     flashLast(id)
     setSel(null); setTeamSel(null)
+  }
+  // Sửa loại mất bóng của một pha TOV trong Play-by-play.
+  const setTovKind = (e: StatEvent, kind: 'self' | 'stolen') => {
+    const info = tovInfo.get(e.id)
+    if (kind === 'self') {
+      updateStat(e.id, { tovKind: 'self', linkedId: null })
+      if (info?.stealId) {
+        updateStat(info.stealId, { linkedId: null }) // pha STL giữ nguyên nhưng không còn nối với TOV này
+        toast('Pha STL của đối thủ vẫn được giữ lại. Nếu STL đó cũng nhầm, xoá nó ở Play-by-play.')
+      }
+    } else updateStat(e.id, { tovKind: 'stolen' })
+  }
+  const setStealer = (e: StatEvent, pid: string | null) => {
+    if (!game) return
+    const info = tovInfo.get(e.id)
+    const opp: TeamSide = e.side === 'home' ? 'away' : 'home'
+    if (info?.stealId) {
+      if (pid) updateStat(info.stealId, { gamePlayerId: pid, side: opp, linkedId: e.id })
+      else { removeStat(info.stealId); updateStat(e.id, { linkedId: null }) }
+    } else if (pid) {
+      const sid = addStat({ gameId: game.id, side: opp, gamePlayerId: pid, type: 'STL', period: e.period, videoId: e.videoId, videoT: e.videoT, clockS: e.clockS, linkedId: e.id })
+      updateStat(e.id, { linkedId: sid, tovKind: 'stolen' })
+    }
   }
   const answerFu = (playerId: string | null) => {
     if (!fu || !game) return setFu(null)
     const ev = stats.find((e) => e.id === fu.eventId)
     if (playerId && fu.kind === 'drawn') updateStat(fu.eventId, { drawnBy: playerId })
+    if (playerId && fu.kind === 'steal' && ev) {
+      // Ghi luôn pha STL của đối thủ và nối với pha mất bóng này.
+      const sid = addStat({ gameId: game.id, side: fu.side, gamePlayerId: playerId, type: 'STL', period: ev.period, videoId: ev.videoId, videoT: ev.videoT, clockS: ev.clockS, linkedId: ev.id })
+      updateStat(ev.id, { linkedId: sid, tovKind: 'stolen' })
+      const p = byId.get(playerId); toast(`#${p?.number} ${p?.name} · STL`)
+    }
     if (playerId && fu.kind === 'assist' && ev) {
       addStat({ gameId: game.id, side: fu.side, gamePlayerId: playerId, type: 'AST', period: ev.period, videoId: ev.videoId, videoT: ev.videoT, clockS: ev.clockS, linkedId: ev.id })
       const p = byId.get(playerId); toast(`#${p?.number} ${p?.name} · AST`)
@@ -234,13 +265,14 @@ export function StatsPage() {
     else if (ls) removeStat(ls.id)
     setLastId(null); setEditId(null)
   }
+  const tovInfo = useMemo(() => turnoverInfo(stats), [stats])
   const suspicious = useMemo(() => offCourtStats(stats, lineups), [stats, lineups])
   const lastStat = lastId ? stats.find((e) => e.id === lastId) : undefined
   // Câu hỏi tiếp (ai bị phạm lỗi / ai kiến tạo) hết ý nghĩa nếu pha đó đã bị xoá hoặc đổi sang loại khác.
   useEffect(() => {
     if (!fu) return
     const ev = stats.find((e) => e.id === fu.eventId)
-    const ok = ev && (fu.kind === 'assist' ? ev.type === '2PM' || ev.type === '3PM' : DRAWN_TYPES.includes(ev.type))
+    const ok = ev && (fu.kind === 'assist' ? ev.type === '2PM' || ev.type === '3PM' : fu.kind === 'steal' ? ev.type === 'TOV' : DRAWN_TYPES.includes(ev.type))
     if (!ok) setFu(null)
   }, [stats, fu])
   const rename = async (side: TeamSide) => {
@@ -347,6 +379,7 @@ export function StatsPage() {
               <span className="grow">
                 <span className="muted">{periodLabel(ev.period)}{clock != null ? ` ${mmss(clock)}` : ''}</span> <b>{p ? `#${p.number} ${p.name}` : `TEAM ${ev.side === 'home' ? homeName : awayName}`}</b>{' '}
                 {e ? STAT_LABEL[e.type] : l!.kind === 'in' ? 'SUB IN' : 'SUB OUT'}
+                {e?.type === 'TOV' && tovInfo.get(e.id) && <span className={`sp-flag ${tovInfo.get(e.id)!.kind === 'stolen' ? 'steal' : ''}`}>{tovInfo.get(e.id)!.kind === 'stolen' ? `bị steal${tovInfo.get(e.id)!.stealerId && byId.get(tovInfo.get(e.id)!.stealerId!) ? ` #${byId.get(tovInfo.get(e.id)!.stealerId!)!.number}` : ''}` : 'tự mất'}</span>}
                 {e?.paint && <span className="sp-flag">paint</span>}{e?.fastBreak && <span className="sp-flag">FB</span>}
                 {e && suspicious.has(e.id) && <span className="sp-flag warn" title="Cầu thủ không ở trên sân lúc này">⚠ ngoài sân</span>}
               </span>
@@ -359,6 +392,7 @@ export function StatsPage() {
               {canEdit && e && editId === e.id && (
                 <StatEditor e={e} players={gamePlayers} onCourt={court} homeName={homeName} awayName={awayName}
                   update={(patch) => updateStat(e.id, patch)} say={toast}
+                  tov={e.type === 'TOV' ? { info: tovInfo.get(e.id), setKind: (k) => setTovKind(e, k), setStealer: (pid) => setStealer(e, pid) } : undefined}
                   remove={() => { removeStat(e.id); setEditId(null); if (lastId === e.id) setLastId(null) }} close={() => setEditId(null)} />
               )}
             </li>
@@ -383,7 +417,7 @@ export function StatsPage() {
         const opts = roster(fu.side).filter((x) => court.has(x.id) && x.id !== fu.exclude)
         return (
           <div className={`sp-fu ${fu.side}`}>
-            <span className="sp-fu-q">{fu.kind === 'drawn' ? 'Ai bị phạm lỗi?' : 'Ai kiến tạo?'}</span>
+            <span className="sp-fu-q">{fu.kind === 'drawn' ? 'Ai bị phạm lỗi?' : fu.kind === 'steal' ? 'Ai cướp bóng?' : 'Ai kiến tạo?'}</span>
             {opts.map((x) => <button key={x.id} onClick={() => answerFu(x.id)} title={x.name}>#{x.number}</button>)}
             <button className="skip" onClick={() => answerFu(null)}>{fu.kind === 'drawn' ? 'Bỏ qua' : 'Không có'}</button>
           </div>
@@ -402,7 +436,7 @@ export function StatsPage() {
       </div>
           <div className="sp-actions">
             {ACTIONS.map((a) => (
-              <button key={a.type} className={`sp-act ${a.tone ?? ''}`} disabled={!canEdit} onClick={() => record(a.type)}>
+              <button key={a.type + (a.tov ?? "")} className={`sp-act ${a.tone ?? ''}`} disabled={!canEdit} onClick={() => record(a.type, a.tov)}>
                 <span>{a.label}</span>{a.pts && <small>{a.pts}</small>}
               </button>
             ))}
@@ -483,7 +517,7 @@ export function StatsPage() {
       ) : tab === 'box' ? (
         <div className="sp-box"><BoxScoreView editable={canEdit} onSeek={VIDEO_ENABLED ? (vid, t) => { setTab('record'); if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(vid, t, true), 50) } : undefined} /></div>
       ) : tab === 'analysis' ? (
-        <div className="sp-box"><Analysis /></div>
+        <div className="sp-box"><Analysis editable={canEdit} /></div>
       ) : (
         <div className="sp-work">
           <div className="col center sp-main-col">

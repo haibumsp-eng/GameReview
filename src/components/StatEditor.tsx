@@ -4,7 +4,7 @@ import { STAT_LABEL, periodLabel } from '../lib/boxscore'
 import { mmss } from '../lib/minutes'
 import type { StatPatch } from '../store'
 import { Court } from './Court'
-import { zoneOf, isThreeZone } from '../lib/analytics'
+import { zoneOf, isThreeZone, type TovInfo } from '../lib/analytics'
 
 const SHOTS: StatType[] = ['2PM', '2PX', '3PM', '3PX']
 const TEAM_OK: StatType[] = ['OREB', 'DREB', 'TOV', 'PFT']
@@ -31,6 +31,8 @@ export function StatEditor(props: {
   remove: () => void
   close: () => void
   say: (msg: string) => void
+  /** Chỉ có với pha TOV: loại mất bóng và người cướp bóng. */
+  tov?: { info: TovInfo | undefined; setKind: (k: 'self' | 'stolen') => void; setStealer: (pid: string | null) => void }
 }) {
   const { e, players, onCourt } = props
   const [clock, setClock] = useState(e.clockS != null ? mmss(e.clockS) : '')
@@ -94,6 +96,21 @@ export function StatEditor(props: {
         <span className="se-lbl">Cầu thủ</span>
         <div className="se-players">{roster('home')}{roster('away')}</div>
       </div>
+      {props.tov && (
+        <div className="se-row">
+          <span className="se-lbl">Loại mất bóng</span>
+          <div className="se-chips">
+            <button className={`se-chip type ${props.tov.info?.kind !== 'stolen' ? 'on' : ''}`} onClick={() => props.tov!.setKind('self')}>Tự mất bóng</button>
+            <button className={`se-chip type ${props.tov.info?.kind === 'stolen' ? 'on' : ''}`} onClick={() => props.tov!.setKind('stolen')}>Bị steal</button>
+          </div>
+          {props.tov.info?.kind === 'stolen' && (
+            <div className="se-chips">
+              <span className="se-lbl">Ai cướp bóng</span>
+              {oppPlayers.map((x) => <button key={x.id} className={`se-chip ${props.tov!.info?.stealerId === x.id ? 'on' : ''} ${onCourt.has(x.id) ? '' : 'bench'}`} title={x.name} onClick={() => props.tov!.setStealer(props.tov!.info?.stealerId === x.id ? null : x.id)}>{x.number}</button>)}
+            </div>
+          )}
+        </div>
+      )}
       {shot && (
         <div className="se-row">
           <span className="se-lbl">Cú ném</span>

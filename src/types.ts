@@ -101,8 +101,10 @@ export interface StatEvent {
   fastBreak?: boolean
   /** Cầu thủ (đối phương) bị phạm lỗi. */
   drawnBy?: string | null
-  /** AST: cú ghi điểm được kiến tạo. */
+  /** AST: cú ghi điểm được kiến tạo. TOV bị steal: pha STL của đối thủ. STL: pha TOV tương ứng. */
   linkedId?: string | null
+  /** TOV: 'self' = tự mất bóng, 'stolen' = bị cướp bóng; trống = chưa rõ (tự ghép với STL gần đó). */
+  tovKind?: 'self' | 'stolen' | null
   /** Vị trí ném trên nửa sân, 0..1 (x: ngang sân, y: từ đường biên cuối). */
   shotX?: number | null
   shotY?: number | null

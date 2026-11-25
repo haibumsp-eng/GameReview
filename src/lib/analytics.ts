@@ -233,3 +233,40 @@ export function lineupUnits(side: TeamSide, lineups: LineupEvent[], stats: StatE
   close(elapsed(nowPeriod, Math.min(nowRemaining, periodLength(nowPeriod, len)), len))
   return [...units.values()].filter((u) => u.secs > 0 || u.pf || u.pa).sort((a, b) => b.secs - a.secs)
 }
+
+/**
+ * Phân loại mất bóng: "bị steal" (có pha STL của đối thủ ngay gần đó) hay "tự mất bóng".
+ * Ưu tiên liên kết đã lưu; pha chưa phân loại thì tự ghép với STL chưa được ghép của đối thủ nằm trong
+ * cùng hiệp và lệch giờ đồng hồ ≤ 3 giây (thiếu giờ thì lệch lúc bấm ≤ 8 giây). Mỗi STL chỉ ghép với một TOV.
+ */
+export type TovInfo = { kind: 'self' | 'stolen'; stealId: string | null; stealerId: string | null }
+export function turnoverInfo(stats: StatEvent[]): Map<string, TovInfo> {
+  const res = new Map<string, TovInfo>()
+  const stls = stats.filter((e) => e.type === 'STL')
+  const byId = new Map(stats.map((e) => [e.id, e]))
+  const claimed = new Set<string>()
+  const tovs = stats.filter((e) => e.type === 'TOV')
+  // 1. Liên kết đã lưu (từ TOV hoặc từ STL).
+  for (const t of tovs) {
+    if (t.tovKind === 'self') { res.set(t.id, { kind: 'self', stealId: null, stealerId: null }); continue }
+    const linked = (t.linkedId && byId.get(t.linkedId)?.type === 'STL' ? byId.get(t.linkedId) : undefined) ?? stls.find((x) => x.linkedId === t.id)
+    if (linked) { claimed.add(linked.id); res.set(t.id, { kind: 'stolen', stealId: linked.id, stealerId: linked.gamePlayerId }) }
+    else if (t.tovKind === 'stolen') res.set(t.id, { kind: 'stolen', stealId: null, stealerId: null })
+  }
+  // 2. Chưa phân loại: ghép theo độ gần, cặp gần nhất trước.
+  // Hai pha có giờ đồng hồ: cùng hiệp và lệch ≤ 3 giây. Thiếu giờ: dùng thời điểm bấm (≤ 8 giây).
+  const hasClock = (a: StatEvent, b: StatEvent) => a.clockS != null && b.clockS != null
+  const near = (a: StatEvent, b: StatEvent) => (hasClock(a, b) ? a.period === b.period && Math.abs(a.clockS! - b.clockS!) <= 3 : Math.abs(a.createdAt - b.createdAt) <= 8000)
+  const dist = (a: StatEvent, b: StatEvent) => (hasClock(a, b) ? Math.abs(a.clockS! - b.clockS!) * 1000 : Math.abs(a.createdAt - b.createdAt))
+  const pairs: { t: StatEvent; s: StatEvent; d: number }[] = []
+  for (const t of tovs) {
+    if (res.has(t.id)) continue
+    for (const s of stls) if (!claimed.has(s.id) && s.side !== t.side && !s.linkedId && near(t, s)) pairs.push({ t, s, d: dist(t, s) })
+  }
+  for (const { t, s } of pairs.sort((a, b) => a.d - b.d)) {
+    if (res.has(t.id) || claimed.has(s.id)) continue
+    claimed.add(s.id); res.set(t.id, { kind: 'stolen', stealId: s.id, stealerId: s.gamePlayerId })
+  }
+  for (const t of tovs) if (!res.has(t.id)) res.set(t.id, { kind: 'self', stealId: null, stealerId: null })
+  return res
+}

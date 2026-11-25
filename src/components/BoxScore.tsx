@@ -4,8 +4,10 @@ import { lineOf, pct, periodLabel, STAT_LABEL, type Line } from '../lib/boxscore
 import type { TeamSide } from '../types'
 import { clockNow, mmss, plusMinus, secondsPlayed } from '../lib/minutes'
 import { confirmDialog } from '../lib/dialog'
-import { eff, foulStatus, starters } from '../lib/analytics'
+import { eff, foulStatus, starters, turnoverInfo } from '../lib/analytics'
 import { Scoresheet } from './Scoresheet'
+import { SnapshotsModal } from './Snapshots'
+import { ReportModal } from './Report'
 import { downloadCsv, type Cell } from '../lib/csv'
 
 const COLS: { k: string; label: string; v: (l: Line) => string | number }[] = [
@@ -33,6 +35,8 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
   const [open, setOpen] = useState<string | null>(null)
   const [period, setPeriod] = useState(0) // 0 = cả trận
   const [sheet, setSheet] = useState(false)
+  const [snaps, setSnaps] = useState(false)
+  const [report, setReport] = useState(false)
   if (!game) return null
   const ev = period ? stats.filter((e) => e.period === period) : stats
   const periods = [...new Set(stats.map((e) => e.period))].sort((a, b) => a - b)
@@ -71,21 +75,31 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
 
   // Xuất CSV: 2 đội trong một file, mỗi cột một số (ném trúng / ném / %) để dùng được trong Excel, Google Sheets.
   const exportCsv = () => {
+    const cols = ['Đội', 'No', 'Cầu thủ', 'Đá chính', 'MIN (phút)', 'PTS', 'FGM', 'FGA', 'FG%', '2PM', '2PA', '2P%', '3PM', '3PA', '3P%', 'FTM', 'FTA', 'FT%', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'TOV tự mất', 'TOV bị steal', 'PF', 'FD', 'EFF', 'Plus/Minus']
+    const mk = (o: Record<string, Cell>): Cell[] => cols.map((c) => o[c] ?? '')
     const pctN = (m: number, a: number) => (a ? Math.round((m / a) * 1000) / 10 : '')
-    const head: Cell[] = ['Đội', 'No', 'Cầu thủ', 'Đá chính', 'MIN (phút)', 'PTS', 'FGM', 'FGA', 'FG%', '2PM', '2PA', '2P%', '3PM', '3PA', '3P%', 'FTM', 'FTA', 'FT%', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'PF', 'FD', 'EFF', 'Plus/Minus']
-    const line = (l: ReturnType<typeof lineOf>): Cell[] => [l.pts, l.fgm, l.fga, pctN(l.fgm, l.fga), l.p2m, l.p2a, pctN(l.p2m, l.p2a), l.p3m, l.p3a, pctN(l.p3m, l.p3a), l.ftm, l.fta, pctN(l.ftm, l.fta), l.oreb, l.dreb, l.reb, l.ast, l.stl, l.blk, l.tov, l.pf]
-    const rows: Cell[][] = [[`Box score: ${game.title}`, game.date || '', period ? periodLabel(period) : 'Full game'], [`${name('home')} ${pts('home')} - ${pts('away')} ${name('away')}`], [], head]
+    const tinfo = turnoverInfo(stats)
+    const stat = (l: ReturnType<typeof lineOf>, evs: typeof ev): Record<string, Cell> => ({
+      PTS: l.pts, FGM: l.fgm, FGA: l.fga, 'FG%': pctN(l.fgm, l.fga), '2PM': l.p2m, '2PA': l.p2a, '2P%': pctN(l.p2m, l.p2a), '3PM': l.p3m, '3PA': l.p3a, '3P%': pctN(l.p3m, l.p3a),
+      FTM: l.ftm, FTA: l.fta, 'FT%': pctN(l.ftm, l.fta), OREB: l.oreb, DREB: l.dreb, REB: l.reb, AST: l.ast, STL: l.stl, BLK: l.blk, TOV: l.tov,
+      'TOV tự mất': evs.filter((e) => e.type === 'TOV' && tinfo.get(e.id)?.kind === 'self').length,
+      'TOV bị steal': evs.filter((e) => e.type === 'TOV' && tinfo.get(e.id)?.kind === 'stolen').length, PF: l.pf,
+    })
+    const min = (sec: number) => Math.round((sec / 60) * 100) / 100
+    const rows: Cell[][] = [[`Box score: ${game.title}`, game.date || '', period ? periodLabel(period) : 'Full game'], [`${name('home')} ${pts('home')} - ${pts('away')} ${name('away')}`], [], cols]
     for (const side of ['home', 'away'] as TeamSide[]) {
       const ps = gamePlayers.filter((p) => p.side === side).sort((a, b) => a.number - b.number)
       for (const p of ps) {
-        const l = lineOf(ev.filter((e) => e.gamePlayerId === p.id))
-        rows.push([name(side), p.number, p.name, start.has(p.id) ? 'x' : '', secs.has(p.id) ? Math.round((secs.get(p.id)! / 60) * 100) / 100 : 'DNP', ...line(l), ev.filter((e) => e.drawnBy === p.id).length, eff(l), pm.get(p.id) ?? 0])
+        const mine = ev.filter((e) => e.gamePlayerId === p.id)
+        const l = lineOf(mine)
+        rows.push(mk({ 'Đội': name(side), No: p.number, 'Cầu thủ': p.name, 'Đá chính': start.has(p.id) ? 'x' : '', 'MIN (phút)': secs.has(p.id) ? min(secs.get(p.id)!) : 'DNP', ...stat(l, mine), FD: ev.filter((e) => e.drawnBy === p.id).length, EFF: eff(l), 'Plus/Minus': pm.get(p.id) ?? 0 }))
       }
-      const tl = lineOf(ev.filter((e) => e.side === side && !e.gamePlayerId))
-      if (tl.reb || tl.tov) rows.push([name(side), '', 'Team', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', tl.oreb, tl.dreb, tl.reb, '', '', '', tl.tov, '', '', '', ''])
-      const t = lineOf(ev.filter((e) => e.side === side))
-      const other = lineOf(ev.filter((e) => e.side !== side))
-      rows.push([name(side), '', 'Totals', '', Math.round((ps.reduce((a, p) => a + (secs.get(p.id) ?? 0), 0) / 60) * 100) / 100, ...line(t), ev.filter((e) => e.side !== side && e.drawnBy).length, eff(t), t.pts - other.pts], [])
+      const teamEv = ev.filter((e) => e.side === side && !e.gamePlayerId)
+      const tl = lineOf(teamEv)
+      if (tl.reb || tl.tov) rows.push(mk({ 'Đội': name(side), 'Cầu thủ': 'Team', OREB: tl.oreb, DREB: tl.dreb, REB: tl.reb, TOV: tl.tov, 'TOV tự mất': stat(tl, teamEv)['TOV tự mất'], 'TOV bị steal': stat(tl, teamEv)['TOV bị steal'] }))
+      const sideEv = ev.filter((e) => e.side === side)
+      const t = lineOf(sideEv)
+      rows.push(mk({ 'Đội': name(side), 'Cầu thủ': 'Totals', 'MIN (phút)': min(ps.reduce((a, p) => a + (secs.get(p.id) ?? 0), 0)), ...stat(t, sideEv), FD: ev.filter((e) => e.side !== side && e.drawnBy).length, EFF: eff(t), 'Plus/Minus': t.pts - lineOf(ev.filter((e) => e.side !== side)).pts }), [])
     }
     downloadCsv(`${game.title} - boxscore${period ? ' ' + periodLabel(period) : ''}`, rows)
   }
@@ -165,7 +179,9 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
     <div className="bs-view stack">
       <div className="row">
         <div className="bs-score grow">{name('home')} <b>{pts('home')}</b> – <b>{pts('away')}</b> {name('away')}</div>
-        <button className="btn sm" onClick={exportCsv} title="Tải box score 2 đội dạng CSV (mở bằng Excel / Google Sheets)">⬇ CSV</button>
+        <button className="btn sm primary" onClick={() => setReport(true)} title="Báo cáo để coach đọc: box score + phân tích + shot chart. In hoặc lưu PDF">📄 PDF</button>
+        <button className="btn sm" onClick={exportCsv} title="Tải box score 2 đội dạng CSV để nhập liệu (Excel / Google Sheets)">⬇ CSV</button>
+        {props.editable && <button className="btn sm" onClick={() => setSnaps(true)} title="Khôi phục trận về một bản đã lưu (khi bị bấm nhầm, xoá nhầm)">↺ Khôi phục bản cũ</button>}
         <button className="btn sm" onClick={() => setSheet(true)}>🖨 Biên bản</button>
         <select style={{ width: 140 }} value={period} onChange={(e) => setPeriod(+e.target.value)}>
           <option value={0}>Full game</option>
@@ -175,6 +191,8 @@ export function BoxScoreView(props: { onSeek?: (videoId: string, t: number) => v
       {table('home')}
       {table('away')}
       {sheet && <Scoresheet onClose={() => setSheet(false)} />}
+      {snaps && <SnapshotsModal onClose={() => setSnaps(false)} />}
+      {report && <ReportModal onClose={() => setReport(false)} />}
     </div>
   )
 }

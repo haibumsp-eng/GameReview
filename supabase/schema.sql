@@ -849,4 +849,112 @@ begin
 end $$;
 grant execute on function remote_state(text), remote_add_event(text, uuid, text, text, boolean, boolean) to anon, authenticated;
 
+-- ===== TO: tự mất bóng / bị steal =====
+-- tov_kind: 'self' = tự mất bóng, 'stolen' = bị cướp bóng (linked_id trỏ tới pha STL của đối thủ nếu biết ai cướp). Trống = chưa rõ (app tự ghép với STL gần đó).
+alter table stat_events add column if not exists tov_kind text;
+alter table stat_events drop constraint if exists stat_events_tov_kind_check;
+alter table stat_events add constraint stat_events_tov_kind_check check (tov_kind in ('self', 'stolen'));
+
+-- ===== Bản lưu của trận (khôi phục khi bị bấm nhầm / xoá nhầm) =====
+-- Một bản lưu = toàn bộ cầu thủ, pha thống kê và thay người của trận tại một thời điểm. Tự lưu trước khi có thay đổi,
+-- cách nhau tối thiểu 5 phút (giữ 60 bản tự động gần nhất), hoặc lưu tay bất kỳ lúc nào.
+create table if not exists game_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games on delete cascade,
+  kind text not null default 'auto' check (kind in ('auto', 'manual', 'restore')),
+  label text not null default '',
+  summary jsonb not null default '{}',
+  data jsonb not null,
+  author uuid default auth.uid() references auth.users on delete set null,
+  created_at timestamptz default now()
+);
+create index if not exists game_snapshots_game_idx on game_snapshots (game_id, created_at desc);
+alter table game_snapshots enable row level security;
+drop policy if exists game_snapshots_read on game_snapshots;
+create policy game_snapshots_read on game_snapshots for select to authenticated using (is_member(squad_of_game(game_id)));
+
+create or replace function game_snapshot_create(p_game uuid, p_kind text, p_label text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare sid uuid; np int; ns int; nl int; sh int; sa int;
+begin
+  if not exists (select 1 from games where id = p_game) then return null; end if;
+  select count(*) into np from game_players where game_id = p_game;
+  select count(*) into ns from stat_events where game_id = p_game;
+  select count(*) into nl from lineup_events where game_id = p_game;
+  if p_kind = 'auto' and np + ns + nl = 0 then return null; end if;
+  select coalesce(sum(case type when '2PM' then 2 when '3PM' then 3 when 'FTM' then 1 else 0 end) filter (where side = 'home'), 0),
+         coalesce(sum(case type when '2PM' then 2 when '3PM' then 3 when 'FTM' then 1 else 0 end) filter (where side = 'away'), 0)
+    into sh, sa from stat_events where game_id = p_game;
+  insert into game_snapshots (game_id, kind, label, summary, data)
+  values (p_game, p_kind, coalesce(p_label, ''),
+    jsonb_build_object('home', sh, 'away', sa, 'players', np, 'stats', ns, 'lineups', nl),
+    jsonb_build_object(
+      'game', (select to_jsonb(g) from games g where g.id = p_game),
+      'players', coalesce((select jsonb_agg(to_jsonb(x)) from game_players x where x.game_id = p_game), '[]'::jsonb),
+      'stats', coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at) from stat_events x where x.game_id = p_game), '[]'::jsonb),
+      'lineups', coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at) from lineup_events x where x.game_id = p_game), '[]'::jsonb)))
+  returning id into sid;
+  delete from game_snapshots where game_id = p_game and kind = 'auto'
+    and id not in (select id from game_snapshots where game_id = p_game and kind = 'auto' order by created_at desc limit 60);
+  return sid;
+end $$;
+revoke execute on function game_snapshot_create(uuid, text, text) from public, anon, authenticated;
+
+-- Tự lưu trước khi có thay đổi nếu bản lưu gần nhất đã quá 5 phút.
+create or replace function game_snapshot_auto() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare gid uuid;
+begin
+  gid := case when tg_op = 'DELETE' then old.game_id else new.game_id end;
+  if not exists (select 1 from game_snapshots where game_id = gid and created_at > now() - interval '5 minutes') then
+    perform game_snapshot_create(gid, 'auto', 'Tự động');
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end $$;
+revoke execute on function game_snapshot_auto() from public, anon, authenticated;
+drop trigger if exists stat_events_snap on stat_events;
+drop trigger if exists lineup_events_snap on lineup_events;
+drop trigger if exists game_players_snap on game_players;
+create trigger stat_events_snap before insert or update or delete on stat_events for each row execute function game_snapshot_auto();
+create trigger lineup_events_snap before insert or update or delete on lineup_events for each row execute function game_snapshot_auto();
+create trigger game_players_snap before insert or update or delete on game_players for each row execute function game_snapshot_auto();
+
+-- Lưu tay một bản.
+create or replace function game_snapshot_save(p_game uuid, p_label text) returns text
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_editor(squad_of_game(p_game)) then return 'Bạn không có quyền lưu bản cho trận này.'; end if;
+  perform game_snapshot_create(p_game, 'manual', nullif(trim(p_label), ''));
+  return 'ok';
+end $$;
+
+-- Khôi phục trận về một bản lưu. Trạng thái hiện tại được lưu lại thành một bản "Trước khi khôi phục" nên có thể hoàn lại.
+create or replace function game_snapshot_restore(p_snapshot uuid) returns text
+language plpgsql security definer set search_path = public as $$
+declare s game_snapshots;
+begin
+  select * into s from game_snapshots where id = p_snapshot;
+  if s.id is null then return 'Không tìm thấy bản lưu này.'; end if;
+  if not is_editor(squad_of_game(s.game_id)) then return 'Bạn không có quyền khôi phục trận này.'; end if;
+  perform game_snapshot_create(s.game_id, 'restore', 'Trước khi khôi phục');
+  delete from stat_events where game_id = s.game_id;
+  delete from lineup_events where game_id = s.game_id;
+  delete from game_players where game_id = s.game_id;
+  insert into game_players
+    select * from jsonb_populate_recordset(null::game_players, coalesce((
+      select jsonb_agg(case when exists (select 1 from players p where p.id = nullif(e->>'player_id', '')::uuid) then e else e - 'player_id' end)
+      from jsonb_array_elements(s.data->'players') e), '[]'::jsonb));
+  insert into stat_events
+    select * from jsonb_populate_recordset(null::stat_events, coalesce((
+      select jsonb_agg((case when exists (select 1 from game_videos v where v.id = nullif(e->>'video_id', '')::uuid) then e else e - 'video_id' end) - 'author')
+      from jsonb_array_elements(s.data->'stats') e), '[]'::jsonb));
+  insert into lineup_events
+    select * from jsonb_populate_recordset(null::lineup_events, coalesce((
+      select jsonb_agg(e - 'author') from jsonb_array_elements(s.data->'lineups') e), '[]'::jsonb));
+  update games set home_name = s.data->'game'->>'home_name', away_name = s.data->'game'->>'away_name',
+    period_len = coalesce((s.data->'game'->>'period_len')::int, period_len) where id = s.game_id;
+  return 'ok';
+end $$;
+grant execute on function game_snapshot_save(uuid, text), game_snapshot_restore(uuid) to authenticated;
+
 notify pgrst, 'reload schema';

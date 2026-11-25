@@ -931,6 +931,7 @@ html.obs, html.obs body, html.obs #root { background: transparent !important; ov
 @media print {
   body * { visibility: hidden; }
   .ss-print, .ss-print * { visibility: visible; }
+  .report-print, .report-print * { visibility: visible; }
   .ss-back { position: static; padding: 0; background: none; overflow: visible; }
   .ss-print { position: absolute; left: 0; top: 0; max-width: none; width: 100%; border-radius: 0; padding: 0; }
   .ss-tools { display: none; }
@@ -1006,3 +1007,56 @@ html.obs, html.obs body, html.obs #root { background: transparent !important; ov
 details.cap-details { border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--panel-2); }
 details.cap-details > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-2); list-style: none; }
 details.cap-details[open] > summary { margin-bottom: 8px; }
+.sp-flag.steal { color: #ff8a70; background: #ff6b4a22; }
+.court-legend { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); font-weight: 600; }
+.court-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 1px solid #000; }
+.court-x { color: #ff4d4d; font-style: normal; font-weight: 900; margin-left: 4px; }
+
+/* Khôi phục bản cũ */
+.snap-modal { width: 600px; }
+.snap-now { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 8px 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; }
+.snap-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.snap-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); }
+.tag.snap-manual { color: var(--accent); } .tag.snap-restore { color: #f2c037; }
+
+/* ---------- Báo cáo trận đấu (in / lưu PDF, nền sáng) ---------- */
+.report-print {
+  max-width: 1000px; margin: 0 auto; background: #fff; color: #111; padding: 18px; border-radius: 6px; font: 400 11px/1.35 var(--font-ui); page: report;
+  --bg: #fff; --panel: #fff; --panel-2: #f6f6f6; --panel-3: #eeeeee; --line: #d9d9d9; --line-2: #cfcfcf; --text: #111; --text-2: #333; --muted: #666; --accent: #4f6b00; --accent-line: #b6c97a; --accent-ink: #fff;
+}
+.report-print .card { background: #fff; border: 1px solid #d9d9d9; box-shadow: none; padding: 8px 10px; border-radius: 6px; break-inside: avoid; }
+.report-print .an { padding: 0; gap: 8px; }
+.report-print .an-sec b { color: #111; font-size: 11px; }
+.report-print .an-grid, .report-print .an-grid.two { grid-template-columns: 1fr 1fr; gap: 8px; }
+.report-print .an-shots { grid-template-columns: 1fr 1fr; gap: 8px; }
+.report-print .an-shot { grid-template-columns: 1fr; }
+.report-print .an-table td, .report-print .an-table th, .report-print .an-q td, .report-print .an-q th, .report-print .an-units td, .report-print .an-units th { border-bottom: 1px solid #e3e3e3; padding: 3px 6px; font-size: 10.5px; color: #111; }
+.report-print .an-v.win.home { color: #4f6b00; font-weight: 800; } .report-print .an-v.win.away { color: #4a52c9; font-weight: 800; }
+.report-print .an-big { color: #4f6b00; font-size: 20px; }
+.report-print .an-five span { background: #eee; }
+.report-print .st-dot.home { background: #8aa800; } .report-print .st-dot.away { background: #6b73e6; }
+.report-print .court { background: #fbfaf5; max-width: 100%; }
+.report-print .court-line { stroke: #9a9a9a; } .report-print .court-paint { fill: #f0efe6; }
+.report-print .bs-plus { color: #3f7d00; } .report-print .bs-minus { color: #c0392b; }
+.rp-title { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #111; padding-bottom: 6px; margin-bottom: 8px; font-size: 13px; }
+.rp-final { font-size: 20px; }
+.rp-h { margin: 12px 0 6px; font: 800 13px var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+.report-print table { border-collapse: collapse; }
+.rp-q { width: 100%; margin-bottom: 4px; } .rp-q th, .rp-q td { border: 1px solid #bbb; padding: 3px 6px; text-align: center; } .rp-q .l, .rp-box .l { text-align: left; }
+.rp-team { margin-bottom: 10px; break-inside: avoid; }
+.rp-team-head { display: flex; justify-content: space-between; font: 800 13px var(--font-display); text-transform: uppercase; border-bottom: 1.5px solid #111; margin-bottom: 3px; }
+.rp-box { width: 100%; font-size: 10px; }
+.rp-box th, .rp-box td { border-bottom: 1px solid #e3e3e3; padding: 2px 3px; text-align: center; }
+.rp-box th { font-size: 9px; color: #555; border-bottom: 1px solid #999; }
+.rp-box td.b { font-weight: 800; }
+.rp-box tr.dnp td { color: #999; } .rp-box tr.team td { color: #666; font-style: italic; } .rp-box tr.tot td { border-top: 1.5px solid #111; font-weight: 800; }
+.rp-shoot { margin-top: 2px; font-size: 10px; color: #444; }
+.rp-note { font-size: 9px; color: #666; margin-top: 4px; }
+@media print {
+  body.print-report > #root { display: none !important; }
+  body.print-report .ss-back { position: static; padding: 0; background: none; overflow: visible; }
+  .report-print, .report-print * { visibility: visible; }
+  .report-print { position: static; max-width: none; width: 100%; border-radius: 0; padding: 0; page: report; }
+  .rp-break { break-before: page; }
+  @page report { size: A4 portrait; margin: 10mm; }
+}

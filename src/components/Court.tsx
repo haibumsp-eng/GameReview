@@ -25,7 +25,7 @@ export function Court(props: { shots?: CourtShot[]; pick?: { x: number; y: numbe
       <circle cx={rim.x} cy={rim.y} r={2.4} className="court-line" />
       {props.shots?.map((s) => s.made
         ? <circle key={s.id} cx={s.x * W} cy={s.y * H} r={3.4} fill={s.color ?? 'var(--accent)'} stroke="#000" strokeWidth={0.6}><title>{s.title}</title></circle>
-        : <g key={s.id} stroke={s.color ?? 'var(--accent)'} strokeWidth={1.4}><title>{s.title}</title>
+        : <g key={s.id} stroke="#ff4d4d" strokeWidth={1.8} strokeLinecap="round"><title>{s.title}</title>
             <line x1={s.x * W - 3} y1={s.y * H - 3} x2={s.x * W + 3} y2={s.y * H + 3} /><line x1={s.x * W + 3} y1={s.y * H - 3} x2={s.x * W - 3} y2={s.y * H + 3} /></g>)}
       {props.pick && <circle cx={props.pick.x * W} cy={props.pick.y * H} r={4.5} className="court-pick" />}
     </svg>
