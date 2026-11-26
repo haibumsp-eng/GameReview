@@ -23,6 +23,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
   const [sel, setSel] = useState('')
   const [modal, setModal] = useState<'' | 'import' | 'match' | 'new'>('')
   const [err, setErr] = useState('')
+  const [tab, setTab] = useState<'teams' | 'games'>('games')
 
   const jet = squads.filter((s) => s.orgId === orgId && s.league)
   const seasons = [...new Set(jet.filter((s) => s.league === league).map((s) => s.season || ''))].sort().reverse()
@@ -30,6 +31,11 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
   const team = jet.find((s) => s.id === sel)
   const count = (id: string) => players.filter((p) => p.squadId === id).length
   const reload = () => useData.getState().loadBase()
+  // Trận có chữ "JET" trong tên (PRO.JET, JR.JET, WJET, JET5…) hoặc thuộc đội JET, trong trung tâm này.
+  const orgSquads = new Map(squads.filter((s) => s.orgId === orgId).map((s) => [s.id, s]))
+  const jetGames = games.filter((g) => { const sq = orgSquads.get(g.squadId); return !!sq && (/jet/i.test(g.title) || !!sq.league) })
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.title.localeCompare(b.title, 'vi'))
+  const openGame = (g: (typeof games)[number]) => { set({ squadId: g.squadId }); selectGame(g.id); onOpenStats() }
 
   return (
     <div className="jt">
@@ -46,7 +52,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
         )}
         <ul className="list">
           {teams.map((t) => (
-            <li key={t.id} className={t.id === sel ? 'item active' : 'item'} onClick={() => setSel(t.id)}>
+            <li key={t.id} className={t.id === sel ? 'item active' : 'item'} onClick={() => { setSel(t.id); setTab('teams') }}>
               <span className="grow"><b>{t.name}</b><br /><span className="muted small-note">{t.season ? `${t.season} · ` : ''}{t.coach ? `HLV ${t.coach} · ` : ''}{count(t.id)} VĐV</span></span>
             </li>
           ))}
@@ -63,11 +69,28 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
 
       <div className="jt-main">
         {err && <div className="card err" onClick={() => setErr('')}>{err}</div>}
-        {team ? <TeamEditor key={team.id} id={team.id} canEdit={canEdit} onError={setErr} onDeleted={() => { setSel(''); void reload() }} /> : <div className="card muted">Chọn một đội ở bên trái để xem và sửa danh sách VĐV.</div>}
+        <div className="seg-toggle">
+          <button className={tab === 'games' ? 'on' : ''} onClick={() => setTab('games')}>Trận JET ({jetGames.length})</button>
+          <button className={tab === 'teams' ? 'on' : ''} onClick={() => setTab('teams')}>Đội &amp; VĐV</button>
+        </div>
+        {tab === 'games' ? (
+          <div className="card stack">
+            <div className="muted small-note">Các trận có chữ “JET” trong tên (PRO.JET, JR.JET, WJET…) hoặc của đội JET. Bấm một trận để mở Live Stats và bấm stats.</div>
+            <ul className="list">
+              {jetGames.map((g) => (
+                <li key={g.id} className="item" onClick={() => openGame(g)}>
+                  <span className="grow"><b>{g.title}</b><br /><span className="muted small-note">{g.date || 'chưa có ngày'} · {orgSquads.get(g.squadId)?.name}</span></span>
+                  <button className="btn sm primary">Bấm stats</button>
+                </li>
+              ))}
+              {jetGames.length === 0 && <li className="empty">Chưa có trận nào có chữ “JET” trong tên. Tạo trận mới bằng “Tạo trận JET”.</li>}
+            </ul>
+          </div>
+        ) : team ? <TeamEditor key={team.id} id={team.id} canEdit={canEdit} onError={setErr} onDeleted={() => { setSel(''); void reload() }} /> : <div className="card muted">Chọn một đội ở bên trái để xem và sửa danh sách VĐV.</div>}
       </div>
 
       {modal === 'import' && <ImportModal orgId={orgId} defaultLeague={league} onClose={() => setModal('')} onDone={(l) => { setLeague(l); setSeason(''); setModal('') }} />}
-      {modal === 'new' && <NewTeamModal orgId={orgId} league={league} onClose={() => setModal('')} onCreated={(id) => { setSel(id); setModal('') }} onError={setErr} />}
+      {modal === 'new' && <NewTeamModal orgId={orgId} league={league} onClose={() => setModal('')} onCreated={(id) => { setSel(id); setTab('teams'); setModal('') }} onError={setErr} />}
       {modal === 'match' && <MatchModal league={league} onClose={() => setModal('')} onCreated={() => { setModal(''); set({}); onOpenStats() }} />}
       <span hidden>{games.length}</span>
     </div>

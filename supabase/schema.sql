@@ -1031,4 +1031,7 @@ alter table players alter column number drop not null;
 update players set number = null where squad_id in (select id from squads where league is not null);
 alter table games add column if not exists away_squad_id uuid references squads on delete set null;
 
+-- Giải JET chỉ dành cho Junsport: tự bật cho trung tâm có tên Junsport.
+update orgs set jet_enabled = true where name ilike '%junsport%' and not jet_enabled;
+
 notify pgrst, 'reload schema';
