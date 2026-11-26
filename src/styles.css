@@ -1185,8 +1185,8 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .cam-go { height: 72px; min-width: 130px; border-radius: 14px; border: 0; background: var(--accent); color: var(--accent-ink); font-family: var(--font-display); font-weight: 800; font-size: 20px; }
 .cam-go.stop { background: #ff6b4a; color: #1a0600; }
 .cam-go:disabled { opacity: .45; }
-.cam-adj { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.cam-adj button, .cam-score button { height: 48px; border-radius: 10px; background: var(--panel-3); border: 1px solid var(--line-2); color: var(--text); font-weight: 700; }
+.cam-adj { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cam-adj button, .cam-score button { height: 56px; font-size: 16px; border-radius: 10px; background: var(--panel-3); border: 1px solid var(--line-2); color: var(--text); font-weight: 700; }
 .cam-adj button:disabled, .cam-score button:disabled { opacity: .4; }
 .cam-mark { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px dashed var(--line-2); border-radius: 12px; padding: 10px 12px; font-size: 13px; }
 .cam-markbtn { width: 100%; height: 48px; border-radius: 10px; border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
@@ -1197,3 +1197,18 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .cam-subbtn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .rp-players.dim { opacity: .45; }
 @media (max-width: 380px) { .cam-time { font-size: 44px; } .cam-go { min-width: 108px; font-size: 17px; } }
+
+/* Máy quay: nút to, chạm 2 lần để cho ra sân */
+.cam button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.cam .rp-players { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cam .rp-player { padding: 16px 4px; min-height: 92px; }
+.cam .rp-player b { font-size: 34px; }
+.cam .rp-player span { font-size: 14px; }
+.cam .rp-player small { font-size: 11px; }
+.cam .rp-player.going { background: #ff6b4a33; border-color: #ff6b4a; color: var(--text); }
+.cam .rp-player.going small { color: #ff6b4a; font-weight: 800; }
+.cam .rp-player.bench.ready { border-color: var(--accent); background: var(--accent-soft); }
+.cam-score { grid-template-columns: repeat(3, 1fr); }
+.cam-score button:not(.cam-subbtn) { height: 76px; font-size: 30px; }
+.cam-out { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid #ff6b4a; background: #ff6b4a1a; font-size: 14px; }
+.cam-out button { height: 48px; padding: 0 14px; border-radius: 10px; background: var(--panel-3); border: 1px solid var(--line-2); color: var(--text); font-weight: 700; }
