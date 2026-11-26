@@ -1128,4 +1128,13 @@ end $$;
 grant execute on function jet_team_create(uuid, text, text, text, text), jet_team_update(uuid, text, text), jet_team_delete(uuid), jet_team_assign(uuid, uuid, boolean) to authenticated;
 revoke execute on function jet_team_create(uuid, text, text, text, text), jet_team_update(uuid, text, text), jet_team_delete(uuid), jet_team_assign(uuid, uuid, boolean) from anon;
 
+-- Tuyến cũ có chữ JET trong tên (vd "Pro.Jet") thuộc Giải JET: gán giải để Trọng tài / HLV JET thấy các trận đã bấm stats.
+update squads s set league = case
+    when s.name ~* 'pro\.?\s?-?jet' then 'PRO.JET'
+    when s.name ~* 'jr\.?\s?-?jet' then 'JR.JET'
+    when s.name ~* 'w\.?\s?-?jet' then 'WJET'
+    else 'JET' end
+  where s.league is null and s.name ~* 'jet'
+    and exists (select 1 from orgs o where o.id = s.org_id and o.jet_enabled);
+
 notify pgrst, 'reload schema';
