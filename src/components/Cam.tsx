@@ -25,6 +25,8 @@ export function CamPad({ token }: { token: string }) {
   const [side, setSide] = useState<'home' | 'away'>('home')
   const [sel, setSel] = useState<string | null>(null)       // người đang chọn (trên sân)
   const [outId, setOutId] = useState<string | null>(null)       // người đã chạm 2 lần để ra sân, chờ chọn người vào
+  const [editing, setEditing] = useState<string | null>(null) // đang nhập giờ (chuỗi người dùng gõ)
+  const [armReset, setArmReset] = useState(false)
   const lastTap = useRef<{ id: string; at: number } | null>(null)
   const fetchedAt = useRef(Date.now())
   const stRef = useRef<CState | null>(null)
@@ -83,6 +85,28 @@ export function CamPad({ token }: { token: string }) {
   const me = st.players.find((p) => p.id === sel)
   const name = (s: 'home' | 'away') => (s === 'home' ? st.game.home : st.game.away)
 
+  // Gõ giờ: "7:32", "732" (= 7:32), "45" (= 0:45), "1000" (= 10:00).
+  const parseTime = (t: string): number | null => {
+    const v = t.trim()
+    let m: number, sec: number
+    if (v.includes(':')) { const [a, b] = v.split(':'); m = +a; sec = +b } else { const d = v.replace(/\D/g, ''); if (!d) return null; sec = +d.slice(-2); m = +(d.slice(0, -2) || 0) }
+    if (isNaN(m) || isNaN(sec) || sec > 59) return null
+    return m * 60 + sec
+  }
+  const commitTime = () => {
+    if (editing === null || !st) return
+    const v = parseTime(editing)
+    if (v === null) return flash('Nhập dạng 7:32 hoặc 732 (giây từ 00 đến 59)')
+    if (v > (st.game.period <= 4 ? st.period_len : 300)) return flash('Vượt quá độ dài một hiệp')
+    setEditing(null)
+    const n = v
+    void call('cam_clock', { p_token: token, p_action: 'set', p_secs: n, p_lag_ms: 0 }, `✓ Đặt giờ ${mmss(n)}`, (c) => withClock(c, {}, n))
+  }
+  const resetClock = () => {
+    if (!armReset) { setArmReset(true); setTimeout(() => setArmReset(false), 3000); return }
+    setArmReset(false)
+    void clock('reset', 0, '↺ Đã đặt lại giờ hiệp', (c) => withClock(c, { running: false }, c.game.period <= 4 ? c.period_len : 300))
+  }
   const adj = (d: number) => { const n = shownClock(); clock('adjust', d, '✓', (c) => withClock(c, {}, Math.min(st.period_len, Math.max(0, n + d)))) }
   const per = (d: number) => clock(d > 0 ? 'next' : 'prev', 0, d > 0 ? '✓ Hiệp kế' : '✓ Hiệp trước', (c) => withClock(c, { period: Math.max(1, c.game.period + d), running: false }, c.period_len))
   const score = (pts: number) => {
@@ -129,16 +153,27 @@ export function CamPad({ token }: { token: string }) {
       </div>
 
       <div className="cam-clock">
-        <div className={`cam-time ${running ? 'run' : ''}`}>{mmss(now)}</div>
-        <button className={`cam-go ${running ? 'stop' : ''}`} disabled={!running && now <= 0} onClick={() => { const n = shownClock(); clock(running ? 'stop' : 'start', 0, running ? '⏸ Đã dừng' : '▶ Đồng hồ chạy', (c) => withClock(c, { running: !running }, n)) }}>
-          {running ? '⏸ DỪNG' : '▶ CHẠY'}
-        </button>
+        {editing !== null ? (
+          <div className="cam-edit">
+            <input autoFocus inputMode="numeric" pattern="[0-9:]*" enterKeyHint="done" placeholder="7:32" value={editing}
+              onChange={(e) => setEditing(e.target.value.replace(/[^0-9:]/g, '').slice(0, 5))}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitTime(); if (e.key === 'Escape') setEditing(null) }} />
+            <button className="ok" onClick={commitTime}>OK</button>
+            <button onClick={() => setEditing(null)}>Huỷ</button>
+          </div>
+        ) : (
+          <button className={`cam-time ${running ? 'run' : ''}`} title="Chạm để nhập giờ" onClick={() => setEditing('')}>{mmss(now)}<small>chạm để sửa giờ</small></button>
+        )}
+{editing === null && (        <button className={`cam-go ${running ? 'stop' : ''}`} disabled={!running && now <= 0} onClick={() => { const n = shownClock(); clock(running ? 'stop' : 'start', 0, running ? '⏸ Đã dừng' : '▶ Đồng hồ chạy', (c) => withClock(c, { running: !running }, n)) }}>
+            {running ? '⏸ DỪNG' : '▶ CHẠY'}
+          </button>)}
       </div>
       <div className="cam-adj">
         <button onClick={() => adj(-10)}>−10s</button>
         <button onClick={() => adj(-1)}>−1s</button>
         <button onClick={() => adj(1)}>+1s</button>
         <button onClick={() => adj(10)}>+10s</button>
+        <button className={`reset ${armReset ? 'arm' : ''}`} onClick={resetClock}>{armReset ? 'Bấm lần nữa' : '↺ Reset giờ'}</button>
         <button disabled={st.game.period <= 1} onClick={() => per(-1)}>‹ Hiệp</button>
         <button onClick={() => per(1)}>Hiệp ›</button>
       </div>

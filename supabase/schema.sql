@@ -1166,7 +1166,7 @@ begin
     'mark', jsonb_build_object('at', g.start_marked_at, 'clock', g.start_mark_clock));
 end $$;
 
--- Đồng hồ: start | stop | adjust (p_secs, có thể âm) | next | prev (đổi hiệp, đồng hồ về đầu hiệp và dừng).
+-- Đồng hồ: start | stop | adjust (p_secs, có thể âm) | set (p_secs = giây còn lại cần đặt) | reset (về đầu hiệp, dừng) | next | prev (đổi hiệp, đồng hồ về đầu hiệp và dừng).
 -- p_lag_ms: độ trễ mạng ước tính từ lúc bấm tới lúc máy chủ nhận (điện thoại tự đo); bù vào start / stop để giờ khớp lúc bấm thật.
 drop function if exists cam_clock(text, text, int);
 create or replace function cam_clock(p_token text, p_action text, p_secs int default 0, p_lag_ms int default 0) returns text
@@ -1187,6 +1187,11 @@ begin
   elsif p_action = 'adjust' then
     update games set clock_remaining = least(plen, greatest(0, c + coalesce(p_secs, 0))),
                      clock_started_at = case when g.clock_running then now() else null end where id = gid;
+  elsif p_action = 'set' then
+    update games set clock_remaining = least(plen, greatest(0, coalesce(p_secs, 0))),
+                     clock_started_at = case when g.clock_running then now() else null end where id = gid;
+  elsif p_action = 'reset' then
+    update games set clock_remaining = plen, clock_running = false, clock_started_at = null where id = gid;
   elsif p_action in ('next', 'prev') then
     np := greatest(1, coalesce(g.clock_period, 1) + case when p_action = 'next' then 1 else -1 end);
     update games set clock_period = np, clock_running = false, clock_started_at = null,
