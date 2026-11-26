@@ -1025,4 +1025,10 @@ end $$;
 grant execute on function jet_team_create(uuid, text, text, text, text), jet_team_update(uuid, text, text), jet_team_delete(uuid) to authenticated;
 revoke execute on function jet_team_create(uuid, text, text, text, text), jet_team_update(uuid, text, text), jet_team_delete(uuid) from anon;
 
+-- Đội JET: số áo không có mặc định (mỗi trận một số), và trận JET nhớ đội khách để nạp danh sách.
+alter table players alter column number drop not null;
+-- Đội JET đã nhập trước đó có số áo tạm: bỏ đi (số áo nay nhập theo từng trận).
+update players set number = null where squad_id in (select id from squads where league is not null);
+alter table games add column if not exists away_squad_id uuid references squads on delete set null;
+
 notify pgrst, 'reload schema';

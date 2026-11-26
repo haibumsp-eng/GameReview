@@ -17,7 +17,7 @@ export function Roster() {
   const [name, setName] = useState('')
   const [bulk, setBulk] = useState(false)
   const [text, setText] = useState('')
-  const list = players.filter((p) => p.squadId === squadId).sort((a, b) => a.number - b.number)
+  const list = players.filter((p) => p.squadId === squadId).sort((a, b) => (a.number ?? 999) - (b.number ?? 999))
 
   const add = () => {
     const n = parseInt(num, 10)

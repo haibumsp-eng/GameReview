@@ -185,7 +185,7 @@ function SpotlightControls({ clip }: { clip: Clip }) {
   }, [clip.id])
 
   const players = [...squadPlayers].sort((a, b) =>
-    (clip.playerIds.includes(b.id) ? 1 : 0) - (clip.playerIds.includes(a.id) ? 1 : 0) || a.number - b.number)
+    (clip.playerIds.includes(b.id) ? 1 : 0) - (clip.playerIds.includes(a.id) ? 1 : 0) || (a.number ?? 999) - (b.number ?? 999))
   const within = (t: number) => Math.min(clip.end - 0.3, Math.max(clip.start, t))
 
   const begin = () => {

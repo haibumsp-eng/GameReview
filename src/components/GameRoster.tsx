@@ -26,17 +26,19 @@ export function GameRosterModal({ side = 'home', onClose }: { side?: TeamSide; o
   const squad = useData((s) => s.squads.find((x) => x.id === game?.squadId))
   const { players, games, gamePlayers, stats, lineups, clips, squads, addGamePlayers, updateGamePlayer, removeGamePlayer } = useData()
   const mine = gamePlayers.filter((g) => g.side === side)
-  const squadPlayers = side === 'home' ? players.filter((p) => p.squadId === (game?.squadId ?? squadId)).sort((a, b) => a.number - b.number) : []
+  // Đội nhà: VĐV của tuyến. Đội khách: VĐV của đội JET đã chọn khi tạo trận (nếu có).
+  const teamSquad = side === 'home' ? (game?.squadId ?? squadId) : game?.awaySquadId
+  const squadPlayers = (teamSquad ? players.filter((p) => p.squadId === teamSquad) : []).sort((a, b) => (a.number ?? 999) - (b.number ?? 999) || a.name.localeCompare(b.name, 'vi'))
   const firstTime = mine.length === 0
   const teamName = side === 'home' ? game?.homeName || squad?.name || 'HOME' : game?.awayName || 'AWAY'
 
   const [rows, setRows] = useState<Row[]>(() => [
     ...squadPlayers.map((p) => {
       const g = mine.find((x) => x.playerId === p.id)
-      return { key: p.id, playerId: p.id, gpId: g?.id ?? null, name: p.name, base: p.number, on: firstTime || !!g, num: String(g?.number ?? p.number) }
+      return { key: p.id, playerId: p.id, gpId: g?.id ?? null, name: p.name, base: p.number, on: firstTime || !!g, num: String(g?.number ?? p.number ?? '') }
     }),
     // Cầu thủ chỉ có trong trận này (đội khách, hoặc người ngoài tuyến của đội nhà).
-    ...mine.filter((g) => !g.playerId || !squadPlayers.some((p) => p.id === g.playerId)).sort((a, b) => a.number - b.number)
+    ...mine.filter((g) => !g.playerId || !squadPlayers.some((p) => p.id === g.playerId)).sort((a, b) => (a.number ?? 999) - (b.number ?? 999))
       .map((g) => ({ key: g.id, playerId: null, gpId: g.id, name: g.name, base: null, on: true, num: String(g.number) })),
   ])
   const [draft, setDraft] = useState({ num: '', name: '' })
@@ -49,9 +51,9 @@ export function GameRosterModal({ side = 'home', onClose }: { side?: TeamSide; o
   const loadJet = (sid: string) => {
     const t = squads.find((s) => s.id === sid)
     if (!t) return
-    const ps = players.filter((p) => p.squadId === sid).sort((a, b) => a.number - b.number)
+    const ps = players.filter((p) => p.squadId === sid).sort((a, b) => (a.number ?? 999) - (b.number ?? 999))
     // Danh sách cũ của bên này được bỏ chọn (có thể tick lại), thay bằng cầu thủ của đội JET.
-    setRows((r) => [...r.filter((x) => x.gpId).map((x) => ({ ...x, on: false })), ...ps.map((p) => ({ key: newKey(), playerId: side === 'home' ? p.id : null, gpId: null, name: p.name, base: side === 'home' ? p.number : null, on: true, num: String(p.number) }))])
+    setRows((r) => [...r.filter((x) => x.gpId).map((x) => ({ ...x, on: false })), ...ps.map((p) => ({ key: newKey(), playerId: p.id, gpId: null, name: p.name, base: p.number, on: true, num: String(p.number ?? '') }))])
     setErr('')
     toast(`Đã lấy ${ps.length} VĐV của ${t.name}`)
   }
@@ -61,6 +63,14 @@ export function GameRosterModal({ side = 'home', onClose }: { side?: TeamSide; o
   const nums = on.map((r) => parseInt(r.num, 10))
   const dupNums = new Set(nums.filter((n, i) => nums.indexOf(n) !== i))
   const badRow = (r: Row) => { const n = parseInt(r.num, 10); return r.on && (isNaN(n) || n < 0 || n > 99 || dupNums.has(n) || !r.name.trim()) }
+  const missing = on.filter((r) => isNaN(parseInt(r.num, 10))).length
+  // Enter ở ô số áo: nhảy sang ô số áo kế tiếp.
+  const nextNum = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const all = [...(e.currentTarget.closest('.gr-list')?.querySelectorAll<HTMLInputElement>('input.gr-num:not(:disabled)') ?? [])]
+    all[all.indexOf(e.currentTarget) + 1]?.focus()
+  }
   const addRows = (list: { number: number; name: string }[]) => {
     const have = new Set(rows.filter((r) => r.on).map((r) => parseInt(r.num, 10)))
     const fresh = list.filter((x) => !have.has(x.number))
@@ -110,6 +120,7 @@ export function GameRosterModal({ side = 'home', onClose }: { side?: TeamSide; o
   }
 
   const save = async () => {
+    if (missing) return setErr(`Còn ${missing} VĐV chưa có số áo. Nhập số áo hoặc bỏ tick người vắng.`)
     if (on.some(badRow)) return setErr('Số áo phải từ 0 đến 99, không trùng nhau và có tên.')
     // Bỏ khỏi danh sách trận: nếu đã có pha / thay người thì hỏi lại (các pha đó sẽ bị xoá).
     const drop = rows.filter((r) => !r.on && r.gpId)
@@ -140,8 +151,8 @@ export function GameRosterModal({ side = 'home', onClose }: { side?: TeamSide; o
         <div className="row"><b className="grow">Danh sách trận · {teamName} <span className="muted">({side === 'home' ? 'đội nhà' : 'đội khách'})</span></b><button className="icon-btn" onClick={onClose}>×</button></div>
         <div className="muted small-note">
           {side === 'home'
-            ? <>Chọn ai có mặt trận này và số áo các bạn mặc <b>trong trận này</b>. Số áo mặc định của tuyến không đổi.</>
-            : <>Nhập số áo và tên cầu thủ đội khách cho trận này. Có thể dán danh sách hoặc lấy lại từ trận trước rồi sửa số.</>}
+            ? <>Chọn ai có mặt trận này và nhập số áo các bạn mặc <b>trong trận này</b>.</>
+            : <>Nhập số áo và tên cầu thủ đội khách cho trận này{game.awaySquadId ? ' (tên đã nạp từ đội JET, chỉ cần nhập số)' : ''}. Có thể dán danh sách hoặc lấy lại từ trận trước rồi sửa số.</>}
         </div>
         <div className="row wrap">
           <button className="btn sm ghost" onClick={() => setRows((r) => r.map((x) => ({ ...x, on: true })))}>Chọn tất cả</button>
@@ -173,7 +184,7 @@ export function GameRosterModal({ side = 'home', onClose }: { side?: TeamSide; o
             <label key={r.key} className={`gr-row ${r.on ? '' : 'off'}`}>
               <input type="checkbox" checked={r.on} onChange={(e) => set(r.key, { on: e.target.checked })} />
               <input className={`gr-num ${badRow(r) ? 'bad' : ''}`} inputMode="numeric" value={r.num} disabled={!r.on}
-                onChange={(e) => set(r.key, { num: e.target.value.replace(/\D/g, '').slice(0, 2) })} />
+                onKeyDown={nextNum} onChange={(e) => set(r.key, { num: e.target.value.replace(/\D/g, '').slice(0, 2) })} />
               {r.playerId ? <span className="grow">{r.name}</span>
                 : <input className="gr-name grow" value={r.name} disabled={!r.on} onChange={(e) => set(r.key, { name: e.target.value })} />}
               {side === 'home' && r.playerId === null && <span className="muted small-note">chỉ trận này</span>}

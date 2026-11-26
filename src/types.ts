@@ -5,7 +5,8 @@ export type OrgRole = 'owner' | 'coach' | 'viewer'
 /** Trung tâm / CLB: một khách hàng. */
 export interface Org { id: string; name: string; plan: string; maxSquads: number | null; expiresOn: string | null; joinCode: string; /** Bật mục Giải JET (riêng Junsport). */ jetEnabled?: boolean }
 export interface OrgMember { orgId: string; userId: string; role: OrgRole }
-export interface Player { id: string; squadId: string; number: number; name: string }
+/** number: số áo mặc định của tuyến; đội giải JET không có số mặc định (null), số áo ghi theo từng trận. */
+export interface Player { id: string; squadId: string; number: number | null; name: string }
 export interface Game {
   id: string
   squadId: string
@@ -13,6 +14,8 @@ export interface Game {
   date: string
   homeName?: string
   awayName?: string
+  /** Đội JET làm đội khách (nếu có): danh sách VĐV tự nạp vào "Danh sách trận" của đội khách. */
+  awaySquadId?: string | null
   /** Đồng hồ thi đấu (trang Live Stats) */
   periodLen?: number
   clockPeriod?: number

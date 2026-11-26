@@ -42,7 +42,7 @@ interface DataState {
   removeOrgMember: (orgId: string, userId: string) => void
   addMember: (squadId: string, email: string, role: string) => Promise<string | null>
   addPlayer: (squadId: string, number: number, name: string) => void
-  addPlayers: (squadId: string, list: { number: number; name: string }[]) => void
+  addPlayers: (squadId: string, list: { number: number | null; name: string }[]) => void
   removePlayer: (id: string) => void
   updatePlayer: (id: string, patch: { number?: number; name?: string }) => void
   addGame: (g: Omit<Game, 'id'>, videos: { label: string; youtubeId: string }[]) => { gameId: string; videoId: string }
@@ -57,6 +57,7 @@ interface DataState {
   addPlaylist: (gameId: string, name: string, f: Filter) => string
   removePlaylist: (id: string) => void
   setTeamNames: (gameId: string, home: string, away: string) => void
+  setGameAwaySquad: (gameId: string, squadId: string | null) => void
   addGamePlayers: (gameId: string, side: TeamSide, list: { number: number; name: string; playerId?: string | null }[]) => void
   removeGamePlayer: (id: string) => void
   updateGamePlayer: (id: string, patch: { number?: number; name?: string }) => void
@@ -205,7 +206,7 @@ export const useData = create<DataState>((set, get) => {
         orgMembers: (om.data ?? []).map((r: any) => ({ orgId: r.org_id, userId: r.user_id, role: r.role })),
         baseLoaded: true,
         players: (pl.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, number: r.number, name: r.name })),
-        games: (ga.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, title: r.title, date: r.played_on ?? '', homeName: r.home_name ?? '', awayName: r.away_name ?? '',
+        games: (ga.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, title: r.title, date: r.played_on ?? '', homeName: r.home_name ?? '', awayName: r.away_name ?? '', awaySquadId: r.away_squad_id ?? null,
           periodLen: r.period_len ?? 600, clockPeriod: r.clock_period ?? 1, clockRemaining: r.clock_remaining ?? null,
           clockRunning: !!r.clock_running, clockStartedAt: r.clock_started_at ? new Date(r.clock_started_at).getTime() : null })),
         videos: (gv.data ?? []).map((r: any) => ({ id: r.id, gameId: r.game_id, label: r.label, youtubeId: r.youtube_id, position: r.position })),
@@ -404,6 +405,10 @@ export const useData = create<DataState>((set, get) => {
     setTeamNames: (gameId, home, away) => {
       set((s) => ({ games: s.games.map((g) => (g.id === gameId ? { ...g, homeName: home, awayName: away } : g)) }))
       supabase.from('games').update({ home_name: home, away_name: away }).eq('id', gameId).then(({ error }) => fail(error))
+    },
+    setGameAwaySquad: (gameId, squadId) => {
+      set((s) => ({ games: s.games.map((g) => (g.id === gameId ? { ...g, awaySquadId: squadId } : g)) }))
+      supabase.from('games').update({ away_squad_id: squadId }).eq('id', gameId).then(({ error }) => fail(error))
     },
     addGamePlayers: (gameId, side, list) => {
       const rows: GamePlayer[] = list.map((p) => ({ id: uid(), gameId, side, number: p.number, name: p.name, playerId: p.playerId ?? null }))
@@ -657,20 +662,22 @@ export type StatPatch = Partial<Pick<StatEvent, 'gamePlayerId' | 'side' | 'type'
 
 /* ---------- Số áo theo trận ---------- */
 /** Số áo của cầu thủ (tuyến) trong trận đang mở: theo danh sách trận nếu đã đặt, không thì số mặc định của tuyến. */
-export function numberIn(p: Player, gps: GamePlayer[]): number {
+export function numberIn(p: Player, gps: GamePlayer[]): number | null {
   return gps.find((g) => g.playerId === p.id)?.number ?? p.number
 }
 /** Cầu thủ của tuyến, số áo đã đổi theo trận đang mở (baseNumber = số mặc định). */
-export function useSquadPlayers(squadId: string): (Player & { baseNumber: number })[] {
+export function useSquadPlayers(squadId: string): (Player & { baseNumber: number | null })[] {
   const players = useData((s) => s.players)
   const gps = useData((s) => s.gamePlayers)
   return useMemo(() => players.filter((p) => p.squadId === squadId)
     .map((p) => ({ ...p, number: numberIn(p, gps), baseNumber: p.number }))
-    .sort((a, b) => a.number - b.number), [players, gps, squadId])
+    .sort((a, b) => (a.number ?? 999) - (b.number ?? 999)), [players, gps, squadId])
 }
 /** "#số tên" theo số áo của trận đang mở. */
 export function playerLabel(id: string): string | undefined {
   const d = useData.getState()
   const p = d.players.find((x) => x.id === id)
-  return p ? `#${numberIn(p, d.gamePlayers)} ${p.name}` : undefined
+  if (!p) return undefined
+  const n = numberIn(p, d.gamePlayers)
+  return n == null ? p.name : `#${n} ${p.name}`
 }
