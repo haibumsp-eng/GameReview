@@ -64,6 +64,8 @@ export function StatsPage() {
   const [sel, setSel] = useState<GamePlayer | null>(null)
   // Bảng ném phạt mở sau lỗi dẫn tới ném phạt (lỗi khi ném rổ, kỹ thuật, không thể thể thao, truất quyền, lỗi cá nhân khi đã bonus).
   const [ftStart, setFtStart] = useState<FtStart | null>(null)
+  // Sau cú ném / quả phạt trượt: hỏi ai bắt bóng bật bảng (OREB nếu cùng đội ném, DREB nếu khác đội). Quả phạt cho chọn nhiều người.
+  const [rebQ, setRebQ] = useState<{ side: TeamSide; ft: boolean; eventId: string; period: number; clockS: number; videoId: string | null; videoT: number | null; n: number } | null>(null)
   const [, tick] = useState(0)
   const [newGame, setNewGame] = useState<{ title: string; home: string; away: string; date: string; len: number } | null>(null)
   // Giải JET là mục riêng: không lẫn vào tuyến đội / trận thường (trừ khi đang mở đúng trận JET đó).
@@ -189,6 +191,8 @@ export function StatsPage() {
     else if (sel && (type === '2PM' || type === '3PM')) setFu({ kind: 'assist', eventId: id, side: sel.side, exclude: sel.id })
     else if (type === 'TOV' && tov === 'stolen') setFu({ kind: 'steal', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
     else setFu(null)
+    setRebQ(type === '2PX' || type === '3PX' || type === 'FTX'
+      ? { side: sel.side, ft: type === 'FTX', eventId: id, period, clockS: remaining, videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, n: 0 } : null)
     flashLast(id)
     setSel(null)
   }
@@ -214,6 +218,13 @@ export function StatsPage() {
       const sid = addStat({ gameId: game.id, side: opp, gamePlayerId: pid, type: 'STL', period: e.period, videoId: e.videoId, videoT: e.videoT, clockS: e.clockS, linkedId: e.id })
       updateStat(e.id, { linkedId: sid, tovKind: 'stolen' })
     }
+  }
+  const answerReb = (p: GamePlayer) => {
+    if (!game || !rebQ) return
+    addStat({ gameId: game.id, side: p.side, gamePlayerId: p.id, type: p.side === rebQ.side ? 'OREB' : 'DREB', period: rebQ.period, videoId: rebQ.videoId, videoT: rebQ.videoT, clockS: rebQ.clockS, linkedId: rebQ.eventId })
+    toast(`#${p.number} ${p.name} · ${p.side === rebQ.side ? 'OREB' : 'DREB'}`)
+    if (rebQ.ft) setRebQ({ ...rebQ, n: rebQ.n + 1 })
+    else setRebQ(null)
   }
   const answerFu = (playerId: string | null) => {
     if (!fu || !game) return setFu(null)
@@ -420,6 +431,22 @@ export function StatsPage() {
             <span className="sp-fu-q">{fu.kind === 'drawn' ? 'Ai bị phạm lỗi?' : fu.kind === 'steal' ? 'Ai cướp bóng?' : 'Ai kiến tạo?'}</span>
             {opts.map((x) => <button key={x.id} onClick={() => answerFu(x.id)} title={x.name}>#{x.number}</button>)}
             <button className="skip" onClick={() => answerFu(null)}>{fu.kind === 'drawn' ? 'Bỏ qua' : 'Không có'}</button>
+          </div>
+        )
+      })()}
+      {rebQ && (() => {
+        const o: TeamSide = rebQ.side === 'home' ? 'away' : 'home'
+        const side = (s: TeamSide, tag: string) => (
+          <div className={`sp-fu ${s}`}>
+            <span className="sp-fu-q">{s === 'home' ? homeName : awayName} · {tag}</span>
+            {roster(s).filter((x) => court.has(x.id)).map((x) => <button key={x.id} onClick={() => answerReb(x)} title={x.name}>#{x.number}</button>)}
+          </div>
+        )
+        return (
+          <div className="sp-reb">
+            <div className="sp-fu-q">Ai bắt bóng bật bảng?{rebQ.ft ? ' (quả phạt: chọn một hoặc nhiều người, rồi bấm Xong)' : ''}</div>
+            {side(rebQ.side, 'OREB (rebound tấn công)')}{side(o, 'DREB (rebound phòng thủ)')}
+            <button className="skip" onClick={() => setRebQ(null)}>{rebQ.ft ? (rebQ.n ? 'Xong' : 'Không có rebound (còn quả phạt / bóng ra ngoài)') : 'Bỏ qua'}</button>
           </div>
         )
       })()}

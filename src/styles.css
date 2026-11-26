@@ -1119,3 +1119,6 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .es-ev .grow { flex: 1; } .es-ev .home { color: var(--atk); } .es-ev .away { color: var(--def); }
 .es-tag { font-size: 11px; border: 1px solid var(--def); color: var(--def); border-radius: 99px; padding: 0 6px; }
 @media (max-width: 700px) { .es-body, .es-two { grid-template-columns: 1fr; } .es-sc { font-size: 32px; } }
+
+.sp-reb { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--accent-line); border-radius: 10px; }
+.sp-reb .skip { justify-self: start; }
