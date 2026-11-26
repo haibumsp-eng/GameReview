@@ -1221,3 +1221,5 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .cam-edit button { height: 64px; padding: 0 16px; border-radius: 12px; background: var(--panel-3); border: 1px solid var(--line-2); color: var(--text); font-weight: 700; font-size: 16px; }
 .cam-edit button.ok { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .cam-adj button.arm { background: #ff6b4a; color: #1a0600; border-color: #ff6b4a; }
+
+.cam-links { display: flex; flex-direction: column; align-items: flex-end; }

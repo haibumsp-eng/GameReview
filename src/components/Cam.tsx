@@ -180,9 +180,10 @@ export function CamPad({ token }: { token: string }) {
       <div className="cam-mark">
         {st.mark.at
           ? <><span>🏁 Bắt đầu trận lúc <b>{hms(st.mark.at)}</b> (đồng hồ {mmss(st.mark.clock ?? 0)})</span>
-              <button className="cam-link" onClick={() => call('cam_mark_start', { p_token: token, p_on: false }, 'Đã xoá mốc', (c) => ({ ...c, mark: { at: null, clock: null } }))}>Xoá mốc</button></>
-          : <button className="cam-markbtn" disabled={!running} onClick={() => { const n = shownClock(); call('cam_mark_start', { p_token: token, p_on: true }, '🏁 Đã đánh dấu bắt đầu trận', (c) => ({ ...c, mark: { at: new Date().toISOString(), clock: n } })) }}>
-              🏁 Đánh dấu bắt đầu trận{running ? '' : ' (chạy đồng hồ trước)'}</button>}
+              <span className="cam-links"><button className="cam-link" onClick={() => { const n = shownClock(); call('cam_mark_start', { p_token: token, p_on: true }, '🏁 Đã đánh dấu lại', (c) => ({ ...c, mark: { at: new Date().toISOString(), clock: n } })) }}>Đánh dấu lại</button>
+              <button className="cam-link" onClick={() => call('cam_mark_start', { p_token: token, p_on: false }, 'Đã xoá mốc', (c) => ({ ...c, mark: { at: null, clock: null } }))}>Xoá mốc</button></span></>
+          : <button className="cam-markbtn" onClick={() => { const n = shownClock(); call('cam_mark_start', { p_token: token, p_on: true }, '🏁 Đã đánh dấu bắt đầu trận', (c) => ({ ...c, mark: { at: new Date().toISOString(), clock: n } })) }}>
+              🏁 Đánh dấu bắt đầu trận</button>}
       </div>
 
       {err && <div className="err">{err}</div>}

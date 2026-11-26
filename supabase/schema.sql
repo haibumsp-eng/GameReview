@@ -1151,7 +1151,7 @@ alter table stat_events add column if not exists ft_count int;
 
 -- ================= Điện thoại máy quay: đồng hồ, thay người, +điểm, mốc bắt đầu trận =================
 -- Dùng chung mã QR (remote_tokens) với bảng bấm stats nhưng chỉ làm được 4 việc này. Link riêng: #cam=<token>.
--- start_marked_at: giờ thật lúc máy quay bấm "Đánh dấu bắt đầu trận" (khi đồng hồ đang chạy); start_mark_clock: giây còn lại lúc đó.
+-- start_marked_at: giờ thật lúc máy quay bấm "Đánh dấu bắt đầu trận" (có thể trước khi chạy đồng hồ); start_mark_clock: giây còn lại trên đồng hồ lúc đó.
 alter table games add column if not exists start_marked_at timestamptz;
 alter table games add column if not exists start_mark_clock real;
 
@@ -1256,7 +1256,7 @@ begin
   return 'ok';
 end $$;
 
--- Đánh dấu bắt đầu trận (chỉ khi đồng hồ đang chạy) hoặc xoá dấu (p_on = false).
+-- Đánh dấu bắt đầu trận (bấm được bất cứ lúc nào, kể cả trước khi chạy đồng hồ) hoặc xoá dấu (p_on = false). Bấm lại thì ghi đè mốc cũ.
 create or replace function cam_mark_start(p_token text, p_on boolean default true) returns text
 language plpgsql security definer set search_path = public as $$
 declare gid uuid; g games;
@@ -1268,7 +1268,6 @@ begin
     update games set start_marked_at = null, start_mark_clock = null where id = gid;
     return 'ok';
   end if;
-  if not g.clock_running then return 'Hãy chạy đồng hồ rồi mới đánh dấu bắt đầu trận.'; end if;
   update games set start_marked_at = now(), start_mark_clock = game_clock_now(g) where id = gid;
   return 'ok';
 end $$;
