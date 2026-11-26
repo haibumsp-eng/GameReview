@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { create } from 'zustand'
 import { useData, useUi, toast } from '../store'
 import { clockNow, onCourt } from '../lib/minutes'
 import type { GamePlayer, StatType, TeamSide } from '../types'
@@ -14,7 +15,50 @@ export const FT_RULE: Record<FoulKind, { count: number; ask: boolean; live: bool
   PFD: { count: 2, ask: false, live: false, note: 'Truất quyền: 2 quả phạt, sau đó bóng thuộc đội bị phạm lỗi (không có rebound).' },
 }
 export const FOUL_TITLE: Record<FoulKind, string> = { PF: 'Lỗi cá nhân (bonus)', PFS: 'Lỗi khi đang ném rổ (shooting foul)', PFT: 'Lỗi kỹ thuật', PFU: 'Lỗi không thể thể thao', PFD: 'Lỗi truất quyền' }
-export interface FtStart { kind: FoulKind; foulId: string; foulerSide: TeamSide }
+export interface FtStart { kind: FoulKind; foulId: string; foulerSide: TeamSide; gameId: string }
+
+/**
+ * Hàng đợi ném phạt của trận. Có thể có nhiều lỗi chờ ném phạt cùng lúc (ví dụ lỗi khi ném rổ rồi đối thủ nóng đầu bị lỗi kỹ thuật).
+ * Quy tắc: lỗi kỹ thuật, không thể thể thao, truất quyền được ném TRƯỚC các lỗi thường; cùng nhóm thì theo thứ tự xảy ra.
+ */
+export const useFtQueue = create<{ q: FtStart[]; add: (s: FtStart) => void; remove: (foulId: string) => void }>((set) => ({
+  q: [],
+  add: (s) => set((st) => ({ q: [...st.q.filter((x) => x.foulId !== s.foulId), s] })),
+  remove: (foulId) => set((st) => ({ q: st.q.filter((x) => x.foulId !== foulId) })),
+}))
+const PRIORITY: Record<FoulKind, number> = { PFT: 0, PFU: 0, PFD: 0, PFS: 1, PF: 1 }
+
+/** Khung ném phạt nằm ngay trên sân (cùng chỗ với các câu hỏi rebound, kiến tạo), không bật cửa sổ riêng. */
+export function FtQueue({ canEdit }: { canEdit: boolean }) {
+  const gameId = useUi((s) => s.gameId)
+  const q = useFtQueue((s) => s.q)
+  const remove = useFtQueue((s) => s.remove)
+  const game = useData((s) => s.games.find((g) => g.id === gameId))
+  const items = q.filter((x) => x.gameId === gameId)
+  if (!game || !items.length) return null
+  const active = [...items].sort((a, b) => PRIORITY[a.kind] - PRIORITY[b.kind] || items.indexOf(a) - items.indexOf(b))[0]
+  const waiting = items.filter((x) => x !== active)
+  const nm = (s: TeamSide) => (s === 'home' ? game.homeName || 'HOME' : game.awayName || 'AWAY')
+  return (
+    <div className="ft-queue">
+      {waiting.length > 0 && (
+        <div className="row wrap muted small-note">
+          <b>Ném phạt đang chờ ({items.length} lỗi):</b>
+          {waiting.map((w) => (
+            <span key={w.foulId} className="es-tag">{FOUL_TITLE[w.kind]} · {nm(w.foulerSide)} <button className="icon-btn" title="Bỏ ném phạt này" onClick={() => remove(w.foulId)}>×</button></span>
+          ))}
+          {PRIORITY[active.kind] === 0 && <span>Lỗi kỹ thuật / không thể thể thao / truất quyền được ném trước lỗi thường.</span>}
+        </div>
+      )}
+      {/* Mọi lỗi đang chờ vẫn được giữ nguyên trạng thái (ẩn), chỉ lỗi ưu tiên cao nhất hiện ra. */}
+      {items.map((it) => (
+        <div key={it.foulId} hidden={it !== active}>
+          <FtFlow start={it} canEdit={canEdit} onClose={() => remove(it.foulId)} />
+        </div>
+      ))}
+    </div>
+  )
+}
 
 const opp = (s: TeamSide): TeamSide => (s === 'home' ? 'away' : 'home')
 interface Flow { put?: 'made' | 'miss' | 'none'; and1: 0 | 2 | 3; stage: 'setup' | 'shots' | 'miss' | 'reb'; shooter: string | null; count: number; i: number; picks: string[] }

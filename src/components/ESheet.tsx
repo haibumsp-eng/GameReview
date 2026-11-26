@@ -5,7 +5,7 @@ import { lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
 import { BONUS_AT, isThreeZone, teamFouls, timeouts, zoneOf, ZONE_LABEL } from '../lib/analytics'
 import { confirmDialog } from '../lib/dialog'
 import { Court } from './Court'
-import { FtFlow, type FoulKind, type FtStart } from './FtFlow'
+import { FtQueue, useFtQueue, type FoulKind } from './FtFlow'
 import type { GamePlayer, StatEvent, StatType, TeamSide } from '../types'
 
 const opp = (s: TeamSide): TeamSide => (s === 'home' ? 'away' : 'home')
@@ -31,7 +31,6 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
   const [side, setSide] = useState<TeamSide>('home')
   const [sel, setSel] = useState<string | null>(null)
   const [subOut, setSubOut] = useState<string | null>(null)
-  const [flow, setFlow] = useState<FtStart | null>(null)
   const [draft, setDraft] = useState<Record<string, Draft>>({})
   const [, tick] = useState(0)
 
@@ -41,7 +40,7 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
     const iv = setInterval(() => tick((n) => n + 1), 250)
     return () => clearInterval(iv)
   }, [running])
-  useEffect(() => { setSel(null); setSubOut(null); setFlow(null) }, [gameId])
+  useEffect(() => { setSel(null); setSubOut(null) }, [gameId])
 
   if (!game) return null
   const len = game.periodLen ?? 600
@@ -71,7 +70,7 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
     toast(`#${me.number} ${me.name} · ${STAT_LABEL[type]} (lỗi đồng đội ${n})`)
     setSel(null)
     if (type === 'PF' && !bonus) return toast(`Lỗi cá nhân #${me.number}: bóng cho ${name(opp(me.side))} (chưa bonus, ${name(me.side)} có ${n} lỗi)`)
-    setFlow({ kind: type, foulId: id, foulerSide: me.side })
+    useFtQueue.getState().add({ kind: type, foulId: id, foulerSide: me.side, gameId: game.id })
   }
   const timeout = (s: TeamSide) => {
     const t = timeouts(stats, s, period)
@@ -254,10 +253,9 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
         ))}
       </div>
 
+      <FtQueue canEdit={canEdit} />
       <div className="card stack es-panel">
-        {role === 1 && (flow ? (
-          <FtFlow key={flow.foulId} start={flow} canEdit={canEdit} onClose={() => setFlow(null)} />
-        ) : (
+        {role === 1 && (
           <>
             {sideTabs}
             {onList(side).length === 0 && <div className="muted">Chưa có ai trên sân. Máy quay đưa đội hình vào sân ở vai trò 2 (hoặc dùng “Thay người” ở tab Record).</div>}
@@ -276,7 +274,7 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
             </div>
             <div className="muted small-note">Chỉ hiện người đang trên sân. Lỗi dẫn tới ném phạt (lỗi khi ném rổ, kỹ thuật, không thể thể thao, truất quyền, hoặc lỗi cá nhân khi đối phương đã bonus) sẽ mở bảng ném phạt. Pha ghi điểm chờ vai trò 3 bổ sung vị trí, kiến tạo.</div>
           </>
-        ))}
+        )}
 
         {role === 2 && (
           <>

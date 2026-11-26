@@ -18,7 +18,7 @@ import { Analysis } from './Analysis'
 import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, turnoverInfo, zoneOf } from '../lib/analytics'
 import { Court } from './Court'
 import { ESheet } from './ESheet'
-import { FtFlow, FOUL_KINDS, type FoulKind, type FtStart } from './FtFlow'
+import { FtQueue, FOUL_KINDS, useFtQueue, type FoulKind } from './FtFlow'
 import { GameRosterModal } from './GameRoster'
 import { StatEditor } from './StatEditor'
 import { SubEditor, SubForm } from './SubEditor'
@@ -62,8 +62,6 @@ export function StatsPage() {
   // Hỏi tiếp sau một pha: ai bị phạm lỗi / ai kiến tạo.
   const [fu, setFu] = useState<{ kind: 'drawn' | 'assist' | 'steal'; eventId: string; side: TeamSide; exclude?: string } | null>(null)
   const [sel, setSel] = useState<GamePlayer | null>(null)
-  // Bảng ném phạt mở sau lỗi dẫn tới ném phạt (lỗi khi ném rổ, kỹ thuật, không thể thể thao, truất quyền, lỗi cá nhân khi đã bonus).
-  const [ftStart, setFtStart] = useState<FtStart | null>(null)
   // Sau cú ném / quả phạt trượt: hỏi ai bắt bóng bật bảng (OREB nếu cùng đội ném, DREB nếu khác đội). Quả phạt cho chọn nhiều người.
   const [putQ, setPutQ] = useState<{ p: GamePlayer; period: number; clockS: number; videoId: string | null; videoT: number | null } | null>(null)
   const [rebQ, setRebQ] = useState<{ side: TeamSide; ft: boolean; eventId: string; period: number; clockS: number; videoId: string | null; videoT: number | null; n: number } | null>(null)
@@ -186,7 +184,7 @@ export function StatsPage() {
     if (shot) { setMods({ paint: false, fb: false }); setLoc(null) }
     // Lỗi dẫn tới ném phạt: mở bảng ném phạt (hỏi ai ném, từng quả vào / trượt, rebound).
     const foulFt = FOUL_KINDS.includes(type) && (type !== 'PF' || teamFouls(stats, sel.side, period) + 1 > BONUS_AT)
-    if (foulFt) { setFtStart({ kind: type as FoulKind, foulId: id, foulerSide: sel.side }); setFu(null) }
+    if (foulFt) { useFtQueue.getState().add({ kind: type as FoulKind, foulId: id, foulerSide: sel.side, gameId: game.id }); setFu(null) }
     // Hỏi tiếp: lỗi → ai bị phạm lỗi; ghi điểm → ai kiến tạo.
     else if (sel && DRAWN_TYPES.includes(type)) setFu({ kind: 'drawn', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
     else if (sel && (type === '2PM' || type === '3PM')) setFu({ kind: 'assist', eventId: id, side: sel.side, exclude: sel.id })
@@ -449,6 +447,7 @@ export function StatsPage() {
           </div>
         )
       })()}
+      <FtQueue canEdit={canEdit} />
       {putQ && (
         <div className="sp-reb">
           <div className="sp-fu-q">#{putQ.p.number} {putQ.p.name} (OREB) có dứt điểm ngay (tip-in / putback) không?</div>
@@ -545,13 +544,6 @@ export function StatsPage() {
         )}
       </div>
 
-      {ftStart && game && (
-        <div className="modal-back" onClick={() => setFtStart(null)}>
-          <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
-            <FtFlow key={ftStart.foulId} start={ftStart} canEdit={canEdit} onClose={() => setFtStart(null)} />
-          </div>
-        </div>
-      )}
       {rosterOpen && game && <GameRosterModal side={rosterOpen} onClose={() => setRosterOpen(null)} />}
       {remoteOpen && game && <RemoteModal gameId={game.id} onClose={() => setRemoteOpen(false)} />}
       {newGame && (

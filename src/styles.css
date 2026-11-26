@@ -1122,3 +1122,6 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 
 .sp-reb { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--accent-line); border-radius: 10px; }
 .sp-reb .skip { justify-self: start; }
+
+.ft-queue { display: grid; gap: 6px; }
+.ft-queue .icon-btn { margin-left: 4px; }
