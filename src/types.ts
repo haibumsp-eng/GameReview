@@ -1,6 +1,6 @@
 export type Side = 'ATK' | 'DEF'
 
-export interface Squad { id: string; name: string; orgId: string; /** Giải JET (PRO.JET | JET | JR.JET | WJET) nếu đây là đội giải JET. */ league?: string | null; season?: string; coach?: string; /** true = đội giải JET thật (tạo từ mục Giải JET); false = tuyến cũ có chữ JET, chỉ để giữ các trận. */ jetTeam?: boolean }
+export interface Squad { id: string; name: string; orgId: string; /** Giải JET (PRO.JET | JET | JR.JET | WJET) nếu đây là đội giải JET. */ league?: string | null; season?: string; coach?: string; /** true = tuyến cũ có chữ JET (không phải đội giải): ẩn khỏi danh sách đội, chỉ giữ các trận. */ jetLegacy?: boolean }
 /** jet_ref: Trọng tài JET (admin riêng của Giải JET, không phải chủ trung tâm). jet_coach: HLV JET (chỉ đội được giao). */
 export type OrgRole = 'owner' | 'coach' | 'viewer' | 'jet_ref' | 'jet_coach'
 /** Trung tâm / CLB: một khách hàng. */
@@ -112,6 +112,8 @@ export interface StatEvent {
   /** Vị trí ném trên nửa sân, 0..1 (x: ngang sân, y: từ đường biên cuối). */
   shotX?: number | null
   shotY?: number | null
+  /** Pha do bàn thư ký ghi, đang chờ người bấm stats bổ sung (vị trí, rebound, kiến tạo…). */
+  pending?: boolean
   createdAt: number
 }
 /** Vào sân / ra sân, ghi theo đồng hồ thi đấu. */

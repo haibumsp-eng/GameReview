@@ -1137,28 +1137,12 @@ update squads s set league = case
   where s.league is null and s.name ~* 'jet'
     and exists (select 1 from orgs o where o.id = s.org_id and o.jet_enabled);
 
--- Phân biệt đội giải JET thật (jet_team) với tuyến cũ có chữ JET (chỉ giữ các trận, không hiện trong danh sách đội).
-do $$ begin
-  if not exists (select 1 from information_schema.columns where table_name = 'squads' and column_name = 'jet_team') then
-    alter table squads add column jet_team boolean not null default false;
-    -- Đội đã nhập từ CSV / tạo tay có mùa giải hoặc HLV; tuyến cũ thì không.
-    update squads set jet_team = true where league is not null and (season <> '' or coach <> '');
-  end if;
-end $$;
-create or replace function jet_team_create(p_org uuid, p_league text, p_season text, p_name text, p_coach text) returns uuid
-language plpgsql security definer set search_path = public as $$
-declare sid uuid;
-begin
-  if not exists (select 1 from orgs where id = p_org and jet_enabled) then raise exception 'Trung tâm này chưa bật Giải JET.'; end if;
-  if not jet_manager(p_org) then raise exception 'Chỉ chủ trung tâm hoặc Trọng tài JET mới tạo được đội JET.'; end if;
-  if not (org_active(p_org) or is_super()) then raise exception 'Gói của trung tâm đã hết hạn. Liên hệ để gia hạn.'; end if;
-  if p_league not in ('PRO.JET', 'JET', 'JR.JET', 'WJET') then raise exception 'Mã giải không hợp lệ.'; end if;
-  if coalesce(trim(p_name), '') = '' then raise exception 'Nhập tên đội.'; end if;
-  select id into sid from squads where org_id = p_org and league = p_league and season = coalesce(p_season, '') and lower(name) = lower(trim(p_name)) and jet_team;
-  if sid is not null then return sid; end if;
-  insert into squads (name, org_id, league, season, coach, jet_team) values (trim(p_name), p_org, p_league, coalesce(p_season, ''), coalesce(trim(p_coach), ''), true) returning id into sid;
-  insert into members (squad_id, user_id, role) values (sid, auth.uid(), 'admin') on conflict do nothing;
-  return sid;
-end $$;
+-- Tuyến cũ có chữ JET (không phải đội giải) bị ẩn khỏi danh sách đội. Mặc định mọi đội đều hiện.
+alter table squads add column if not exists jet_legacy boolean not null default false;
+update squads set jet_legacy = true
+  where league is not null and name ~* 'jet' and season = '' and coach = '' and not jet_legacy;
+
+-- Biên bản điện tử: pha do bàn thư ký ghi, chờ người bấm stats bổ sung.
+alter table stat_events add column if not exists pending boolean not null default false;
 
 notify pgrst, 'reload schema';

@@ -67,7 +67,6 @@ interface RState {
   fouls?: { home: number; away: number }
   timeouts?: { home: number; away: number; max: number }
 }
-const TEAM_TYPES = ['OREB', 'DREB', 'TOV']
 const SHOTS = ['2PM', '2PX', '3PM', '3PX']
 const ACTIONS: { type: string; label: string; sub?: string; tone?: string }[] = [
   { type: '2PM', label: '2PT', sub: '+2', tone: 'made' }, { type: '3PM', label: '3PT', sub: '+3', tone: 'made' }, { type: 'FTM', label: 'FT', sub: '+1', tone: 'made' },
@@ -85,7 +84,6 @@ export function RemotePad({ token }: { token: string }) {
   const [err, setErr] = useState('')
   const [side, setSide] = useState<'home' | 'away'>('home')
   const [sel, setSel] = useState<RPlayer | null>(null)
-  const [team, setTeam] = useState(false) // chọn TEAM của đội đang xem
   const [mods, setMods] = useState({ paint: false, fb: false })
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
@@ -119,14 +117,10 @@ export function RemotePad({ token }: { token: string }) {
     const tags = shot ? [type.startsWith('2') && mods.paint ? 'paint' : '', mods.fb ? 'FB' : ''].filter(Boolean).join(', ') : ''
     flash(`✓ ${label} · ${NAME[type] ?? type}${tags ? ` (${tags})` : ''}`)
     if (shot) setMods({ paint: false, fb: false })
-    setSel(null); setTeam(false); void load()
+    setSel(null); void load()
   }
   const act = (type: string) => {
-    if (team) {
-      if (!TEAM_TYPES.includes(type)) return flash('TEAM chỉ ghi được OREB, DREB, TOV')
-      return send(null, type, side, `TEAM ${side === 'home' ? st?.game.home : st?.game.away}`)
-    }
-    if (!sel) return flash('Chọn cầu thủ (hoặc TEAM) trước')
+    if (!sel) return flash('Chọn cầu thủ trước')
     return send(sel.id, type, sel.side, `#${sel.number} ${sel.name}`)
   }
   const timeout = (s: 'home' | 'away') => send(null, 'TMO', s, s === 'home' ? st?.game.home ?? 'HOME' : st?.game.away ?? 'AWAY')
@@ -170,28 +164,23 @@ export function RemotePad({ token }: { token: string }) {
       </div>
       {err && <div className="err">{err}</div>}
       <div className="seg-toggle rp-sides">
-        <button className={side === 'home' ? 'on atk' : ''} onClick={() => { setSide('home'); setSel(null); setTeam(false) }}>{st.game.home}</button>
-        <button className={side === 'away' ? 'on' : ''} onClick={() => { setSide('away'); setSel(null); setTeam(false) }}>{st.game.away}</button>
+        <button className={side === 'home' ? 'on atk' : ''} onClick={() => { setSide('home'); setSel(null) }}>{st.game.home}</button>
+        <button className={side === 'away' ? 'on' : ''} onClick={() => { setSide('away'); setSel(null) }}>{st.game.away}</button>
       </div>
       <div className="rp-players">
         {on.map((p) => (
-          <button key={p.id} className={`rp-player oncourt ${sel?.id === p.id ? 'sel' : ''} ${p.pf >= 5 ? 'out' : ''}`} onClick={() => { setTeam(false); setSel(sel?.id === p.id ? null : p) }}>
+          <button key={p.id} className={`rp-player oncourt ${sel?.id === p.id ? 'sel' : ''} ${p.pf >= 5 ? 'out' : ''}`} onClick={() => setSel(sel?.id === p.id ? null : p)}>
             <b>{p.number}</b><span>{p.name}</span><small>{p.pts} PTS · {p.pf} PF</small>
           </button>
         ))}
-        {on.length > 0 && (
-          <button className={`rp-player oncourt rp-team ${team ? 'sel' : ''}`} onClick={() => { setSel(null); setTeam(!team) }}>
-            <b>TEAM</b><span>REB · TOV</span><small>không gắn cầu thủ</small>
-          </button>
-        )}
         {on.length === 0 && <div className="rp-empty muted">Chưa có cầu thủ trên sân. Hãy đưa đội hình vào sân trên máy tính.</div>}
       </div>
-      <div className="rp-sel">{sel ? <>Đang chọn <b>#{sel.number} {sel.name}</b></> : team ? <>Đang chọn <b>TEAM</b> (OREB, DREB, TOV)</> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
+      <div className="rp-sel">{sel ? <>Đang chọn <b>#{sel.number} {sel.name}</b></> : 'Chọn cầu thủ, rồi bấm hành động'}</div>
       <div className="rp-mods">
         <button className={mods.paint ? 'on' : ''} onClick={() => setMods({ ...mods, paint: !mods.paint })}>🎯 Trong paint</button>
         <button className={mods.fb ? 'on' : ''} onClick={() => setMods({ ...mods, fb: !mods.fb })}>⚡ Fast break</button>
       </div>
-      <div className={`rp-actions ${sel || team ? '' : 'idle'}`}>
+      <div className={`rp-actions ${sel ? '' : 'idle'}`}>
         {ACTIONS.map((a) => (
           <button key={a.type} disabled={busy} className={`rp-act ${a.tone ?? ''}`} onClick={() => act(a.type)}>
             <span>{a.label}</span>{a.sub && <small>{a.sub}</small>}

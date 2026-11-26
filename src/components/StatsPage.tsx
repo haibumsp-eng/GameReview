@@ -17,6 +17,7 @@ import type { VoiceItem } from '../voice/parse'
 import { Analysis } from './Analysis'
 import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, turnoverInfo, zoneOf } from '../lib/analytics'
 import { Court } from './Court'
+import { ESheet } from './ESheet'
 import { GameRosterModal } from './GameRoster'
 import { StatEditor } from './StatEditor'
 import { SubEditor, SubForm } from './SubEditor'
@@ -24,7 +25,6 @@ import { SubEditor, SubForm } from './SubEditor'
 /** Khung video trong Live Stats: tạm tắt (bật lại = true). */
 const VIDEO_ENABLED = false
 const SHOT_TYPES: StatType[] = ['2PM', '2PX', '3PM', '3PX']
-const TEAM_TYPES: StatType[] = ['OREB', 'DREB', 'TOV', 'PFT']
 // Lỗi có người bị phạm (hỏi tiếp "ai bị phạm lỗi"). Lỗi kỹ thuật thì không.
 const DRAWN_TYPES: StatType[] = ['PF', 'PFS', 'PFU', 'PFD']
 
@@ -53,9 +53,7 @@ export function StatsPage() {
   const showVideo = VIDEO_ENABLED && showVideoPref
   const toggleVideo = () => { if (!VIDEO_ENABLED) return; setShowVideo(!showVideo); try { localStorage.setItem('gr-sp-video', showVideo ? 'off' : 'on') } catch { /* bỏ qua */ } }
   const { squads, games, players, gamePlayers, stats, lineups, isSuper, addGame, setTeamNames, removeGamePlayer, addStat, updateStat, removeStat, setClock, addLineup, updateLineup, removeLineup, setStatVideo } = useData()
-  const [tab, setTab] = useState<'record' | 'box' | 'analysis'>('record')
-  // Chọn TEAM (pha của đội, không gắn cầu thủ): team rebound, team turnover.
-  const [teamSel, setTeamSel] = useState<TeamSide | null>(null)
+  const [tab, setTab] = useState<'record' | 'box' | 'sheet' | 'analysis'>('record')
   // Cờ cho cú ném tiếp theo: trong paint / fast break. Tự tắt sau khi ghi.
   const [mods, setMods] = useState({ paint: false, fb: false })
   // Vị trí cú ném tiếp theo (chạm lên sân nhỏ). Trong paint thì tự bật cờ "Trong paint".
@@ -165,29 +163,28 @@ export function StatsPage() {
 
   const record = (type: StatType, tov?: 'self' | 'stolen') => {
     if (!game) return
-    if (!sel && !teamSel) return toast('Chưa chọn cầu thủ trên sân (hoặc TEAM)')
-    if (teamSel && !TEAM_TYPES.includes(type)) return toast('TEAM chỉ ghi được OREB, DREB, TOV, TF (lỗi kỹ thuật HLV / ghế)')
+    if (!sel) return toast('Chưa chọn cầu thủ trên sân')
     // Đang xem video thì gắn đúng giây trong video để bấm vào pha là xem lại được.
     const onVideo = showVideo && !!videoId && yt.ready()
     const shot = SHOT_TYPES.includes(type)
     const paint = shot && type.startsWith('2') && (mods.paint || (!!loc && zoneOf(loc.x, loc.y) === 'paint'))
     const id = addStat({
-      gameId: game.id, side: sel ? sel.side : teamSel!, gamePlayerId: sel ? sel.id : null, type, period,
+      gameId: game.id, side: sel.side, gamePlayerId: sel.id, type, period,
       videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, clockS: remaining,
       paint, fastBreak: shot && mods.fb, shotX: shot && loc ? loc.x : null, shotY: shot && loc ? loc.y : null,
       tovKind: type === 'TOV' ? tov ?? null : null,
     })
     const tags = shot ? [type.startsWith('2') && paint ? 'trong paint' : '', mods.fb ? 'fast break' : '', loc ? 'có vị trí' : ''].filter(Boolean).join(', ') : ''
     if (shot && loc && type.startsWith('2') && isThreeZone(zoneOf(loc.x, loc.y))) toast('Lưu ý: vị trí chọn nằm ngoài vạch 3 điểm mà ghi 2PT')
-    else toast(`${sel ? `#${sel.number} ${sel.name}` : `TEAM ${teamSel === 'home' ? homeName : awayName}`} · ${STAT_LABEL[type]}${tags ? ` (${tags})` : ''}`)
+    else toast(`#${sel.number} ${sel.name} · ${STAT_LABEL[type]}${tags ? ` (${tags})` : ''}`)
     if (shot) { setMods({ paint: false, fb: false }); setLoc(null) }
     // Hỏi tiếp: lỗi → ai bị phạm lỗi; ghi điểm → ai kiến tạo.
     if (sel && DRAWN_TYPES.includes(type)) setFu({ kind: 'drawn', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
     else if (sel && (type === '2PM' || type === '3PM')) setFu({ kind: 'assist', eventId: id, side: sel.side, exclude: sel.id })
-    else if (type === 'TOV' && tov === 'stolen') setFu({ kind: 'steal', eventId: id, side: (sel ? sel.side : teamSel!) === 'home' ? 'away' : 'home' })
+    else if (type === 'TOV' && tov === 'stolen') setFu({ kind: 'steal', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
     else setFu(null)
     flashLast(id)
-    setSel(null); setTeamSel(null)
+    setSel(null)
   }
   // Sửa loại mất bóng của một pha TOV trong Play-by-play.
   const setTovKind = (e: StatEvent, kind: 'self' | 'stolen') => {
@@ -306,7 +303,7 @@ export function StatsPage() {
     return (
       <div key={p.id} className={`sp-player ${sel?.id === p.id ? 'on' : ''} ${fs.out ? 'out' : ''} ${isOn ? '' : 'benched'}`}
         title={`#${p.number} ${p.name} · ${pf} PF${fTip ? ` (${fTip})` : ''}${fs.out ? ' · PHẢI RỜI SÂN' : ''} · ${mmss(secs.get(p.id) ?? 0)} MIN`}
-        onClick={(e) => { if (!canEdit) return; if (e.shiftKey) return deletePlayer(p); if (isOn) { setTeamSel(null); setSel(sel?.id === p.id ? null : p) } }}>
+        onClick={(e) => { if (!canEdit) return; if (e.shiftKey) return deletePlayer(p); if (isOn) { setSel(sel?.id === p.id ? null : p) } }}>
         <span className="sp-no">{p.number}</span>
         <span className="sp-pname">{p.name}</span>
         {(pf >= 3 || fs.out) && <span className={`sp-pf f${fs.out ? 5 : Math.min(pf, 5)}`}>{fs.out ? 'DQ' : `${pf}F`}</span>}
@@ -333,10 +330,6 @@ export function StatsPage() {
         <div className="sp-group-label">ON COURT <b>{on.length}/5</b></div>
         <div className="sp-roster">
           {on.map(card)}
-          <div className={`sp-player sp-teamchip ${teamSel === side ? 'on' : ''}`} title="TEAM: team rebound, team turnover (không gắn cầu thủ)"
-            onClick={() => { if (!canEdit) return; setSel(null); setTeamSel(teamSel === side ? null : side) }}>
-            <span className="sp-no">TEAM</span><span className="sp-pname">REB · TOV</span>
-          </div>
         </div>
         <div className="sp-group-label">BENCH</div>
         <div className="sp-roster bench">
@@ -404,7 +397,7 @@ export function StatsPage() {
   )
 
   const padBlock = (
-        <div className={`sp-pad ${sel || teamSel ? '' : 'idle'}`}>
+        <div className={`sp-pad ${sel ? '' : 'idle'}`}>
       {lastStat && canEdit && (
         <div className="sp-last">
           <span className="grow">Vừa ghi: <b>{(() => { const p = byId.get(lastStat.gamePlayerId ?? ''); return p ? `#${p.number} ${p.name}` : `TEAM ${lastStat.side === 'home' ? homeName : awayName}` })()}</b> {STAT_LABEL[lastStat.type]}</span>
@@ -413,7 +406,7 @@ export function StatsPage() {
         </div>
       )}
       <div className="sp-sel">{sel ? <>#{sel.number} {sel.name} <span className="muted">· {sel.side === 'home' ? homeName : awayName}</span></>
-        : teamSel ? <>TEAM <span className="muted">· {teamSel === 'home' ? homeName : awayName} (OREB, DREB, TOV)</span></> : '—'}</div>
+        : '—'}</div>
       {fu && (() => {
         const opts = roster(fu.side).filter((x) => court.has(x.id) && x.id !== fu.exclude)
         return (
@@ -488,6 +481,7 @@ export function StatsPage() {
           <div className="seg-toggle sp-tabs">
             <button className={tab === 'record' ? 'on' : ''} onClick={() => setTab('record')}>Record</button>
             <button className={tab === 'box' ? 'on' : ''} onClick={() => setTab('box')}>Box score</button>
+            <button className={tab === 'sheet' ? 'on' : ''} onClick={() => setTab('sheet')}>Biên bản{stats.some((e) => e.pending) ? ` (${stats.filter((e) => e.pending).length})` : ''}</button>
             <button className={tab === 'analysis' ? 'on' : ''} onClick={() => setTab('analysis')}>Phân tích</button>
           </div>
         )}
@@ -517,6 +511,8 @@ export function StatsPage() {
         <div className="placeholder">Chọn một trận ở trên, hoặc bấm <b>+ Trận mới</b> để thống kê một trận (kể cả trận của giải đấu).</div>
       ) : tab === 'box' ? (
         <div className="sp-box"><BoxScoreView editable={canEdit} onSeek={VIDEO_ENABLED ? (vid, t) => { setTab('record'); if (!showVideo) toggleVideo(); setTimeout(() => seekVideo(vid, t, true), 50) } : undefined} /></div>
+      ) : tab === 'sheet' ? (
+        <div className="sp-box"><ESheet canEdit={canEdit} /></div>
       ) : tab === 'analysis' ? (
         <div className="sp-box"><Analysis editable={canEdit} /></div>
       ) : (
