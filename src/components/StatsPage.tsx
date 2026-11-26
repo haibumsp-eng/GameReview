@@ -447,33 +447,6 @@ export function StatsPage() {
           </div>
         )
       })()}
-      <FtQueue canEdit={canEdit} />
-      {putQ && (
-        <div className="sp-reb">
-          <div className="sp-fu-q">#{putQ.p.number} {putQ.p.name} (OREB) có dứt điểm ngay (tip-in / putback) không?</div>
-          <div className="row wrap">
-            <button className="btn primary" onClick={() => answerPut('made')}>Vào (+2)</button>
-            <button className="btn" onClick={() => answerPut('miss')}>Trượt</button>
-            <button className="btn ghost" onClick={() => answerPut('none')}>Không dứt điểm</button>
-          </div>
-        </div>
-      )}
-      {rebQ && (() => {
-        const o: TeamSide = rebQ.side === 'home' ? 'away' : 'home'
-        const side = (s: TeamSide, tag: string) => (
-          <div className={`sp-fu ${s}`}>
-            <span className="sp-fu-q">{s === 'home' ? homeName : awayName} · {tag}</span>
-            {roster(s).filter((x) => court.has(x.id)).map((x) => <button key={x.id} onClick={() => answerReb(x)} title={x.name}>#{x.number}</button>)}
-          </div>
-        )
-        return (
-          <div className="sp-reb">
-            <div className="sp-fu-q">Ai bắt bóng bật bảng?{rebQ.ft ? ' (quả phạt: chọn một hoặc nhiều người, rồi bấm Xong)' : ''}</div>
-            {side(rebQ.side, 'OREB (rebound tấn công)')}{side(o, 'DREB (rebound phòng thủ)')}
-            <button className="skip" onClick={() => setRebQ(null)}>{rebQ.ft ? (rebQ.n ? 'Xong' : 'Không có rebound (còn quả phạt / bóng ra ngoài)') : 'Bỏ qua'}</button>
-          </div>
-        )
-      })()}
       <div className="sp-shot">
         <Court pick={loc} onPick={(x, y) => setLoc(loc && Math.hypot(loc.x - x, loc.y - y) < 0.03 ? null : { x, y })} />
         <div className="sp-shot-side">
@@ -513,6 +486,35 @@ export function StatsPage() {
                 </div>
                 <span className="sp-num away">{score('away')}</span>
                 <span className="sp-sname">{awayName}</span>
+              </div>
+              <div className="sp-alerts">
+      <FtQueue canEdit={canEdit} />
+      {putQ && (
+        <div className="sp-reb">
+          <div className="sp-fu-q">#{putQ.p.number} {putQ.p.name} (OREB) có dứt điểm ngay (tip-in / putback) không?</div>
+          <div className="row wrap">
+            <button className="btn primary" onClick={() => answerPut('made')}>Vào (+2)</button>
+            <button className="btn" onClick={() => answerPut('miss')}>Trượt</button>
+            <button className="btn ghost" onClick={() => answerPut('none')}>Không dứt điểm</button>
+          </div>
+        </div>
+      )}
+      {rebQ && (() => {
+        const o: TeamSide = rebQ.side === 'home' ? 'away' : 'home'
+        const side = (s: TeamSide, tag: string) => (
+          <div className={`sp-fu ${s}`}>
+            <span className="sp-fu-q">{s === 'home' ? homeName : awayName} · {tag}</span>
+            {roster(s).filter((x) => court.has(x.id)).map((x) => <button key={x.id} onClick={() => answerReb(x)} title={x.name}>#{x.number}</button>)}
+          </div>
+        )
+        return (
+          <div className="sp-reb">
+            <div className="sp-fu-q">Ai bắt bóng bật bảng?{rebQ.ft ? ' (quả phạt: chọn một hoặc nhiều người, rồi bấm Xong)' : ''}</div>
+            {side(rebQ.side, 'OREB (rebound tấn công)')}{side(o, 'DREB (rebound phòng thủ)')}
+            <button className="skip" onClick={() => setRebQ(null)}>{rebQ.ft ? (rebQ.n ? 'Xong' : 'Không có rebound (còn quả phạt / bóng ra ngoài)') : 'Bỏ qua'}</button>
+          </div>
+        )
+      })()}
               </div>
               <div className="sp-deck">{team('home')}{padBlock}{team('away')}</div>
     </div>
@@ -580,7 +582,7 @@ export function StatsPage() {
               : underBlock}
           </div>
           <Gutter dir="col" begin={() => L.spRight} move={(st, dx) => L.set({ spRight: clamp(st - dx, 220, 560) })} />
-          <div className="col sp-col-right" style={{ width: L.spRight }}>
+          <div className="col sp-col-right" style={{ width: `min(${L.spRight}px, 24vw)` }}>
             {logEl}
             {game && <div className="sp-voice"><VoicePanel gameId={game.id} homeName={homeName} awayName={awayName} players={voicePlayers} canEdit={canEdit} stamp={voiceStamp} onCommit={voiceCommit} /></div>}
           </div>

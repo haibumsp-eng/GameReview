@@ -214,7 +214,7 @@ export default function App() {
       {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}
       {cur === 'stats' ? <StatsPage /> : cur === 'board' && !jetOnly ? <ScoreboardPage /> : cur === 'jet' && org?.jetEnabled ? <JetPage onOpenStats={() => setView('stats')} /> : (
       <div className="workspace">
-        <div className="col" style={{ width: L.left }}>
+        <div className="col" style={{ width: `min(${L.left}px, 21vw)` }}>
           <SplitV frac={L.leftSplit} setFrac={(f) => L.set({ leftSplit: f })} top={<Library />} bottom={<Roster />} />
         </div>
         <Gutter dir="col" begin={() => L.left} move={(s, dx) => L.set({ left: clamp(s + dx, 200, 520) })} />
@@ -222,13 +222,13 @@ export default function App() {
         <div className="col center">
           <div className="slot grow"><PlayerPanel /></div>
           <Gutter dir="row" begin={() => L.tlH} move={(s, _dx, dy) => L.set({ tlH: clamp(s - dy, 70, 400) })} />
-          <div className="slot" style={{ height: L.tlH }}><Timeline /></div>
+          <div className="slot" style={{ height: `min(${L.tlH}px, 18vh)` }}><Timeline /></div>
           <Gutter dir="row" begin={() => L.clipsH} move={(s, _dx, dy) => L.set({ clipsH: clamp(s - dy, 120, 700) })} />
-          <div className="slot" style={{ height: L.clipsH }}><ClipList /></div>
+          <div className="slot" style={{ height: `min(${L.clipsH}px, 28vh)` }}><ClipList /></div>
         </div>
 
         <Gutter dir="col" begin={() => L.right} move={(s, dx) => L.set({ right: clamp(s - dx, 260, 700) })} />
-        <div className="col" style={{ width: L.right }}>
+        <div className="col" style={{ width: `min(${L.right}px, 27vw)` }}>
           <SplitV frac={L.rightSplit} setFrac={(f) => L.set({ rightSplit: f })} top={<MarkPanel />} bottom={<Comments />} />
         </div>
       </div>

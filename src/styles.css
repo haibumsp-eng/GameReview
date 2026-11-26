@@ -1125,3 +1125,55 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 
 .ft-queue { display: grid; gap: 6px; }
 .ft-queue .icon-btn { margin-left: 4px; }
+
+/* ================= Màn hình laptop 12 / 13 / 14 inch (rộng 1280-1512, cao 680-860) ================= */
+.app { min-height: 0; }
+.topbar { flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+.sp-bar { flex-wrap: wrap; row-gap: 6px; }
+.sp-select { width: auto; min-width: 110px; flex: 1 1 130px; max-width: 190px; }
+.sp-select.wide { flex: 2 1 200px; max-width: 320px; }
+.sp-tabs { width: auto; flex: none; }
+@media (max-width: 1560px) {
+  .topbar { gap: 6px; padding-left: 10px; padding-right: 10px; }
+  .topbar .btn.sm, .topbar .btn { padding-left: 9px; padding-right: 9px; }
+  .view-switch { margin-left: 6px; }
+  .view-switch button { padding: 5px 10px; }
+  .keys-help, .me { display: none; }
+  .org-select { width: 130px; }
+  .org-pill { padding: 4px 9px; }
+}
+@media (max-width: 1360px) {
+  .logo-word { font-size: 16px; }
+  .view-switch button { padding: 5px 8px; font-size: 13px; }
+  .topbar .btn.ghost { font-size: 12px; }
+  .sp-tabs button { padding: 6px 8px; font-size: 13px; }
+}
+/* Live Stats trên màn thấp: sân ném và nút bấm gọn lại để thấy đủ không bị chồng chéo */
+@media (max-height: 900px) {
+  .sp-deck .sp-pad { position: static; }
+  .sp-shot .court { max-height: clamp(120px, 24vh, 250px); width: auto; margin: 0 auto; }
+  .sp-deck .sp-act { height: 44px; font-size: 13px; }
+  .sp-deck .sp-pad { gap: 6px; padding: 8px; }
+  .sp-deck .sp-team { padding: 6px; }
+  .sp-under .sp-score { padding: 4px 12px; }
+  .sp-under .sp-num { font-size: 32px; }
+  .sp-under .sp-time { font-size: 22px; }
+  .sp-player, .sp-deck .sp-player { min-height: 46px; padding: 4px 3px; }
+  .es-p { padding: 4px 3px; }
+  .es-p b { font-size: 16px; }
+  .es { padding: 6px; gap: 8px; }
+  .es-sc { font-size: 30px; }
+  .es-clk { font-size: 24px; }
+}
+@media (max-width: 1440px) {
+  .sp-deck { grid-template-columns: minmax(0, 1fr) minmax(250px, 0.8fr) minmax(0, 1fr); }
+  .sp-deck .sp-roster, .sp-roster { grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); }
+  .sp-deck .sp-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .sp-deck .sp-act small { font-size: 10px; }
+}
+
+/* Khung hỏi (ném phạt, rebound, tip-in) nằm một dải ngang trên các cột, chỉ hiện khi có câu hỏi */
+.sp-alerts { display: grid; gap: 6px; }
+.sp-alerts:empty { display: none; }
+.sp-alerts .es-card, .sp-alerts .sp-reb { max-height: 46vh; overflow: auto; }
+.sp-alerts .es-grid { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); }
