@@ -19,6 +19,7 @@ import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, turnoverInfo, z
 import { Court } from './Court'
 import { ESheet } from './ESheet'
 import { FtQueue, FOUL_KINDS } from './FtFlow'
+import { PendingCards } from './PendingCards'
 import { GameRosterModal } from './GameRoster'
 import { StatEditor } from './StatEditor'
 import { SubEditor, SubForm } from './SubEditor'
@@ -489,6 +490,7 @@ export function StatsPage() {
                 <span className="sp-sname">{awayName}</span>
               </div>
               <div className="sp-alerts">
+                <PendingCards canEdit={canEdit} />
       <FtQueue canEdit={canEdit} />
       {putQ && (
         <div className="sp-reb">

@@ -1223,3 +1223,23 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .cam-adj button.arm { background: #ff6b4a; color: #1a0600; border-color: #ff6b4a; }
 
 .cam-links { display: flex; flex-direction: column; align-items: flex-end; }
+
+/* Máy quay: màn chính chỉ có đồng hồ + 4 ô lớn; mỗi ô mở một bảng riêng khi bấm */
+.cam-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cam-tiles .tile { min-height: 104px; border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 10px; text-align: center; }
+.cam-tiles .tile .ico { font-size: 28px; line-height: 1; }
+.cam-tiles .tile b { font-size: 16px; }
+.cam-tiles .tile small { font-size: 11px; color: var(--muted); }
+.cam-tiles .tile.done { border-color: var(--accent-line); background: var(--accent-soft); }
+.cam-tiles .tile.arm { background: #ff6b4a33; border-color: #ff6b4a; }
+.cam-panel { display: grid; gap: 10px; border: 1px solid var(--accent-line); border-radius: 16px; padding: 12px; background: var(--panel); }
+.cam-phead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cam-phead b { font-size: 15px; }
+.cam-phead button { height: 44px; padding: 0 14px; border-radius: 10px; background: var(--panel-3); border: 1px solid var(--line-2); color: var(--text); font-weight: 700; }
+.cam-panel .cam-link { justify-self: start; }
+
+.pend-list { display: grid; gap: 6px; }
+.cam-panel .rp-players { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.cam-panel .rp-player { min-height: 78px; padding: 8px 2px; }
+.cam-panel .rp-player b { font-size: 26px; }
+.cam-phead button { white-space: nowrap; }
