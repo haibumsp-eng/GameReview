@@ -2,7 +2,7 @@ import { dialogOpen } from './lib/dialog'
 import { useShallow } from 'zustand/react/shallow'
 import { Logo } from './components/Logo'
 import { useEffect, useRef, useState } from 'react'
-import { useData, useUi, selectGame, myOrgRole, orgExpired } from './store'
+import { useData, useUi, selectGame, myOrgRole, orgExpired, isJetSquad } from './store'
 import { OrgAdminModal, OrgMembersModal } from './components/Orgs'
 import { playClip, cancelIntro } from './nav'
 import { yt } from './youtube'
@@ -113,9 +113,12 @@ export default function App() {
   }, [isSuper, myOrgId, orgs, orgId, set])
   // Chọn tuyến đội đầu tiên của trung tâm khi chưa có / không còn tồn tại.
   useEffect(() => {
+    // Tuyến JET không nằm trong danh sách tuyến thường: không tự chọn, nhưng giữ nếu đang mở trận JET.
     const mine = squads.filter((s) => s.orgId === orgId)
-    if (!mine.some((s) => s.id === squadId)) { set({ squadId: mine[0]?.id ?? '' }); selectGame(null) }
-  }, [squads, orgId, squadId, set])
+    const cur = mine.find((s) => s.id === squadId)
+    if (cur && (!isJetSquad(cur) || games.some((g) => g.id === gameId && g.squadId === cur.id))) return
+    set({ squadId: mine.find((s) => !isJetSquad(s))?.id ?? '' }); selectGame(null)
+  }, [squads, games, gameId, orgId, squadId, set])
   useEffect(() => { loadGame(gameId) }, [gameId, loadGame])
 
   // Link chia sẻ: #g=<gameId>&p=<playlistId>

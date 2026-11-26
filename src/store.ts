@@ -660,6 +660,14 @@ export type LineupPatch = Partial<Pick<LineupEvent, 'gamePlayerId' | 'side' | 'k
 /** Các trường của một pha có thể sửa sau khi ghi. */
 export type StatPatch = Partial<Pick<StatEvent, 'gamePlayerId' | 'side' | 'type' | 'paint' | 'fastBreak' | 'drawnBy' | 'linkedId' | 'tovKind' | 'shotX' | 'shotY' | 'clockS' | 'period'>>
 
+/* ---------- Giải JET tách riêng khỏi tuyến đội / trận thường ---------- */
+/** Tuyến thuộc Giải JET: đội giải (có league) hoặc tuyến cũ có chữ "JET" trong tên. */
+export const isJetSquad = (s: { name: string; league?: string | null } | undefined): boolean => !!s && (!!s.league || /jet/i.test(s.name))
+/** Trận thuộc Giải JET: nằm trong tuyến JET hoặc có chữ "JET" trong tên trận. */
+export function isJetGame(g: { squadId: string; title: string }, squads: { id: string; name: string; league?: string | null }[]): boolean {
+  return /jet/i.test(g.title) || isJetSquad(squads.find((s) => s.id === g.squadId))
+}
+
 /* ---------- Số áo theo trận ---------- */
 /** Số áo của cầu thủ (tuyến) trong trận đang mở: theo danh sách trận nếu đã đặt, không thì số mặc định của tuyến. */
 export function numberIn(p: Player, gps: GamePlayer[]): number | null {

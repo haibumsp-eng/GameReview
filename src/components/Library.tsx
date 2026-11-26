@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useState } from 'react'
-import { useData, useUi, selectGame, myOrgRole, toast } from '../store'
+import { useData, useUi, selectGame, myOrgRole, toast, isJetSquad, isJetGame } from '../store'
 import { defaultLabel, parseYouTubeId, toLoginEmail } from '../util'
 import { Panel } from './Panel'
 import { confirmDialog, promptDialog, formDialog, alertDialog } from '../lib/dialog'
@@ -9,14 +9,15 @@ export function Library() {
   const { squads, games, videos, addSquad, addGame, removeGame, addMember } = useData()
   const { orgId, squadId, gameId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, set: s.set })))
   const isOwner = useData((s) => s.isSuper) || myOrgRole(orgId) === 'owner'
-  const orgSquads = squads.filter((s) => s.orgId === orgId)
+  // Giải JET là mục riêng: không lẫn vào tuyến đội / trận thường (trừ khi đang mở đúng trận JET đó).
+  const orgSquads = squads.filter((s) => s.orgId === orgId && (!isJetSquad(s) || s.id === squadId))
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
   const [links, setLinks] = useState<string[]>(['', '', '', ''])
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [err, setErr] = useState('')
 
-  const squadGames = games.filter((g) => g.squadId === squadId)
+  const squadGames = games.filter((g) => g.squadId === squadId && (!isJetGame(g, squads) || g.id === gameId))
   // Mỗi ô một hiệp; ô để trống thì bỏ qua.
   const slots = links.map((l, i) => ({ label: defaultLabel(i + 1), raw: l.trim(), id: parseYouTubeId(l) }))
   const filled = slots.filter((x) => x.raw)

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { supabase } from '../supabase'
-import { useData, useUi, selectGame, toast } from '../store'
+import { useData, useUi, selectGame, toast, isJetGame } from '../store'
 import { confirmDialog } from '../lib/dialog'
 import { parseJetCsv, type JetParse } from '../lib/jetCsv'
 
@@ -34,7 +34,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
   const reload = () => useData.getState().loadBase()
   // Trận có chữ "JET" trong tên (PRO.JET, JR.JET, WJET, JET5…) hoặc thuộc đội JET, trong trung tâm này.
   const orgSquads = new Map(squads.filter((s) => s.orgId === orgId).map((s) => [s.id, s]))
-  const jetGames = games.filter((g) => { const sq = orgSquads.get(g.squadId); return !!sq && (/jet/i.test(g.title) || /jet/i.test(sq.name) || !!sq.league) })
+  const jetGames = games.filter((g) => { const sq = orgSquads.get(g.squadId); return !!sq && isJetGame(g, squads) })
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.title.localeCompare(b.title, 'vi'))
   const openGame = (g: (typeof games)[number]) => { set({ squadId: g.squadId }); selectGame(g.id); onOpenStats() }
 
@@ -62,7 +62,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
         {canEdit && (
           <div className="stack">
             <button className="btn" onClick={() => setModal('import')}>⬆ Nhập file CSV của JET</button>
-            <button className="btn primary" disabled={jet.length < 2} onClick={() => setModal('match')} title="Chọn đội A, đội B: danh sách hai đội tự nạp vào trận">🏀 Tạo trận JET</button>
+            <button className="btn primary" disabled={jet.filter((s) => s.league).length < 2} onClick={() => setModal('match')} title="Chọn đội A, đội B: danh sách hai đội tự nạp vào trận">🏀 Ghi thêm trận</button>
           </div>
         )}
         <div className="muted small-note">Chỉ lưu <b>tên đội, HLV, họ tên VĐV</b>. Không lưu số áo: số áo nhập riêng cho từng trận ở Live Stats.</div>
@@ -76,6 +76,8 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
         </div>
         {tab === 'games' ? (
           <div className="card stack">
+            {canEdit && <button className="btn primary" disabled={jet.filter((s) => s.league).length < 2} title="Chọn đội sân nhà và đội sân khách" onClick={() => setModal('match')}>+ Ghi thêm trận (chọn đội sân nhà / sân khách)</button>}
+            {canEdit && jet.filter((s) => s.league).length < 2 && <div className="muted small-note">Cần ít nhất 2 đội JET. Nhập file CSV ở cột bên trái để có đội.</div>}
             <div className="muted small-note">Các trận có chữ “JET” trong tên trận hoặc nằm trong tuyến/đội có chữ “JET” (PRO.JET, JR.JET, WJET…). Bấm một trận để mở Live Stats và bấm stats.</div>
             <ul className="list">
               {jetGames.map((g) => (
@@ -90,7 +92,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
                   }}>×</button>}
                 </li>
               ))}
-              {jetGames.length === 0 && <li className="empty">Chưa có trận nào có chữ “JET” trong tên. Tạo trận mới bằng “Tạo trận JET”.</li>}
+              {jetGames.length === 0 && <li className="empty">Chưa có trận JET nào. Bấm “Ghi thêm trận”.</li>}
             </ul>
           </div>
         ) : team ? <TeamEditor key={team.id} id={team.id} canEdit={canEdit} onError={setErr} onDeleted={() => { setSel(''); void reload() }} /> : <div className="card muted">Chọn một đội ở bên trái để xem và sửa danh sách VĐV.</div>}
@@ -305,7 +307,7 @@ function MatchModal({ league, onClose, onCreated }: { league: string; onClose: (
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
-        <b>Tạo trận JET</b>
+        <b>Ghi thêm trận JET</b>
         <div className="muted small-note">Tên VĐV hai đội có sẵn khi mở “Danh sách trận”; bạn chỉ cần nhập số áo từng người cho trận này (Live Stats → Danh sách trận / số áo).</div>
         <div className="org-form">
           <label className="field-label">Đội nhà (HOME)</label>
@@ -316,7 +318,7 @@ function MatchModal({ league, onClose, onCreated }: { league: string; onClose: (
           <input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
           <select value={f.len} onChange={(e) => setF({ ...f, len: +e.target.value })}>{[10, 8, 12, 6].map((m) => <option key={m} value={m * 60}>Mỗi hiệp {m} phút</option>)}</select>
         </div>
-        <div className="row"><button className="btn" onClick={onClose}>Huỷ</button><button className="btn primary grow-btn" disabled={!H || !A || H.id === A.id} onClick={create}>Tạo trận và mở Live Stats</button></div>
+        <div className="row"><button className="btn" onClick={onClose}>Huỷ</button><button className="btn primary grow-btn" disabled={!H || !A || H.id === A.id} onClick={create}>Ghi trận và mở Live Stats</button></div>
       </div>
     </div>
   )

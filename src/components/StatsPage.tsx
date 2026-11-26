@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useData, useUi, selectGame, myOrgRole, toast } from '../store'
+import { useData, useUi, selectGame, myOrgRole, toast, isJetSquad, isJetGame } from '../store'
 import { isFoul, lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
 import { clockNow, mmss, offCourtStats, onCourt, periodLength, secondsPlayed } from '../lib/minutes'
 import type { GamePlayer, StatEvent, StatType, TeamSide } from '../types'
@@ -65,8 +65,9 @@ export function StatsPage() {
   const [sel, setSel] = useState<GamePlayer | null>(null)
   const [, tick] = useState(0)
   const [newGame, setNewGame] = useState<{ title: string; home: string; away: string; date: string; len: number } | null>(null)
-  const orgSquads = squads.filter((s) => s.orgId === orgId)
-  const squadGames = games.filter((g) => g.squadId === squadId)
+  // Giải JET là mục riêng: không lẫn vào tuyến đội / trận thường (trừ khi đang mở đúng trận JET đó).
+  const orgSquads = squads.filter((s) => s.orgId === orgId && (!isJetSquad(s) || s.id === squadId))
+  const squadGames = games.filter((g) => g.squadId === squadId && (!isJetGame(g, squads) || g.id === gameId))
   const game = games.find((g) => g.id === gameId)
   const squad = squads.find((s) => s.id === squadId)
   const canEdit = isSuper || myOrgRole(orgId) !== 'viewer'
