@@ -18,6 +18,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
   const { squads, players, games, isSuper, orgMembers, session } = useData()
   const myRole = orgMembers.find((m) => m.orgId === orgId && m.userId === session?.user.id)?.role
   const canEdit = isSuper || myRole === 'owner' || myRole === 'coach'
+  const canDelete = isSuper || myRole === 'owner' // chỉ quản trị tổng và Admin của trung tâm
   const [league, setLeague] = useState<(typeof JET_LEAGUES)[number]>('PRO.JET')
   const [season, setSeason] = useState('')
   const [sel, setSel] = useState('')
@@ -81,6 +82,12 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
                 <li key={g.id} className="item" onClick={() => openGame(g)}>
                   <span className="grow"><b>{g.title}</b><br /><span className="muted small-note">{g.date || 'chưa có ngày'} · {orgSquads.get(g.squadId)?.name}{orgSquads.get(g.squadId)?.league ? '' : ' (tuyến)'}</span></span>
                   <button className="btn sm primary">Bấm stats</button>
+                  {canDelete && <button className="icon-btn" title="Xoá trận (chỉ Admin)" onClick={async (e) => {
+                    e.stopPropagation()
+                    if (!(await confirmDialog({ title: `Xoá trận “${g.title}”?`, message: 'Toàn bộ video, mark, bình luận, thống kê và danh sách của trận này sẽ bị xoá. Không khôi phục được (trừ bản lưu nhanh nếu có).', okText: 'Xoá trận', danger: true }))) return
+                    useData.getState().removeGame(g.id)
+                    if (useUi.getState().gameId === g.id) selectGame(null)
+                  }}>×</button>}
                 </li>
               ))}
               {jetGames.length === 0 && <li className="empty">Chưa có trận nào có chữ “JET” trong tên. Tạo trận mới bằng “Tạo trận JET”.</li>}
