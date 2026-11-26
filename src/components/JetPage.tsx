@@ -33,7 +33,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
   const reload = () => useData.getState().loadBase()
   // Trận có chữ "JET" trong tên (PRO.JET, JR.JET, WJET, JET5…) hoặc thuộc đội JET, trong trung tâm này.
   const orgSquads = new Map(squads.filter((s) => s.orgId === orgId).map((s) => [s.id, s]))
-  const jetGames = games.filter((g) => { const sq = orgSquads.get(g.squadId); return !!sq && (/jet/i.test(g.title) || !!sq.league) })
+  const jetGames = games.filter((g) => { const sq = orgSquads.get(g.squadId); return !!sq && (/jet/i.test(g.title) || /jet/i.test(sq.name) || !!sq.league) })
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.title.localeCompare(b.title, 'vi'))
   const openGame = (g: (typeof games)[number]) => { set({ squadId: g.squadId }); selectGame(g.id); onOpenStats() }
 
@@ -75,11 +75,11 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
         </div>
         {tab === 'games' ? (
           <div className="card stack">
-            <div className="muted small-note">Các trận có chữ “JET” trong tên (PRO.JET, JR.JET, WJET…) hoặc của đội JET. Bấm một trận để mở Live Stats và bấm stats.</div>
+            <div className="muted small-note">Các trận có chữ “JET” trong tên trận hoặc nằm trong tuyến/đội có chữ “JET” (PRO.JET, JR.JET, WJET…). Bấm một trận để mở Live Stats và bấm stats.</div>
             <ul className="list">
               {jetGames.map((g) => (
                 <li key={g.id} className="item" onClick={() => openGame(g)}>
-                  <span className="grow"><b>{g.title}</b><br /><span className="muted small-note">{g.date || 'chưa có ngày'} · {orgSquads.get(g.squadId)?.name}</span></span>
+                  <span className="grow"><b>{g.title}</b><br /><span className="muted small-note">{g.date || 'chưa có ngày'} · {orgSquads.get(g.squadId)?.name}{orgSquads.get(g.squadId)?.league ? '' : ' (tuyến)'}</span></span>
                   <button className="btn sm primary">Bấm stats</button>
                 </li>
               ))}
