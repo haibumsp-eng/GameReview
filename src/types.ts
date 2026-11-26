@@ -1,9 +1,9 @@
 export type Side = 'ATK' | 'DEF'
 
-export interface Squad { id: string; name: string; orgId: string }
+export interface Squad { id: string; name: string; orgId: string; /** Giải JET (PRO.JET | JET | JR.JET | WJET) nếu đây là đội giải JET. */ league?: string | null; season?: string; coach?: string }
 export type OrgRole = 'owner' | 'coach' | 'viewer'
 /** Trung tâm / CLB: một khách hàng. */
-export interface Org { id: string; name: string; plan: string; maxSquads: number | null; expiresOn: string | null; joinCode: string }
+export interface Org { id: string; name: string; plan: string; maxSquads: number | null; expiresOn: string | null; joinCode: string; /** Bật mục Giải JET (riêng Junsport). */ jetEnabled?: boolean }
 export interface OrgMember { orgId: string; userId: string; role: OrgRole }
 export interface Player { id: string; squadId: string; number: number; name: string }
 export interface Game {

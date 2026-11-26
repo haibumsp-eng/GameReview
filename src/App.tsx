@@ -17,6 +17,7 @@ import { StatsPage } from './components/StatsPage'
 import { Login } from './components/Login'
 import { Overview } from './components/Overview'
 import { ScoreboardPage } from './components/ScoreboardPage'
+import { JetPage } from './components/JetPage'
 import { RecordHud } from './components/RecordHud'
 import { SpotlightRunner } from './components/Spotlight'
 import { Gutter, SplitV } from './components/Gutter'
@@ -91,11 +92,11 @@ export default function App() {
   const { orgId, squadId, gameId, overview, inPoint, toastMsg, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, overview: s.overview, inPoint: s.inPoint, toastMsg: s.toast, set: s.set })))
   const [modal, setModal] = useState<'' | 'members' | 'orgs'>('')
   // Hai trang: Mổ băng (video) và Live Stats (thống kê). Nhớ trang đang mở; link #stats mở thẳng trang stats.
-  const [view, setViewState] = useState<'review' | 'stats' | 'board'>(() => {
+  const [view, setViewState] = useState<'review' | 'stats' | 'board' | 'jet'>(() => {
     if (location.hash.includes('stats')) return 'stats'
-    try { const v = localStorage.getItem('gr-view'); return v === 'stats' || v === 'board' ? v : 'review' } catch { return 'review' }
+    try { const v = localStorage.getItem('gr-view'); return v === 'stats' || v === 'board' || v === 'jet' ? v : 'review' } catch { return 'review' }
   })
-  const setView = (v: 'review' | 'stats' | 'board') => { setViewState(v); try { localStorage.setItem('gr-view', v) } catch { /* bỏ qua */ } }
+  const setView = (v: 'review' | 'stats' | 'board' | 'jet') => { setViewState(v); try { localStorage.setItem('gr-view', v) } catch { /* bỏ qua */ } }
   const landed = useRef(false)
   const L = useLayout()
 
@@ -169,6 +170,7 @@ export default function App() {
           <button className={view === 'review' ? 'on' : ''} onClick={() => setView('review')}>Mổ băng</button>
           <button className={view === 'stats' ? 'on' : ''} onClick={() => setView('stats')}>Live Stats</button>
           <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>Bảng tỉ số</button>
+          {org?.jetEnabled && <button className={view === 'jet' ? 'on' : ''} onClick={() => setView('jet')}>Giải JET</button>}
         </div>
         {isSuper ? (
           <select className="org-select" value={orgId} onChange={(e) => { set({ orgId: e.target.value }); try { localStorage.setItem('gr-org', e.target.value) } catch { /* bỏ qua */ } }}>
@@ -204,7 +206,7 @@ export default function App() {
       <RecordHud />
       {toastMsg && inPoint == null && <div className="toast">{toastMsg}</div>}
       {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}
-      {view === 'stats' ? <StatsPage /> : view === 'board' ? <ScoreboardPage /> : (
+      {view === 'stats' ? <StatsPage /> : view === 'board' ? <ScoreboardPage /> : view === 'jet' && org?.jetEnabled ? <JetPage onOpenStats={() => setView('stats')} /> : (
       <div className="workspace">
         <div className="col" style={{ width: L.left }}>
           <SplitV frac={L.leftSplit} setFrac={(f) => L.set({ leftSplit: f })} top={<Library />} bottom={<Roster />} />

@@ -128,7 +128,8 @@ function OrgRow({ org, squads }: { org: Org; squads: number }) {
   }
   return (
     <div className="ov-row org-row">
-      <span className="item-title">{org.name} <span className="tag">{org.joinCode}</span> {orgExpired(org) && <span className="badge DEF">Hết hạn</span>}</span>
+      <span className="item-title">{org.name} <span className="tag">{org.joinCode}</span> {orgExpired(org) && <span className="badge DEF">Hết hạn</span>}
+        <button className={`chip ${org.jetEnabled ? 'on' : ''}`} style={{ marginLeft: 6 }} title="Bật mục Giải JET (PRO.JET, JET, JR.JET, WJET) cho trung tâm này" onClick={async () => { const e = await updateOrg(org.id, { jetEnabled: !org.jetEnabled }); setSaved(e ?? '') }}>Giải JET {org.jetEnabled ? '✓' : ''}</button></span>
       <select value={v.plan} onChange={(e) => setV({ ...v, plan: e.target.value })}>
         {Object.entries(PLAN_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
       </select>

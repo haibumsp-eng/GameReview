@@ -44,6 +44,7 @@ interface DataState {
   addPlayer: (squadId: string, number: number, name: string) => void
   addPlayers: (squadId: string, list: { number: number; name: string }[]) => void
   removePlayer: (id: string) => void
+  updatePlayer: (id: string, patch: { number?: number; name?: string }) => void
   addGame: (g: Omit<Game, 'id'>, videos: { label: string; youtubeId: string }[]) => { gameId: string; videoId: string }
   removeGame: (id: string) => void
   addVideo: (gameId: string, label: string, youtubeId: string) => string
@@ -199,8 +200,8 @@ export const useData = create<DataState>((set, get) => {
       ])
       if ([sq, pl, ga, pr, gv, ad, og, om].some((r) => fail(r.error))) return
       set({
-        squads: (sq.data ?? []).map((r: any) => ({ id: r.id, name: r.name, orgId: r.org_id })),
-        orgs: (og.data ?? []).map((r: any) => ({ id: r.id, name: r.name, plan: r.plan, maxSquads: r.max_squads, expiresOn: r.expires_on, joinCode: r.join_code ?? '' })),
+        squads: (sq.data ?? []).map((r: any) => ({ id: r.id, name: r.name, orgId: r.org_id, league: r.league ?? null, season: r.season ?? '', coach: r.coach ?? '' })),
+        orgs: (og.data ?? []).map((r: any) => ({ id: r.id, name: r.name, plan: r.plan, maxSquads: r.max_squads, expiresOn: r.expires_on, joinCode: r.join_code ?? '', jetEnabled: !!r.jet_enabled })),
         orgMembers: (om.data ?? []).map((r: any) => ({ orgId: r.org_id, userId: r.user_id, role: r.role })),
         baseLoaded: true,
         players: (pl.data ?? []).map((r: any) => ({ id: r.id, squadId: r.squad_id, number: r.number, name: r.name })),
@@ -289,6 +290,7 @@ export const useData = create<DataState>((set, get) => {
       if (p.plan !== undefined) row.plan = p.plan
       if (p.maxSquads !== undefined) row.max_squads = p.maxSquads
       if (p.expiresOn !== undefined) row.expires_on = p.expiresOn
+      if (p.jetEnabled !== undefined) row.jet_enabled = p.jetEnabled
       const { error } = await supabase.from('orgs').update(row).eq('id', id)
       if (!error) get().loadBase()
       return error?.message ?? null
@@ -320,6 +322,10 @@ export const useData = create<DataState>((set, get) => {
       set((s) => ({ players: [...s.players, ...rows] }))
       supabase.from('players').insert(rows.map((r) => ({ id: r.id, squad_id: squadId, number: r.number, name: r.name })))
         .then(({ error }) => { if (fail(error)) get().loadBase() })
+    },
+    updatePlayer: (id, patch) => {
+      set((s) => ({ players: s.players.map((p) => (p.id === id ? { ...p, ...patch } : p)) }))
+      supabase.from('players').update(patch).eq('id', id).then(({ error }) => { if (fail(error)) get().loadBase() })
     },
     removePlayer: (id) => {
       set((s) => ({

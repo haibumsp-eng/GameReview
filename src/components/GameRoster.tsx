@@ -24,7 +24,7 @@ export function GameRosterModal({ side = 'home', onClose }: { side?: TeamSide; o
   const { gameId, squadId } = useUi(useShallow((s) => ({ gameId: s.gameId, squadId: s.squadId })))
   const game = useData((s) => s.games.find((g) => g.id === gameId))
   const squad = useData((s) => s.squads.find((x) => x.id === game?.squadId))
-  const { players, games, gamePlayers, stats, lineups, clips, addGamePlayers, updateGamePlayer, removeGamePlayer } = useData()
+  const { players, games, gamePlayers, stats, lineups, clips, squads, addGamePlayers, updateGamePlayer, removeGamePlayer } = useData()
   const mine = gamePlayers.filter((g) => g.side === side)
   const squadPlayers = side === 'home' ? players.filter((p) => p.squadId === (game?.squadId ?? squadId)).sort((a, b) => a.number - b.number) : []
   const firstTime = mine.length === 0
@@ -44,6 +44,17 @@ export function GameRosterModal({ side = 'home', onClose }: { side?: TeamSide; o
   const [err, setErr] = useState('')
   const [loadingPrev, setLoadingPrev] = useState(false)
   if (!game) return null
+  // Đội JET (nếu trung tâm bật Giải JET): lấy danh sách một đội giải thay cho danh sách hiện tại của bên này.
+  const jetTeams = squads.filter((s) => s.orgId === squad?.orgId && s.league && s.id !== game.squadId).sort((a, b) => (a.league ?? '').localeCompare(b.league ?? '') || a.name.localeCompare(b.name, 'vi'))
+  const loadJet = (sid: string) => {
+    const t = squads.find((s) => s.id === sid)
+    if (!t) return
+    const ps = players.filter((p) => p.squadId === sid).sort((a, b) => a.number - b.number)
+    // Danh sách cũ của bên này được bỏ chọn (có thể tick lại), thay bằng cầu thủ của đội JET.
+    setRows((r) => [...r.filter((x) => x.gpId).map((x) => ({ ...x, on: false })), ...ps.map((p) => ({ key: newKey(), playerId: side === 'home' ? p.id : null, gpId: null, name: p.name, base: side === 'home' ? p.number : null, on: true, num: String(p.number) }))])
+    setErr('')
+    toast(`Đã lấy ${ps.length} VĐV của ${t.name}`)
+  }
 
   const set = (key: string, patch: Partial<Row>) => setRows((r) => r.map((x) => (x.key === key ? { ...x, ...patch } : x)))
   const on = rows.filter((r) => r.on)
@@ -137,6 +148,12 @@ export function GameRosterModal({ side = 'home', onClose }: { side?: TeamSide; o
           <button className="btn sm ghost" onClick={() => setRows((r) => r.map((x) => ({ ...x, on: false })))}>Bỏ chọn tất cả</button>
           {side === 'home' && <button className="btn sm ghost" onClick={() => setRows((r) => r.map((x) => (x.base != null ? { ...x, num: String(x.base) } : x)))}>Về số mặc định</button>}
           <button className="btn sm ghost" onClick={() => setPaste(paste === null ? '' : null)}>Dán danh sách</button>
+          {jetTeams.length > 0 && (
+            <select className="gr-prev" value="" onChange={(e) => loadJet(e.target.value)}>
+              <option value="">Lấy từ đội JET…</option>
+              {jetTeams.map((t) => <option key={t.id} value={t.id}>{t.league}{t.season ? ` ${t.season}` : ''} · {t.name}</option>)}
+            </select>
+          )}
           {prevGames.length > 0 && (
             <select className="gr-prev" value="" disabled={loadingPrev} onChange={(e) => void loadPrev(e.target.value)}>
               <option value="">{loadingPrev ? 'Đang lấy…' : 'Lấy từ trận trước…'}</option>

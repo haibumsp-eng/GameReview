@@ -1060,3 +1060,25 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
   .rp-break { break-before: page; }
   @page report { size: A4 portrait; margin: 10mm; }
 }
+
+/* ---------- Giải JET ---------- */
+.jt { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px 1fr; gap: 8px; }
+.jt-side { align-self: start; max-height: 100%; overflow: auto; }
+.jt-main { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.jt-leagues button { padding: 6px 8px; font-size: 12px; }
+.jt-head { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 10px; align-items: end; }
+.jt-head label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); font-weight: 600; }
+.jt-players { display: flex; flex-direction: column; gap: 4px; }
+.jt-prow { display: flex; align-items: center; gap: 8px; }
+.jt-prow input { padding: 5px 8px; font-size: 13px; }
+.jt-prow .jt-num, .jt-num { width: 56px; text-align: center; font-weight: 700; flex: none; }
+.jt-prow.add { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.jt-import { width: 720px; }
+.jt-prev { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow: auto; }
+.jt-team { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); cursor: pointer; }
+.jt-team.off { opacity: .45; }
+.jt-names { display: flex; flex-wrap: wrap; gap: 4px; }
+.jt-names span { font-size: 11.5px; background: var(--panel-3); border-radius: 6px; padding: 2px 7px; }
+.jt-names span.tmp { font-style: italic; color: #f2c037; }
+.jt-warn { font-size: 12px; color: #f2c037; }
+@media (max-width: 1000px) { .jt { grid-template-columns: 1fr; } .jt-head { grid-template-columns: 1fr 1fr; } }
