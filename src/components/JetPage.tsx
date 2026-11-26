@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { supabase } from '../supabase'
 import { useData, useUi, selectGame, toast, isJetGame } from '../store'
@@ -17,8 +17,10 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
   const { orgId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, set: s.set })))
   const { squads, players, games, isSuper, orgMembers, session } = useData()
   const myRole = orgMembers.find((m) => m.orgId === orgId && m.userId === session?.user.id)?.role
-  const canEdit = isSuper || myRole === 'owner' || myRole === 'coach'
-  const canDelete = isSuper || myRole === 'owner' // chỉ quản trị tổng và Admin của trung tâm
+  // Quản lý Giải JET: quản trị tổng, chủ trung tâm, Trọng tài JET (admin riêng của giải). HLV JET chỉ sửa danh sách đội được giao.
+  const canEdit = isSuper || myRole === 'owner' || myRole === 'jet_ref'
+  const canDelete = canEdit
+  const canPlayers = canEdit || myRole === 'jet_coach'
   const [league, setLeague] = useState<(typeof JET_LEAGUES)[number]>('PRO.JET')
   const [season, setSeason] = useState('')
   const [sel, setSel] = useState('')
@@ -84,7 +86,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
                 <li key={g.id} className="item" onClick={() => openGame(g)}>
                   <span className="grow"><b>{g.title}</b><br /><span className="muted small-note">{g.date || 'chưa có ngày'} · {orgSquads.get(g.squadId)?.name}{orgSquads.get(g.squadId)?.league ? '' : ' (tuyến)'}</span></span>
                   <button className="btn sm primary">Bấm stats</button>
-                  {canDelete && <button className="icon-btn" title="Xoá trận (chỉ Admin)" onClick={async (e) => {
+                  {canDelete && <button className="icon-btn" title="Xoá trận (chỉ admin Giải JET)" onClick={async (e) => {
                     e.stopPropagation()
                     if (!(await confirmDialog({ title: `Xoá trận “${g.title}”?`, message: 'Toàn bộ video, mark, bình luận, thống kê và danh sách của trận này sẽ bị xoá. Không khôi phục được (trừ bản lưu nhanh nếu có).', okText: 'Xoá trận', danger: true }))) return
                     useData.getState().removeGame(g.id)
@@ -95,7 +97,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
               {jetGames.length === 0 && <li className="empty">Chưa có trận JET nào. Bấm “Ghi thêm trận”.</li>}
             </ul>
           </div>
-        ) : team ? <TeamEditor key={team.id} id={team.id} canEdit={canEdit} onError={setErr} onDeleted={() => { setSel(''); void reload() }} /> : <div className="card muted">Chọn một đội ở bên trái để xem và sửa danh sách VĐV.</div>}
+        ) : team ? <TeamEditor key={team.id} id={team.id} canEdit={canEdit} canPlayers={canPlayers} onError={setErr} onDeleted={() => { setSel(''); void reload() }} /> : <div className="card muted">Chọn một đội ở bên trái để xem và sửa danh sách VĐV.</div>}
       </div>
 
       {modal === 'import' && <ImportModal orgId={orgId} defaultLeague={league} onClose={() => setModal('')} onDone={(l) => { setLeague(l); setSeason(''); setModal('') }} />}
@@ -107,7 +109,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
 }
 
 /* ---------- Sửa một đội: tên, HLV, danh sách VĐV ---------- */
-function TeamEditor({ id, canEdit, onError, onDeleted }: { id: string; canEdit: boolean; onError: (m: string) => void; onDeleted: () => void }) {
+function TeamEditor({ id, canEdit, canPlayers, onError, onDeleted }: { id: string; canEdit: boolean; canPlayers: boolean; onError: (m: string) => void; onDeleted: () => void }) {
   const { squads, players, games, addPlayers, updatePlayer, removePlayer } = useData()
   const t = squads.find((s) => s.id === id)!
   const list = players.filter((p) => p.squadId === id).sort((a, b) => a.name.localeCompare(b.name, 'vi'))
@@ -143,16 +145,17 @@ function TeamEditor({ id, canEdit, onError, onDeleted }: { id: string; canEdit: 
         <span className="tag">{t.league}{t.season ? ` · ${t.season}` : ''}</span>
         {canEdit && <button className="btn sm danger" disabled={hasGames} title={hasGames ? 'Đội đã có trận nên không xoá được' : 'Xoá đội'} onClick={del}>Xoá đội</button>}
       </div>
+      {canEdit && <CoachAssign squadId={id} />}
       <div className="muted small-note">{list.length} VĐV · số áo nhập theo từng trận (Live Stats → Danh sách trận / số áo)</div>
       <div className="jt-players">
         {list.map((p) => (
           <div key={p.id} className="jt-prow">
-            <input className="grow" defaultValue={p.name} disabled={!canEdit} key={'m' + p.name}
+            <input className="grow" defaultValue={p.name} disabled={!canPlayers} key={'m' + p.name}
               onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== p.name) updatePlayer(p.id, { name: v }); else e.target.value = p.name }} />
-            {canEdit && <button className="icon-btn" title="Xoá VĐV" onClick={async () => { if (await confirmDialog({ title: `Xoá ${p.name}?`, message: 'VĐV bị gỡ khỏi danh sách đội (các trận đã đấu vẫn giữ tên).', okText: 'Xoá', danger: true })) removePlayer(p.id) }}>×</button>}
+            {canPlayers && <button className="icon-btn" title="Xoá VĐV" onClick={async () => { if (await confirmDialog({ title: `Xoá ${p.name}?`, message: 'VĐV bị gỡ khỏi danh sách đội (các trận đã đấu vẫn giữ tên).', okText: 'Xoá', danger: true })) removePlayer(p.id) }}>×</button>}
           </div>
         ))}
-        {canEdit && (
+        {canPlayers && (
           <div className="jt-prow add">
             <input className="grow" placeholder="Họ tên VĐV mới" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
             <button className="btn sm" onClick={add}>+ Thêm</button>
@@ -320,6 +323,38 @@ function MatchModal({ league, onClose, onCreated }: { league: string; onClose: (
         </div>
         <div className="row"><button className="btn" onClick={onClose}>Huỷ</button><button className="btn primary grow-btn" disabled={!H || !A || H.id === A.id} onClick={create}>Ghi trận và mở Live Stats</button></div>
       </div>
+    </div>
+  )
+}
+
+/* ---------- Giao HLV JET (tài khoản) cho một đội ---------- */
+function CoachAssign({ squadId }: { squadId: string }) {
+  const { orgId } = useUi(useShallow((u) => ({ orgId: u.orgId })))
+  const { orgMembers, profiles } = useData()
+  const [assigned, setAssigned] = useState<Set<string> | null>(null)
+  const [msg, setMsg] = useState('')
+  const coaches = orgMembers.filter((m) => m.orgId === orgId && m.role === 'jet_coach')
+  const load = async () => {
+    const { data } = await supabase.from('members').select('user_id').eq('squad_id', squadId)
+    setAssigned(new Set((data ?? []).map((r: { user_id: string }) => r.user_id)))
+  }
+  useEffect(() => { void load() }, [squadId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = async (uid: string, on: boolean) => {
+    setMsg('')
+    const { error } = await supabase.rpc('jet_team_assign', { p_squad: squadId, p_user: uid, p_on: on })
+    if (error) return setMsg(error.message)
+    void load()
+  }
+  return (
+    <div className="stack" style={{ gap: 4 }}>
+      <span className="field-label">Tài khoản HLV JET được xem / sửa đội này</span>
+      {coaches.length === 0 && <span className="muted small-note">Chưa có tài khoản “HLV JET”. Chủ trung tâm thêm ở nút Thành viên (vai trò “HLV JET”).</span>}
+      <div className="row wrap">
+        {coaches.map((c) => (
+          <label key={c.userId} className="chip-check"><input type="checkbox" disabled={!assigned} checked={!!assigned?.has(c.userId)} onChange={(e) => void toggle(c.userId, e.target.checked)} /> {profiles[c.userId] || 'HLV'}</label>
+        ))}
+      </div>
+      {msg && <div className="err">{msg}</div>}
     </div>
   )
 }

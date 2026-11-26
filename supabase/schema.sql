@@ -1034,4 +1034,93 @@ alter table games add column if not exists away_squad_id uuid references squads 
 -- Giải JET chỉ dành cho Junsport: tự bật cho trung tâm có tên Junsport.
 update orgs set jet_enabled = true where name ilike '%junsport%' and not jet_enabled;
 
+-- ================= Vai trò Giải JET: Trọng tài JET (jet_ref) và HLV JET (jet_coach) =================
+-- Trọng tài JET: mọi quyền trong Giải JET (đội, trận, stats, biên bản), không thấy tuyến thường.
+-- HLV JET: chỉ vào được đội JET được giao (bảng members), không thấy đội khác.
+-- Vai trò 'coach' / 'viewer' thường không còn vào được Giải JET.
+alter table org_members drop constraint if exists org_members_role_check;
+alter table org_members add constraint org_members_role_check check (role in ('owner','coach','viewer','jet_ref','jet_coach'));
+
+create or replace function jet_manager(oid uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select is_super() or exists (select 1 from org_members where org_id = oid and user_id = auth.uid() and role in ('owner', 'jet_ref'))
+$$;
+create or replace function is_member(sid uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select is_super()
+      or exists (select 1 from members where squad_id = sid and user_id = auth.uid())
+      or is_org_owner(org_of_squad(sid))
+      or (is_jet_squad(sid) and exists (select 1 from org_members where org_id = org_of_squad(sid) and user_id = auth.uid() and role = 'jet_ref'))
+$$;
+create or replace function is_editor(sid uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select is_super() or (
+    (exists (select 1 from members where squad_id = sid and user_id = auth.uid() and role in ('admin','coach'))
+       or is_org_owner(org_of_squad(sid))
+       or (is_jet_squad(sid) and exists (select 1 from org_members where org_id = org_of_squad(sid) and user_id = auth.uid() and role = 'jet_ref')))
+    and org_active(org_of_squad(sid)))
+$$;
+
+create or replace function add_org_member(p_org uuid, p_email text, p_role text default 'coach') returns void
+language plpgsql security definer set search_path = public as $$
+declare uid uuid;
+begin
+  if not is_org_owner(p_org) then raise exception 'Chỉ chủ trung tâm mới thêm được thành viên.'; end if;
+  if p_role not in ('owner','coach','viewer','jet_ref','jet_coach') then raise exception 'Vai trò không hợp lệ'; end if;
+  select id into uid from auth.users where lower(email) = lower(trim(p_email));
+  if uid is null then raise exception 'Chưa có tài khoản này. Hãy nhờ họ đăng ký trước.'; end if;
+  if exists (select 1 from org_members where user_id = uid and org_id <> p_org) then
+    raise exception 'Tài khoản này đã thuộc một trung tâm khác. Mỗi HLV chỉ thuộc một trung tâm.';
+  end if;
+  insert into org_members (org_id, user_id, role) values (p_org, uid, p_role)
+    on conflict (org_id, user_id) do update set role = excluded.role;
+end $$;
+
+create or replace function jet_team_create(p_org uuid, p_league text, p_season text, p_name text, p_coach text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare sid uuid;
+begin
+  if not exists (select 1 from orgs where id = p_org and jet_enabled) then raise exception 'Trung tâm này chưa bật Giải JET.'; end if;
+  if not jet_manager(p_org) then raise exception 'Chỉ chủ trung tâm hoặc Trọng tài JET mới tạo được đội JET.'; end if;
+  if not (org_active(p_org) or is_super()) then raise exception 'Gói của trung tâm đã hết hạn. Liên hệ để gia hạn.'; end if;
+  if p_league not in ('PRO.JET', 'JET', 'JR.JET', 'WJET') then raise exception 'Mã giải không hợp lệ.'; end if;
+  if coalesce(trim(p_name), '') = '' then raise exception 'Nhập tên đội.'; end if;
+  select id into sid from squads where org_id = p_org and league = p_league and season = coalesce(p_season, '') and lower(name) = lower(trim(p_name));
+  if sid is not null then return sid; end if;
+  insert into squads (name, org_id, league, season, coach) values (trim(p_name), p_org, p_league, coalesce(p_season, ''), coalesce(trim(p_coach), '')) returning id into sid;
+  insert into members (squad_id, user_id, role) values (sid, auth.uid(), 'admin') on conflict do nothing;
+  return sid;
+end $$;
+create or replace function jet_team_update(p_squad uuid, p_name text, p_coach text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not (is_jet_squad(p_squad) and jet_manager(org_of_squad(p_squad)) and org_active(org_of_squad(p_squad))) then raise exception 'Bạn không có quyền sửa đội này.'; end if;
+  if coalesce(trim(p_name), '') = '' then raise exception 'Nhập tên đội.'; end if;
+  update squads set name = trim(p_name), coach = coalesce(trim(p_coach), '') where id = p_squad;
+end $$;
+create or replace function jet_team_delete(p_squad uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not (is_jet_squad(p_squad) and jet_manager(org_of_squad(p_squad)) and org_active(org_of_squad(p_squad))) then raise exception 'Bạn không có quyền xoá đội này.'; end if;
+  if exists (select 1 from games where squad_id = p_squad) then raise exception 'Đội này đã có trận đấu nên không xoá được.'; end if;
+  delete from squads where id = p_squad;
+end $$;
+
+-- Giao / gỡ HLV JET (tài khoản có vai trò jet_coach) cho một đội: HLV chỉ thấy đội được giao.
+create or replace function jet_team_assign(p_squad uuid, p_user uuid, p_on boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not (is_jet_squad(p_squad) and jet_manager(org_of_squad(p_squad)) and org_active(org_of_squad(p_squad))) then raise exception 'Bạn không có quyền giao HLV cho đội này.'; end if;
+  if not exists (select 1 from org_members where org_id = org_of_squad(p_squad) and user_id = p_user and role = 'jet_coach') then
+    raise exception 'Tài khoản này không phải HLV JET của trung tâm.';
+  end if;
+  if p_on then
+    insert into members (squad_id, user_id, role) values (p_squad, p_user, 'coach') on conflict (squad_id, user_id) do update set role = 'coach';
+  else
+    delete from members where squad_id = p_squad and user_id = p_user;
+  end if;
+end $$;
+grant execute on function jet_team_create(uuid, text, text, text, text), jet_team_update(uuid, text, text), jet_team_delete(uuid), jet_team_assign(uuid, uuid, boolean) to authenticated;
+revoke execute on function jet_team_create(uuid, text, text, text, text), jet_team_update(uuid, text, text), jet_team_delete(uuid), jet_team_assign(uuid, uuid, boolean) from anon;
+
 notify pgrst, 'reload schema';

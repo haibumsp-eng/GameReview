@@ -3,7 +3,7 @@ import { useData, useUi, myOrgRole, orgExpired } from '../store'
 import type { Org } from '../types'
 import { confirmDialog, alertDialog } from '../lib/dialog'
 
-const ROLE_LABEL: Record<string, string> = { owner: 'Chủ trung tâm', coach: 'HLV', viewer: 'Chỉ xem' }
+const ROLE_LABEL: Record<string, string> = { owner: 'Chủ trung tâm', coach: 'HLV', viewer: 'Chỉ xem', jet_ref: 'Trọng tài JET (admin Giải JET)', jet_coach: 'HLV JET (chỉ đội được giao)' }
 const PLAN_LABEL: Record<string, string> = { trial: 'Dùng thử', team: 'Đội', club: 'CLB / Học viện', custom: 'Riêng' }
 
 /** Chủ trung tâm: xem và quản lý thành viên của trung tâm mình. */
@@ -30,7 +30,7 @@ export function OrgMembersModal(props: { onClose: () => void }) {
     <div className="modal-back" onClick={props.onClose}>
       <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
         <div className="row"><b className="grow">Thành viên · {org?.name}</b><button className="icon-btn" onClick={props.onClose}>×</button></div>
-        <div className="muted">Mỗi tài khoản chỉ thuộc một trung tâm. Chủ trung tâm thấy mọi tuyến đội; HLV chỉ thấy tuyến được mời vào.</div>
+        <div className="muted">Mỗi tài khoản chỉ thuộc một trung tâm. Chủ trung tâm thấy mọi tuyến đội; HLV chỉ thấy tuyến được mời vào. Trọng tài JET là admin riêng của Giải JET (không phải chủ trung tâm); HLV JET chỉ thấy đội JET được giao.</div>
         {isOwner && org && (
           <div className="card join-code-card">
             <div className="stack" style={{ gap: 2 }}>
@@ -50,7 +50,7 @@ export function OrgMembersModal(props: { onClose: () => void }) {
               <span className="grow"><b>{profiles[m.userId] || 'Thành viên'}</b>{m.userId === session?.user.id && <span className="muted"> (bạn)</span>}</span>
               {isOwner && m.userId !== session?.user.id ? (
                 <>
-                  <select style={{ width: 140 }} value={m.role} onChange={(e) => setOrgRole(orgId, m.userId, e.target.value)}>
+                  <select style={{ width: 200 }} value={m.role} onChange={(e) => setOrgRole(orgId, m.userId, e.target.value)}>
                     {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                   <button className="icon-btn" title="Gỡ khỏi trung tâm" onClick={async () => { if (await confirmDialog({ title: 'Gỡ thành viên?', message: `Gỡ ${profiles[m.userId] || 'người này'} khỏi trung tâm. Họ sẽ không xem được dữ liệu của trung tâm nữa.`, okText: 'Gỡ', danger: true })) removeOrgMember(orgId, m.userId) }}>×</button>
@@ -64,7 +64,7 @@ export function OrgMembersModal(props: { onClose: () => void }) {
             <label className="field-label">Thêm người vào trung tâm (họ phải đăng ký tài khoản trước)</label>
             <div className="row">
               <input placeholder="Tên đăng nhập hoặc email" value={login} onChange={(e) => setLogin(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-              <select style={{ width: 150 }} value={role} onChange={(e) => setRole(e.target.value)}>
+              <select style={{ width: 210 }} value={role} onChange={(e) => setRole(e.target.value)}>
                 {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
               <button className="btn primary" onClick={add}>Thêm</button>

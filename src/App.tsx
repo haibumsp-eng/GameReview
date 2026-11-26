@@ -145,7 +145,10 @@ export default function App() {
   const me = profiles[session.user.id] || session.user.email || ''
   const org = orgs.find((o) => o.id === orgId)
   const role = isSuper ? 'owner' : myOrgRole(orgId)
-  const ROLE: Record<string, string> = { owner: 'Chủ trung tâm', coach: 'HLV', viewer: 'Chỉ xem' }
+  const ROLE: Record<string, string> = { owner: 'Chủ trung tâm', coach: 'HLV', viewer: 'Chỉ xem', jet_ref: 'Trọng tài JET', jet_coach: 'HLV JET' }
+  // Trọng tài JET / HLV JET chỉ làm việc trong Giải JET (và Live Stats của trận JET), không thấy mổ băng hay bảng tỉ số.
+  const jetOnly = !isSuper && (role === 'jet_ref' || role === 'jet_coach')
+  const cur = jetOnly && (view === 'review' || view === 'board') ? 'jet' : view
 
   // Tài khoản chưa thuộc trung tâm nào.
   if (baseLoaded && !isSuper && !myOrgId) {
@@ -166,14 +169,14 @@ export default function App() {
   }
   return (
     <div className="app">
-      {view === 'review' && <><Hotkeys /><PlaylistRunner /><SpotlightRunner /></>}
+      {cur === 'review' && <><Hotkeys /><PlaylistRunner /><SpotlightRunner /></>}
       <header className="topbar">
         <Logo />
         <div className="seg-toggle view-switch">
-          <button className={view === 'review' ? 'on' : ''} onClick={() => setView('review')}>Mổ băng</button>
-          <button className={view === 'stats' ? 'on' : ''} onClick={() => setView('stats')}>Live Stats</button>
-          <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>Bảng tỉ số</button>
-          {org?.jetEnabled && <button className={view === 'jet' ? 'on' : ''} onClick={() => setView('jet')}>Giải JET</button>}
+          {!jetOnly && <button className={cur === 'review' ? 'on' : ''} onClick={() => setView('review')}>Mổ băng</button>}
+          <button className={cur === 'stats' ? 'on' : ''} onClick={() => setView('stats')}>Live Stats</button>
+          {!jetOnly && <button className={cur === 'board' ? 'on' : ''} onClick={() => setView('board')}>Bảng tỉ số</button>}
+          {org?.jetEnabled && <button className={cur === 'jet' ? 'on' : ''} onClick={() => setView('jet')}>Giải JET</button>}
         </div>
         {isSuper ? (
           <select className="org-select" value={orgId} onChange={(e) => { set({ orgId: e.target.value }); try { localStorage.setItem('gr-org', e.target.value) } catch { /* bỏ qua */ } }}>
@@ -184,7 +187,7 @@ export default function App() {
         {(role === 'owner') && <button className="btn sm ghost" onClick={() => setModal('members')}>Thành viên</button>}
         <span className="spacer" />
         {error && <span className="banner" title="Bấm để ẩn" onClick={() => useData.setState({ error: '' })}>{error}</span>}
-        {view === 'review' && <div className="keys-help">
+        {cur === 'review' && <div className="keys-help">
           <button className="btn sm ghost">⌨ Phím tắt</button>
           <div className="keys-pop">
             <div><kbd>Space</kbd> Phát / dừng</div>
@@ -196,8 +199,8 @@ export default function App() {
             <div><kbd>Esc</kbd> Huỷ / thoát ô nhập · <kbd>Del</kbd> Xoá mark</div>
           </div>
         </div>}
-        <button className="btn sm primary" onClick={() => set({ overview: true })}>Tất cả trận</button>
-{view === 'review' && <button className="btn sm ghost" title="Đưa các module về kích thước mặc định" onClick={L.reset}>Đặt lại bố cục</button>}
+        {!jetOnly && <button className="btn sm primary" onClick={() => set({ overview: true })}>Tất cả trận</button>}
+{cur === 'review' && <button className="btn sm ghost" title="Đưa các module về kích thước mặc định" onClick={L.reset}>Đặt lại bố cục</button>}
         <span className="me">{me}</span>
         {isSuper && <span className="pill live">ADMIN</span>}
         <button className="btn sm ghost" onClick={signOut}>Đăng xuất</button>
@@ -209,7 +212,7 @@ export default function App() {
       <RecordHud />
       {toastMsg && inPoint == null && <div className="toast">{toastMsg}</div>}
       {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}
-      {view === 'stats' ? <StatsPage /> : view === 'board' ? <ScoreboardPage /> : view === 'jet' && org?.jetEnabled ? <JetPage onOpenStats={() => setView('stats')} /> : (
+      {cur === 'stats' ? <StatsPage /> : cur === 'board' && !jetOnly ? <ScoreboardPage /> : cur === 'jet' && org?.jetEnabled ? <JetPage onOpenStats={() => setView('stats')} /> : (
       <div className="workspace">
         <div className="col" style={{ width: L.left }}>
           <SplitV frac={L.leftSplit} setFrac={(f) => L.set({ leftSplit: f })} top={<Library />} bottom={<Roster />} />
