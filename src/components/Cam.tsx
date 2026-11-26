@@ -22,37 +22,53 @@ export function CamPad({ token }: { token: string }) {
   const [st, setSt] = useState<CState | null>(null)
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
-  const [busy, setBusy] = useState(false)
   const [side, setSide] = useState<'home' | 'away'>('home')
   const [sel, setSel] = useState<string | null>(null)       // người đang chọn (trên sân)
   const [outId, setOutId] = useState<string | null>(null)       // người đã chạm 2 lần để ra sân, chờ chọn người vào
   const lastTap = useRef<{ id: string; at: number } | null>(null)
   const fetchedAt = useRef(Date.now())
+  const stRef = useRef<CState | null>(null)
+  const inflight = useRef(0)   // số thao tác đã bấm mà máy chủ chưa trả lời
+  const rtt = useRef(0)        // thời gian khứ hồi gần nhất (ms), dùng bù trễ cho đồng hồ
   const [, tick] = useState(0)
 
   const load = async () => {
+    const t0 = Date.now()
     const { data, error } = await supabase.rpc('cam_state', { p_token: token })
+    const t1 = Date.now()
     if (error) return setErr('Mất kết nối, đang thử lại…')
     if ((data as { error?: string })?.error) return setErr((data as { error: string }).error)
-    setErr(''); fetchedAt.current = Date.now(); setSt(data as CState)
+    rtt.current = t1 - t0
+    // Đang có thao tác chưa được máy chủ xác nhận: không ghi đè trạng thái tạm thời (tránh nhảy lùi).
+    if (inflight.current > 0) return
+    setErr(''); fetchedAt.current = (t0 + t1) / 2 // giờ trả về là giờ ở giữa chuyến đi
+    stRef.current = data as CState; setSt(data as CState)
   }
   useEffect(() => {
     void load()
-    const iv = setInterval(() => { void load() }, 2000)
+    const iv = setInterval(() => { void load() }, 1500)
     const t = setInterval(() => tick((n) => n + 1), 250)
     return () => { clearInterval(iv); clearInterval(t) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 1800) }
-  const call = async (fn: string, args: Record<string, unknown>, ok: string) => {
-    setBusy(true)
-    const { data, error } = await supabase.rpc(fn, args)
-    setBusy(false)
-    if (error || data !== 'ok') return flash(error?.message ?? String(data))
+  /** Giờ đang hiển thị trên đồng hồ (giây). */
+  const shownClock = () => { const c = stRef.current; return !c ? 0 : c.game.running ? Math.max(0, c.game.clock - (Date.now() - fetchedAt.current) / 1000) : c.game.clock }
+  /** Cập nhật giao diện NGAY (không chờ mạng), gửi lên máy chủ ở nền, xong thì đối chiếu lại. */
+  const call = (fn: string, args: Record<string, unknown>, ok: string, optimistic?: (c: CState) => CState) => {
+    if (optimistic && stRef.current) { const n = optimistic(stRef.current); stRef.current = n; setSt(n) }
     navigator.vibrate?.(30)
-    flash(ok); void load()
+    flash(ok)
+    inflight.current++
+    return supabase.rpc(fn, args).then(({ data, error }) => {
+      inflight.current--
+      if (error || data !== 'ok') flash(error?.message ?? String(data))
+      void load() // đối chiếu với máy chủ (nếu máy chủ từ chối thì trạng thái tạm bị sửa lại)
+    })
   }
-  const clock = (a: string, secs = 0, ok = '✓') => call('cam_clock', { p_token: token, p_action: a, p_secs: secs }, ok)
+  const clock = (a: string, secs = 0, ok = '✓', optimistic?: (c: CState) => CState) =>
+    call('cam_clock', { p_token: token, p_action: a, p_secs: secs, p_lag_ms: a === 'start' || a === 'stop' ? Math.round(rtt.current / 2) : 0 }, ok, optimistic)
+  const withClock = (c: CState, v: Partial<CState['game']>, now: number): CState => { fetchedAt.current = Date.now(); return { ...c, game: { ...c.game, clock: now, ...v } } }
 
   useEffect(() => {
     if (sel && st && !st.players.some((p) => p.id === sel && p.on)) setSel(null)
@@ -67,7 +83,17 @@ export function CamPad({ token }: { token: string }) {
   const me = st.players.find((p) => p.id === sel)
   const name = (s: 'home' | 'away') => (s === 'home' ? st.game.home : st.game.away)
 
-  const score = (pts: number) => { if (me) void call('cam_score', { p_token: token, p_player: me.id, p_pts: pts }, `✓ #${me.number} +${pts}`).then(() => setSel(null)) }
+  const adj = (d: number) => { const n = shownClock(); clock('adjust', d, '✓', (c) => withClock(c, {}, Math.min(st.period_len, Math.max(0, n + d)))) }
+  const per = (d: number) => clock(d > 0 ? 'next' : 'prev', 0, d > 0 ? '✓ Hiệp kế' : '✓ Hiệp trước', (c) => withClock(c, { period: Math.max(1, c.game.period + d), running: false }, c.period_len))
+  const score = (pts: number) => {
+    if (!me) return
+    const id = me.id, sd = me.side
+    setSel(null)
+    void call('cam_score', { p_token: token, p_player: id, p_pts: pts }, `✓ #${me.number} +${pts}`, (c) => ({
+      ...c, score: { ...c.score, [sd]: c.score[sd] + pts }, players: c.players.map((p) => (p.id === id ? { ...p, pts: p.pts + pts } : p)),
+    }))
+  }
+  const setOn = (c: CState, out: string | null, inn: string | null): CState => ({ ...c, players: c.players.map((p) => (p.id === out ? { ...p, on: false } : p.id === inn ? { ...p, on: true } : p)) })
   const outP = st.players.find((p) => p.id === outId)
   // Người trên sân: chạm 1 lần = chọn (để +điểm); chạm 2 lần liên tiếp = cho ra sân (rồi chạm người dự bị để vào).
   const tapCourt = (p: CPlayer) => {
@@ -85,12 +111,13 @@ export function CamPad({ token }: { token: string }) {
   // Người dự bị: chạm = vào sân (thay cho người vừa cho ra; hoặc vào thẳng nếu sân chưa đủ 5 người).
   const pickBench = (p: CPlayer) => {
     if (outP) {
-      void call('cam_sub', { p_token: token, p_out: outP.id, p_in: p.id }, `✓ #${outP.number} ra, #${p.number} vào`).then(() => setOutId(null))
+      const o = outP; setOutId(null)
+      void call('cam_sub', { p_token: token, p_out: o.id, p_in: p.id }, `✓ #${o.number} ra, #${p.number} vào`, (c) => setOn(c, o.id, p.id))
     } else if (on.length < 5) {
-      void call('cam_sub', { p_token: token, p_out: null, p_in: p.id }, `✓ #${p.number} vào sân`)
+      void call('cam_sub', { p_token: token, p_out: null, p_in: p.id }, `✓ #${p.number} vào sân`, (c) => setOn(c, null, p.id))
     } else flash('Chạm 2 lần vào người trên sân để cho ra trước')
   }
-  const outOnly = () => { if (outP) void call('cam_sub', { p_token: token, p_out: outP.id, p_in: null }, `✓ #${outP.number} ra sân`).then(() => setOutId(null)) }
+  const outOnly = () => { if (!outP) return; const o = outP; setOutId(null); void call('cam_sub', { p_token: token, p_out: o.id, p_in: null }, `✓ #${o.number} ra sân`, (c) => setOn(c, o.id, null)) }
 
   return (
     <div className="rp cam">
@@ -103,23 +130,23 @@ export function CamPad({ token }: { token: string }) {
 
       <div className="cam-clock">
         <div className={`cam-time ${running ? 'run' : ''}`}>{mmss(now)}</div>
-        <button className={`cam-go ${running ? 'stop' : ''}`} disabled={busy || (!running && now <= 0)} onClick={() => clock(running ? 'stop' : 'start', 0, running ? '⏸ Đã dừng' : '▶ Đồng hồ chạy')}>
+        <button className={`cam-go ${running ? 'stop' : ''}`} disabled={!running && now <= 0} onClick={() => { const n = shownClock(); clock(running ? 'stop' : 'start', 0, running ? '⏸ Đã dừng' : '▶ Đồng hồ chạy', (c) => withClock(c, { running: !running }, n)) }}>
           {running ? '⏸ DỪNG' : '▶ CHẠY'}
         </button>
       </div>
       <div className="cam-adj">
-        <button disabled={busy} onClick={() => clock('adjust', -10)}>−10s</button>
-        <button disabled={busy} onClick={() => clock('adjust', -1)}>−1s</button>
-        <button disabled={busy} onClick={() => clock('adjust', 1)}>+1s</button>
-        <button disabled={busy} onClick={() => clock('adjust', 10)}>+10s</button>
-        <button disabled={busy || st.game.period <= 1} onClick={() => clock('prev', 0, '✓ Hiệp trước')}>‹ Hiệp</button>
-        <button disabled={busy} onClick={() => clock('next', 0, '✓ Hiệp kế')}>Hiệp ›</button>
+        <button onClick={() => adj(-10)}>−10s</button>
+        <button onClick={() => adj(-1)}>−1s</button>
+        <button onClick={() => adj(1)}>+1s</button>
+        <button onClick={() => adj(10)}>+10s</button>
+        <button disabled={st.game.period <= 1} onClick={() => per(-1)}>‹ Hiệp</button>
+        <button onClick={() => per(1)}>Hiệp ›</button>
       </div>
       <div className="cam-mark">
         {st.mark.at
           ? <><span>🏁 Bắt đầu trận lúc <b>{hms(st.mark.at)}</b> (đồng hồ {mmss(st.mark.clock ?? 0)})</span>
-              <button className="cam-link" disabled={busy} onClick={() => call('cam_mark_start', { p_token: token, p_on: false }, 'Đã xoá mốc')}>Xoá mốc</button></>
-          : <button className="cam-markbtn" disabled={busy || !running} onClick={() => call('cam_mark_start', { p_token: token, p_on: true }, '🏁 Đã đánh dấu bắt đầu trận')}>
+              <button className="cam-link" onClick={() => call('cam_mark_start', { p_token: token, p_on: false }, 'Đã xoá mốc', (c) => ({ ...c, mark: { at: null, clock: null } }))}>Xoá mốc</button></>
+          : <button className="cam-markbtn" disabled={!running} onClick={() => { const n = shownClock(); call('cam_mark_start', { p_token: token, p_on: true }, '🏁 Đã đánh dấu bắt đầu trận', (c) => ({ ...c, mark: { at: new Date().toISOString(), clock: n } })) }}>
               🏁 Đánh dấu bắt đầu trận{running ? '' : ' (chạy đồng hồ trước)'}</button>}
       </div>
 
@@ -141,16 +168,16 @@ export function CamPad({ token }: { token: string }) {
       {outP ? (
         <div className="cam-out">
           <span><b>#{outP.number} {outP.name}</b> ra sân. Chạm người dự bị để vào.</span>
-          <button onClick={outOnly} disabled={busy}>Chỉ cho ra</button>
+          <button onClick={outOnly}>Chỉ cho ra</button>
           <button onClick={() => setOutId(null)}>Huỷ</button>
         </div>
       ) : (
         <>
           <div className="rp-sel">{me ? <>Đang chọn <b>#{me.number} {me.name}</b></> : 'Chạm một cầu thủ trên sân để +điểm'}</div>
           <div className={`cam-score ${me ? '' : 'idle'}`}>
-            <button disabled={busy || !me} onClick={() => score(1)}>+1</button>
-            <button disabled={busy || !me} onClick={() => score(2)}>+2</button>
-            <button disabled={busy || !me} onClick={() => score(3)}>+3</button>
+            <button disabled={!me} onClick={() => score(1)}>+1</button>
+            <button disabled={!me} onClick={() => score(2)}>+2</button>
+            <button disabled={!me} onClick={() => score(3)}>+3</button>
           </div>
         </>
       )}
@@ -158,13 +185,13 @@ export function CamPad({ token }: { token: string }) {
       <div className="sp-group-label">{outP ? `DỰ BỊ: chạm người vào thay #${outP.number}` : on.length < 5 ? 'DỰ BỊ: chạm để vào sân' : 'DỰ BỊ'}</div>
       <div className={`rp-players ${on.length >= 5 && !outP ? 'dim' : ''}`}>
         {bench.map((p) => (
-          <button key={p.id} className={`rp-player bench ${outP ? 'ready' : ''}`} disabled={busy} onClick={() => pickBench(p)}>
+          <button key={p.id} className={`rp-player bench ${outP ? 'ready' : ''}`} onClick={() => pickBench(p)}>
             <b>{p.number}</b><span>{p.name}</span>
           </button>
         ))}
         {bench.length === 0 && <div className="rp-empty muted">Không có dự bị.</div>}
       </div>
-      <div className="row"><span className="grow muted small-note">Pha +2 / +3 chờ người bấm stats bổ sung vị trí.</span><button className="btn sm" disabled={busy} onClick={() => call('cam_undo', { p_token: token }, '↶ Đã hoàn tác')}>↶ Hoàn tác</button></div>
+      <div className="row"><span className="grow muted small-note">Pha +2 / +3 chờ người bấm stats bổ sung vị trí.</span><button className="btn sm" onClick={() => call('cam_undo', { p_token: token }, '↶ Đã hoàn tác')}>↶ Hoàn tác</button></div>
       {msg && <div className="toast">{msg}</div>}
     </div>
   )

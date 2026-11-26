@@ -1167,20 +1167,23 @@ begin
 end $$;
 
 -- Đồng hồ: start | stop | adjust (p_secs, có thể âm) | next | prev (đổi hiệp, đồng hồ về đầu hiệp và dừng).
-create or replace function cam_clock(p_token text, p_action text, p_secs int default 0) returns text
+-- p_lag_ms: độ trễ mạng ước tính từ lúc bấm tới lúc máy chủ nhận (điện thoại tự đo); bù vào start / stop để giờ khớp lúc bấm thật.
+drop function if exists cam_clock(text, text, int);
+create or replace function cam_clock(p_token text, p_action text, p_secs int default 0, p_lag_ms int default 0) returns text
 language plpgsql security definer set search_path = public as $$
-declare gid uuid; g games; c real; np int; plen real;
+declare gid uuid; g games; c real; np int; plen real; lag real;
 begin
   gid := remote_game_of(p_token);
   if gid is null then return 'Mã QR không hợp lệ hoặc đã hết hạn.'; end if;
   select * into g from games where id = gid for update;
   c := game_clock_now(g);
   plen := case when coalesce(g.clock_period, 1) <= 4 then g.period_len else 300 end;
+  lag := greatest(0, least(coalesce(p_lag_ms, 0), 1500)) / 1000.0;
   if p_action = 'start' then
     if c <= 0 then return 'Hết giờ hiệp này.'; end if;
-    update games set clock_running = true, clock_remaining = c, clock_started_at = now() where id = gid;
+    update games set clock_running = true, clock_remaining = c, clock_started_at = now() - make_interval(secs => lag) where id = gid;
   elsif p_action = 'stop' then
-    update games set clock_running = false, clock_remaining = c, clock_started_at = null where id = gid;
+    update games set clock_running = false, clock_remaining = least(plen, c + case when g.clock_running then lag else 0 end), clock_started_at = null where id = gid;
   elsif p_action = 'adjust' then
     update games set clock_remaining = least(plen, greatest(0, c + coalesce(p_secs, 0))),
                      clock_started_at = case when g.clock_running then now() else null end where id = gid;
@@ -1283,6 +1286,6 @@ begin
   return 'ok';
 end $$;
 
-grant execute on function cam_state(text), cam_clock(text, text, int), cam_sub(text, uuid, uuid), cam_score(text, uuid, int), cam_mark_start(text, boolean), cam_undo(text) to anon, authenticated;
+grant execute on function cam_state(text), cam_clock(text, text, int, int), cam_sub(text, uuid, uuid), cam_score(text, uuid, int), cam_mark_start(text, boolean), cam_undo(text) to anon, authenticated;
 
 notify pgrst, 'reload schema';
