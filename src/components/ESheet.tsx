@@ -5,7 +5,7 @@ import { lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
 import { BONUS_AT, isThreeZone, teamFouls, timeouts, zoneOf, ZONE_LABEL } from '../lib/analytics'
 import { confirmDialog } from '../lib/dialog'
 import { Court } from './Court'
-import { FtQueue, useFtQueue, type FoulKind } from './FtFlow'
+import { FtQueue, type FoulKind } from './FtFlow'
 import type { GamePlayer, StatEvent, StatType, TeamSide } from '../types'
 
 const opp = (s: TeamSide): TeamSide => (s === 'home' ? 'away' : 'home')
@@ -66,11 +66,11 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
     if (!me) return
     const n = teamFouls(stats, me.side, period) + 1 // lỗi đồng đội của hiệp, tính cả lỗi này
     const bonus = n > BONUS_AT
-    const id = rec(type, me)
+    const needFt = type !== 'PF' || bonus
+    rec(type, me, needFt ? { ftOpen: true } : {}) // lỗi dẫn tới ném phạt: vào hàng đợi ném phạt của trận
     toast(`#${me.number} ${me.name} · ${STAT_LABEL[type]} (lỗi đồng đội ${n})`)
     setSel(null)
     if (type === 'PF' && !bonus) return toast(`Lỗi cá nhân #${me.number}: bóng cho ${name(opp(me.side))} (chưa bonus, ${name(me.side)} có ${n} lỗi)`)
-    useFtQueue.getState().add({ kind: type, foulId: id, foulerSide: me.side, gameId: game.id })
   }
   const timeout = (s: TeamSide) => {
     const t = timeouts(stats, s, period)

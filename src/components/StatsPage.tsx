@@ -18,7 +18,7 @@ import { Analysis } from './Analysis'
 import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, turnoverInfo, zoneOf } from '../lib/analytics'
 import { Court } from './Court'
 import { ESheet } from './ESheet'
-import { FtQueue, FOUL_KINDS, useFtQueue, type FoulKind } from './FtFlow'
+import { FtQueue, FOUL_KINDS } from './FtFlow'
 import { GameRosterModal } from './GameRoster'
 import { StatEditor } from './StatEditor'
 import { SubEditor, SubForm } from './SubEditor'
@@ -172,8 +172,10 @@ export function StatsPage() {
     const onVideo = showVideo && !!videoId && yt.ready()
     const shot = SHOT_TYPES.includes(type)
     const paint = shot && type.startsWith('2') && (mods.paint || (!!loc && zoneOf(loc.x, loc.y) === 'paint'))
+    // Lỗi dẫn tới ném phạt: vào hàng đợi ném phạt của trận (lưu cùng pha lỗi).
+    const foulFt = FOUL_KINDS.includes(type) && (type !== 'PF' || teamFouls(stats, sel.side, period) + 1 > BONUS_AT)
     const id = addStat({
-      gameId: game.id, side: sel.side, gamePlayerId: sel.id, type, period,
+      ftOpen: foulFt, gameId: game.id, side: sel.side, gamePlayerId: sel.id, type, period,
       videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, clockS: remaining,
       paint, fastBreak: shot && mods.fb, shotX: shot && loc ? loc.x : null, shotY: shot && loc ? loc.y : null,
       tovKind: type === 'TOV' ? tov ?? null : null,
@@ -182,9 +184,7 @@ export function StatsPage() {
     if (shot && loc && type.startsWith('2') && isThreeZone(zoneOf(loc.x, loc.y))) toast('Lưu ý: vị trí chọn nằm ngoài vạch 3 điểm mà ghi 2PT')
     else toast(`#${sel.number} ${sel.name} · ${STAT_LABEL[type]}${tags ? ` (${tags})` : ''}`)
     if (shot) { setMods({ paint: false, fb: false }); setLoc(null) }
-    // Lỗi dẫn tới ném phạt: mở bảng ném phạt (hỏi ai ném, từng quả vào / trượt, rebound).
-    const foulFt = FOUL_KINDS.includes(type) && (type !== 'PF' || teamFouls(stats, sel.side, period) + 1 > BONUS_AT)
-    if (foulFt) { useFtQueue.getState().add({ kind: type as FoulKind, foulId: id, foulerSide: sel.side, gameId: game.id }); setFu(null) }
+    if (foulFt) setFu(null)
     // Hỏi tiếp: lỗi → ai bị phạm lỗi; ghi điểm → ai kiến tạo.
     else if (sel && DRAWN_TYPES.includes(type)) setFu({ kind: 'drawn', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
     else if (sel && (type === '2PM' || type === '3PM')) setFu({ kind: 'assist', eventId: id, side: sel.side, exclude: sel.id })

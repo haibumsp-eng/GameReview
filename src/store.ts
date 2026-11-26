@@ -254,7 +254,7 @@ export const useData = create<DataState>((set, get) => {
         gamePlayers: (gpr.data ?? []).map((r: any) => ({ id: r.id, gameId: r.game_id, side: r.side, number: r.number, name: r.name, playerId: r.player_id ?? null })),
         stats: (ser.data ?? []).map((r: any) => ({
           id: r.id, gameId: r.game_id, side: r.side, gamePlayerId: r.game_player_id ?? null, type: r.type, period: r.period,
-          videoId: r.video_id ?? null, videoT: r.video_t ?? null, clockS: r.clock_s ?? null, viaRemote: !!r.via_remote, paint: !!r.paint, fastBreak: !!r.fast_break, drawnBy: r.drawn_by ?? null, linkedId: r.linked_id ?? null, tovKind: r.tov_kind ?? null, shotX: r.shot_x ?? null, shotY: r.shot_y ?? null, pending: !!r.pending, createdAt: new Date(r.created_at).getTime(),
+          videoId: r.video_id ?? null, videoT: r.video_t ?? null, clockS: r.clock_s ?? null, viaRemote: !!r.via_remote, paint: !!r.paint, fastBreak: !!r.fast_break, drawnBy: r.drawn_by ?? null, linkedId: r.linked_id ?? null, tovKind: r.tov_kind ?? null, shotX: r.shot_x ?? null, shotY: r.shot_y ?? null, pending: !!r.pending, ftOpen: !!r.ft_open, ftCount: r.ft_count ?? null, createdAt: new Date(r.created_at).getTime(),
         })),
         lineups: (ler.data ?? []).map((r: any) => ({
           id: r.id, gameId: r.game_id, side: r.side, gamePlayerId: r.game_player_id, kind: r.kind, period: r.period, clockS: r.clock_s,
@@ -440,6 +440,8 @@ export const useData = create<DataState>((set, get) => {
       if (e.shotX != null) row.shot_x = e.shotX
       if (e.shotY != null) row.shot_y = e.shotY
       if (e.pending) row.pending = true
+      if (e.ftOpen) row.ft_open = true
+      if (e.ftCount != null) row.ft_count = e.ftCount
       supabase.from('stat_events').insert(row).then(({ error }) => { if (fail(error)) get().loadGame(e.gameId) })
       return id
     },
@@ -495,6 +497,8 @@ export const useData = create<DataState>((set, get) => {
       if (patch.shotX !== undefined) row.shot_x = patch.shotX
       if (patch.shotY !== undefined) row.shot_y = patch.shotY
       if (patch.pending !== undefined) row.pending = patch.pending
+      if (patch.ftOpen !== undefined) row.ft_open = patch.ftOpen
+      if (patch.ftCount !== undefined) row.ft_count = patch.ftCount
       if (patch.clockS !== undefined) row.clock_s = patch.clockS
       if (patch.period !== undefined) row.period = patch.period
       // Trong lúc đang ghi sửa, bỏ qua kết quả tải lại cũ để không làm chữ / số nhảy về giá trị trước.
@@ -660,7 +664,7 @@ export function orgExpired(o: Org | undefined): boolean {
 /** Các trường của một lần vào / ra sân có thể sửa. */
 export type LineupPatch = Partial<Pick<LineupEvent, 'gamePlayerId' | 'side' | 'kind' | 'period' | 'clockS'>>
 /** Các trường của một pha có thể sửa sau khi ghi. */
-export type StatPatch = Partial<Pick<StatEvent, 'gamePlayerId' | 'side' | 'type' | 'paint' | 'fastBreak' | 'drawnBy' | 'linkedId' | 'tovKind' | 'shotX' | 'shotY' | 'pending' | 'clockS' | 'period'>>
+export type StatPatch = Partial<Pick<StatEvent, 'gamePlayerId' | 'side' | 'type' | 'paint' | 'fastBreak' | 'drawnBy' | 'linkedId' | 'tovKind' | 'shotX' | 'shotY' | 'pending' | 'ftOpen' | 'ftCount' | 'clockS' | 'period'>>
 
 /* ---------- Giải JET tách riêng khỏi tuyến đội / trận thường ---------- */
 /** Tuyến thuộc Giải JET: đội giải (có league) hoặc tuyến cũ có chữ "JET" trong tên. */

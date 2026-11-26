@@ -114,6 +114,10 @@ export interface StatEvent {
   shotY?: number | null
   /** Pha do bàn thư ký ghi, đang chờ người bấm stats bổ sung (vị trí, rebound, kiến tạo…). */
   pending?: boolean
+  /** Lỗi còn nợ ném phạt (chưa ném xong): hàng đợi ném phạt lưu theo trận. */
+  ftOpen?: boolean
+  /** Số quả phạt phải ném cho lỗi này. */
+  ftCount?: number | null
   createdAt: number
 }
 /** Vào sân / ra sân, ghi theo đồng hồ thi đấu. */
