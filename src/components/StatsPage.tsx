@@ -65,6 +65,7 @@ export function StatsPage() {
   // Bảng ném phạt mở sau lỗi dẫn tới ném phạt (lỗi khi ném rổ, kỹ thuật, không thể thể thao, truất quyền, lỗi cá nhân khi đã bonus).
   const [ftStart, setFtStart] = useState<FtStart | null>(null)
   // Sau cú ném / quả phạt trượt: hỏi ai bắt bóng bật bảng (OREB nếu cùng đội ném, DREB nếu khác đội). Quả phạt cho chọn nhiều người.
+  const [putQ, setPutQ] = useState<{ p: GamePlayer; period: number; clockS: number; videoId: string | null; videoT: number | null } | null>(null)
   const [rebQ, setRebQ] = useState<{ side: TeamSide; ft: boolean; eventId: string; period: number; clockS: number; videoId: string | null; videoT: number | null; n: number } | null>(null)
   const [, tick] = useState(0)
   const [newGame, setNewGame] = useState<{ title: string; home: string; away: string; date: string; len: number } | null>(null)
@@ -191,6 +192,7 @@ export function StatsPage() {
     else if (sel && (type === '2PM' || type === '3PM')) setFu({ kind: 'assist', eventId: id, side: sel.side, exclude: sel.id })
     else if (type === 'TOV' && tov === 'stolen') setFu({ kind: 'steal', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
     else setFu(null)
+    setPutQ(null)
     setRebQ(type === '2PX' || type === '3PX' || type === 'FTX'
       ? { side: sel.side, ft: type === 'FTX', eventId: id, period, clockS: remaining, videoId: onVideo ? videoId : null, videoT: onVideo ? yt.time() : null, n: 0 } : null)
     flashLast(id)
@@ -221,10 +223,23 @@ export function StatsPage() {
   }
   const answerReb = (p: GamePlayer) => {
     if (!game || !rebQ) return
+    const stamp = { period: rebQ.period, clockS: rebQ.clockS, videoId: rebQ.videoId, videoT: rebQ.videoT }
     addStat({ gameId: game.id, side: p.side, gamePlayerId: p.id, type: p.side === rebQ.side ? 'OREB' : 'DREB', period: rebQ.period, videoId: rebQ.videoId, videoT: rebQ.videoT, clockS: rebQ.clockS, linkedId: rebQ.eventId })
     toast(`#${p.number} ${p.name} · ${p.side === rebQ.side ? 'OREB' : 'DREB'}`)
-    if (rebQ.ft) setRebQ({ ...rebQ, n: rebQ.n + 1 })
+    // Người OREB: hỏi có dứt điểm ngay (tip-in / putback) không.
+    if (p.side === rebQ.side) { setPutQ({ p, ...stamp }); setRebQ(null) }
+    else if (rebQ.ft) setRebQ({ ...rebQ, n: rebQ.n + 1 })
     else setRebQ(null)
+  }
+  const answerPut = (r: 'made' | 'miss' | 'none') => {
+    if (!game || !putQ) return
+    const { p, ...stamp } = putQ
+    setPutQ(null)
+    if (r === 'none') return
+    const id = addStat({ gameId: game.id, side: p.side, gamePlayerId: p.id, type: r === 'made' ? '2PM' : '2PX', paint: true, ...stamp })
+    toast(`#${p.number} ${p.name} · ${r === 'made' ? 'tip-in / putback vào (+2)' : 'tip-in / putback trượt'}`)
+    // Dứt điểm trượt: lại hỏi ai rebound.
+    if (r === 'miss') setRebQ({ side: p.side, ft: false, eventId: id, ...stamp, n: 0 })
   }
   const answerFu = (playerId: string | null) => {
     if (!fu || !game) return setFu(null)
@@ -434,6 +449,16 @@ export function StatsPage() {
           </div>
         )
       })()}
+      {putQ && (
+        <div className="sp-reb">
+          <div className="sp-fu-q">#{putQ.p.number} {putQ.p.name} (OREB) có dứt điểm ngay (tip-in / putback) không?</div>
+          <div className="row wrap">
+            <button className="btn primary" onClick={() => answerPut('made')}>Vào (+2)</button>
+            <button className="btn" onClick={() => answerPut('miss')}>Trượt</button>
+            <button className="btn ghost" onClick={() => answerPut('none')}>Không dứt điểm</button>
+          </div>
+        </div>
+      )}
       {rebQ && (() => {
         const o: TeamSide = rebQ.side === 'home' ? 'away' : 'home'
         const side = (s: TeamSide, tag: string) => (

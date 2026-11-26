@@ -17,7 +17,7 @@ export const FOUL_TITLE: Record<FoulKind, string> = { PF: 'Lỗi cá nhân (bonu
 export interface FtStart { kind: FoulKind; foulId: string; foulerSide: TeamSide }
 
 const opp = (s: TeamSide): TeamSide => (s === 'home' ? 'away' : 'home')
-interface Flow { and1: 0 | 2 | 3; stage: 'setup' | 'shots' | 'miss' | 'reb'; shooter: string | null; count: number; i: number; picks: string[] }
+interface Flow { put?: 'made' | 'miss' | 'none'; and1: 0 | 2 | 3; stage: 'setup' | 'shots' | 'miss' | 'reb'; shooter: string | null; count: number; i: number; picks: string[] }
 
 /**
  * Bảng ném phạt sau một lỗi: ai bị phạm lỗi và ném, bị phạm lỗi lúc đang ghi điểm (and-one) hay không,
@@ -76,9 +76,13 @@ export function FtFlow({ start, canEdit, onClose }: { start: FtStart; canEdit: b
         const r = byId.get(id)
         if (r) rec(r.side === shooterGp.side ? 'OREB' : 'DREB', r, { linkedId: fx })
       }
+      // Người OREB dứt điểm ngay (tip-in / putback): vào thì ghi 2 điểm trong paint, trượt thì chờ bấm stats chọn rebound tiếp.
+      if (putter && flow.put === 'made') rec('2PM', putter, { paint: true })
+      if (putter && flow.put === 'miss') rec('2PX', putter, { paint: true, pending: true })
     }
     onClose()
   }
+  const putter = flow.picks.map((id) => byId.get(id)).find((p) => p && shooterGp && p.side === shooterGp.side)
   const togglePick = (p: GamePlayer) => setFlow({ ...flow, picks: flow.picks.includes(p.id) ? flow.picks.filter((x) => x !== p.id) : [...flow.picks, p.id] })
 
   return (
@@ -127,7 +131,11 @@ export function FtFlow({ start, canEdit, onClose }: { start: FtStart; canEdit: b
             <div><div className="muted small-note">{name(o)} · rebound tấn công (OR)</div>{grid(onList(o), flow.picks, togglePick)}</div>
             <div><div className="muted small-note">{name(start.foulerSide)} · rebound phòng thủ (DR)</div>{grid(onList(start.foulerSide), flow.picks, togglePick)}</div>
           </div>
-          <div className="row"><button className="btn primary" disabled={!canEdit || !flow.picks.length} onClick={() => ftRebound(false)}>Lưu rebound</button>
+          {putter && (
+            <div className="row wrap"><b>#{putter.number} {putter.name} (OREB) có dứt điểm ngay (tip-in / putback) không?</b>
+              {([['made', 'Vào (+2)'], ['miss', 'Trượt'], ['none', 'Không dứt điểm']] as const).map(([k, l]) => <button key={k} className={`btn ${flow.put === k ? 'primary' : ''}`} onClick={() => setFlow({ ...flow, put: k })}>{l}</button>)}</div>
+          )}
+          <div className="row"><button className="btn primary" disabled={!canEdit || !flow.picks.length || (!!putter && !flow.put)} onClick={() => ftRebound(false)}>Lưu rebound</button>
             <button className="btn" disabled={!canEdit} onClick={() => ftRebound(true)}>Để người bấm stats chọn sau</button></div>
         </>
       )}

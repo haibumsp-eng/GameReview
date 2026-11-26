@@ -14,7 +14,7 @@ const isMade = (t: StatType) => t === '2PM' || t === '3PM'
 const shotName = (t: StatType) => (t.startsWith('2') ? '2 điểm' : '3 điểm')
 
 /** Thông tin người bấm stats bổ sung cho một pha đang chờ. */
-interface Draft { loc?: { x: number; y: number }; fb?: boolean; ast?: string | null; blk?: string | null; rebs?: string[]; stl?: string }
+interface Draft { loc?: { x: number; y: number }; fb?: boolean; ast?: string | null; blk?: string | null; rebs?: string[]; stl?: string; put?: 'made' | 'miss' | 'none' }
 
 /**
  * Biên bản điện tử: ba người cùng làm một trận.
@@ -108,7 +108,7 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
   const complete = (e: StatEvent) => {
     const d = D(e.id)
     if (isShot(e.type) && !d.loc) return false
-    if (e.type === '2PX' || e.type === '3PX' || e.type === 'FTX') return !!d.rebs?.length
+    if (e.type === '2PX' || e.type === '3PX' || e.type === 'FTX') return !!d.rebs?.length && (!orPlayer(e) || !!d.put)
     if (e.type === 'TOV') return d.stl !== undefined
     return true
   }
@@ -116,10 +116,13 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
     const d = D(e.id), n: string[] = []
     if (isShot(e.type) && !d.loc) n.push(`chọn vị trí ném ${e.type.startsWith('2') ? '2 điểm (trong vạch 3 điểm)' : '3 điểm (ngoài vạch 3 điểm)'}`)
     if ((e.type === '2PX' || e.type === '3PX' || e.type === 'FTX') && !d.rebs?.length) n.push('chọn người bắt bóng bật bảng')
+    if (orPlayer(e) && !d.put) n.push('người OREB có dứt điểm ngay không')
     if (e.type === 'TOV' && d.stl === undefined) n.push('chọn người cướp bóng hoặc “Không ai”')
     return n.join(' · ')
   }
   // Rebound của ném phạt (tranh bóng) chọn được nhiều người; ném rổ thường chỉ một người.
+  // Người OREB (cùng đội ném) trong số người đã chọn: hỏi có dứt điểm ngay (tip-in / putback) không.
+  const orPlayer = (e: StatEvent) => (D(e.id).rebs ?? []).map((id) => byId.get(id)).find((p) => p && p.side === e.side)
   const pickReb = (e: StatEvent, id: string) => {
     const cur = D(e.id).rebs ?? []
     if (e.type !== 'FTX') return patch(e.id, { rebs: [id] })
@@ -138,6 +141,9 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
     if (isShot(e.type) && d.loc) Object.assign(p, { shotX: d.loc.x, shotY: d.loc.y, paint: e.type.startsWith('2') && zoneOf(d.loc.x, d.loc.y) === 'paint', fastBreak: !!d.fb })
     if (isMade(e.type) && d.ast) addStat({ ...base, side: e.side, gamePlayerId: d.ast, type: 'AST' })
     if (!isMade(e.type) && e.type !== 'TOV') {
+      const put = orPlayer(e)
+      if (put && d.put === 'made') addStat({ ...base, linkedId: null, side: put.side, gamePlayerId: put.id, type: '2PM', paint: true })
+      if (put && d.put === 'miss') addStat({ ...base, linkedId: null, side: put.side, gamePlayerId: put.id, type: '2PX', paint: true, pending: true })
       for (const rid of d.rebs ?? []) {
         const r = byId.get(rid)
         if (r) addStat({ ...base, linkedId: null, side: r.side, gamePlayerId: r.id, type: r.side === e.side ? 'OREB' : 'DREB' })
@@ -209,6 +215,10 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
             </div>
             {rebList.length === 0 && <div className="muted small-note">Chưa có ai trên sân. Máy quay cần đưa đội hình vào sân.</div>}
           </div>
+        )}
+        {miss && orPlayer(e) && (
+          <div className="row wrap"><b>#{orPlayer(e)!.number} {orPlayer(e)!.name} (OREB) có dứt điểm ngay (tip-in / putback) không?</b>
+            {([['made', 'Vào (+2)'], ['miss', 'Trượt'], ['none', 'Không dứt điểm']] as const).map(([k, l]) => <button key={k} className={`btn sm ${d.put === k ? 'primary' : ''}`} disabled={!canEdit} onClick={() => patch(e.id, { put: k })}>{l}</button>)}</div>
         )}
         {(e.type === '2PX' || e.type === '3PX') && (
           <div><div className="sp-group-label">Bị block bởi (tuỳ chọn)</div>
