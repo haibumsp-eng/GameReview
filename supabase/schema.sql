@@ -1038,7 +1038,12 @@ update orgs set jet_enabled = true where name ilike '%junsport%' and not jet_ena
 -- Trọng tài JET: mọi quyền trong Giải JET (đội, trận, stats, biên bản), không thấy tuyến thường.
 -- HLV JET: chỉ vào được đội JET được giao (bảng members), không thấy đội khác.
 -- Vai trò 'coach' / 'viewer' thường không còn vào được Giải JET.
-alter table org_members drop constraint if exists org_members_role_check;
+-- Gỡ mọi ràng buộc kiểm tra vai trò cũ (dù tên là gì) rồi đặt lại với danh sách vai trò mới.
+do $$ declare c record; begin
+  for c in select conname from pg_constraint where conrelid = 'public.org_members'::regclass and contype = 'c' and pg_get_constraintdef(oid) ilike '%role%' loop
+    execute format('alter table org_members drop constraint %I', c.conname);
+  end loop;
+end $$;
 alter table org_members add constraint org_members_role_check check (role in ('owner','coach','viewer','jet_ref','jet_coach'));
 
 create or replace function jet_manager(oid uuid) returns boolean
