@@ -201,7 +201,7 @@ export const useData = create<DataState>((set, get) => {
       ])
       if ([sq, pl, ga, pr, gv, ad, og, om].some((r) => fail(r.error))) return
       set({
-        squads: (sq.data ?? []).map((r: any) => ({ id: r.id, name: r.name, orgId: r.org_id, league: r.league ?? null, season: r.season ?? '', coach: r.coach ?? '' })),
+        squads: (sq.data ?? []).map((r: any) => ({ id: r.id, name: r.name, orgId: r.org_id, league: r.league ?? null, jetTeam: !!r.jet_team, season: r.season ?? '', coach: r.coach ?? '' })),
         orgs: (og.data ?? []).map((r: any) => ({ id: r.id, name: r.name, plan: r.plan, maxSquads: r.max_squads, expiresOn: r.expires_on, joinCode: r.join_code ?? '', jetEnabled: !!r.jet_enabled })),
         orgMembers: (om.data ?? []).map((r: any) => ({ orgId: r.org_id, userId: r.user_id, role: r.role })),
         baseLoaded: true,

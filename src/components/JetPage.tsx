@@ -28,7 +28,7 @@ export function JetPage({ onOpenStats }: { onOpenStats: () => void }) {
   const [err, setErr] = useState('')
   const [tab, setTab] = useState<'teams' | 'games'>('games')
 
-  const jet = squads.filter((s) => s.orgId === orgId && s.league)
+  const jet = squads.filter((s) => s.orgId === orgId && s.league && s.jetTeam)
   const seasons = [...new Set(jet.filter((s) => s.league === league).map((s) => s.season || ''))].sort().reverse()
   const teams = jet.filter((s) => s.league === league && (!season || (s.season || '') === season)).sort((a, b) => a.name.localeCompare(b.name, 'vi'))
   const team = jet.find((s) => s.id === sel)
@@ -286,7 +286,7 @@ function ImportModal({ orgId, defaultLeague, onClose, onDone }: { orgId: string;
 function MatchModal({ league, onClose, onCreated }: { league: string; onClose: () => void; onCreated: () => void }) {
   const { orgId, set } = useUi(useShallow((s) => ({ orgId: s.orgId, set: s.set })))
   const { squads, players, addGame, setTeamNames, setGameAwaySquad, setClock } = useData()
-  const jet = useMemo(() => squads.filter((s) => s.orgId === orgId && s.league).sort((a, b) => (a.league ?? '').localeCompare(b.league ?? '') || a.name.localeCompare(b.name, 'vi')), [squads, orgId])
+  const jet = useMemo(() => squads.filter((s) => s.orgId === orgId && s.league && s.jetTeam).sort((a, b) => (a.league ?? '').localeCompare(b.league ?? '') || a.name.localeCompare(b.name, 'vi')), [squads, orgId])
   const inLeague = jet.filter((s) => s.league === league)
   const [home, setHome] = useState(inLeague[0]?.id ?? jet[0]?.id ?? '')
   const [away, setAway] = useState(inLeague[1]?.id ?? jet[1]?.id ?? '')

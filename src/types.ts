@@ -1,6 +1,6 @@
 export type Side = 'ATK' | 'DEF'
 
-export interface Squad { id: string; name: string; orgId: string; /** Giải JET (PRO.JET | JET | JR.JET | WJET) nếu đây là đội giải JET. */ league?: string | null; season?: string; coach?: string }
+export interface Squad { id: string; name: string; orgId: string; /** Giải JET (PRO.JET | JET | JR.JET | WJET) nếu đây là đội giải JET. */ league?: string | null; season?: string; coach?: string; /** true = đội giải JET thật (tạo từ mục Giải JET); false = tuyến cũ có chữ JET, chỉ để giữ các trận. */ jetTeam?: boolean }
 /** jet_ref: Trọng tài JET (admin riêng của Giải JET, không phải chủ trung tâm). jet_coach: HLV JET (chỉ đội được giao). */
 export type OrgRole = 'owner' | 'coach' | 'viewer' | 'jet_ref' | 'jet_coach'
 /** Trung tâm / CLB: một khách hàng. */
