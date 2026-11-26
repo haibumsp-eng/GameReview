@@ -1149,4 +1149,140 @@ alter table stat_events add column if not exists pending boolean not null defaul
 alter table stat_events add column if not exists ft_open boolean not null default false;
 alter table stat_events add column if not exists ft_count int;
 
+-- ================= Điện thoại máy quay: đồng hồ, thay người, +điểm, mốc bắt đầu trận =================
+-- Dùng chung mã QR (remote_tokens) với bảng bấm stats nhưng chỉ làm được 4 việc này. Link riêng: #cam=<token>.
+-- start_marked_at: giờ thật lúc máy quay bấm "Đánh dấu bắt đầu trận" (khi đồng hồ đang chạy); start_mark_clock: giây còn lại lúc đó.
+alter table games add column if not exists start_marked_at timestamptz;
+alter table games add column if not exists start_mark_clock real;
+
+create or replace function cam_state(p_token text) returns jsonb
+language plpgsql security definer stable set search_path = public as $$
+declare gid uuid; g games;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return jsonb_build_object('error', 'Mã QR không hợp lệ hoặc đã hết hạn.'); end if;
+  select * into g from games where id = gid;
+  return remote_state(p_token) || jsonb_build_object('period_len', g.period_len,
+    'mark', jsonb_build_object('at', g.start_marked_at, 'clock', g.start_mark_clock));
+end $$;
+
+-- Đồng hồ: start | stop | adjust (p_secs, có thể âm) | next | prev (đổi hiệp, đồng hồ về đầu hiệp và dừng).
+create or replace function cam_clock(p_token text, p_action text, p_secs int default 0) returns text
+language plpgsql security definer set search_path = public as $$
+declare gid uuid; g games; c real; np int; plen real;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return 'Mã QR không hợp lệ hoặc đã hết hạn.'; end if;
+  select * into g from games where id = gid for update;
+  c := game_clock_now(g);
+  plen := case when coalesce(g.clock_period, 1) <= 4 then g.period_len else 300 end;
+  if p_action = 'start' then
+    if c <= 0 then return 'Hết giờ hiệp này.'; end if;
+    update games set clock_running = true, clock_remaining = c, clock_started_at = now() where id = gid;
+  elsif p_action = 'stop' then
+    update games set clock_running = false, clock_remaining = c, clock_started_at = null where id = gid;
+  elsif p_action = 'adjust' then
+    update games set clock_remaining = least(plen, greatest(0, c + coalesce(p_secs, 0))),
+                     clock_started_at = case when g.clock_running then now() else null end where id = gid;
+  elsif p_action in ('next', 'prev') then
+    np := greatest(1, coalesce(g.clock_period, 1) + case when p_action = 'next' then 1 else -1 end);
+    update games set clock_period = np, clock_running = false, clock_started_at = null,
+                     clock_remaining = case when np <= 4 then g.period_len else 300 end where id = gid;
+  else
+    return 'Thao tác không hợp lệ.';
+  end if;
+  return 'ok';
+end $$;
+
+-- Thay người: p_out ra sân, p_in vào sân (cùng đội). Chỉ có p_in = vào sân khi chưa đủ 5 người; chỉ có p_out = ra sân.
+create or replace function cam_sub(p_token text, p_out uuid, p_in uuid) returns text
+language plpgsql security definer set search_path = public as $$
+declare gid uuid; g games; c real; so text; si text; on_n int; is_on boolean;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return 'Mã QR không hợp lệ hoặc đã hết hạn.'; end if;
+  if p_out is null and p_in is null then return 'Chọn người ra hoặc người vào.'; end if;
+  select * into g from games where id = gid for update;
+  c := game_clock_now(g);
+  if p_out is not null then
+    select side into so from game_players where id = p_out and game_id = gid;
+    if so is null then return 'Cầu thủ không thuộc trận này.'; end if;
+    select coalesce((select kind = 'in' from lineup_events where game_player_id = p_out order by created_at desc limit 1), false) into is_on;
+    if not is_on then return 'Người này đang không ở trên sân.'; end if;
+  end if;
+  if p_in is not null then
+    select side into si from game_players where id = p_in and game_id = gid;
+    if si is null then return 'Cầu thủ không thuộc trận này.'; end if;
+    select coalesce((select kind = 'in' from lineup_events where game_player_id = p_in order by created_at desc limit 1), false) into is_on;
+    if is_on then return 'Người này đang ở trên sân rồi.'; end if;
+    if p_out is not null and so <> si then return 'Hai người phải cùng một đội.'; end if;
+    if p_out is null then
+      select count(*) into on_n from game_players gp where gp.game_id = gid and gp.side = si
+        and coalesce((select kind = 'in' from lineup_events l where l.game_player_id = gp.id order by created_at desc limit 1), false);
+      if on_n >= 5 then return 'Đã đủ 5 người trên sân: chọn người ra sân trước.'; end if;
+    end if;
+  end if;
+  if p_out is not null then
+    insert into lineup_events (game_id, side, game_player_id, kind, period, clock_s, author) values (gid, so, p_out, 'out', coalesce(g.clock_period, 1), c, null);
+  end if;
+  if p_in is not null then
+    insert into lineup_events (game_id, side, game_player_id, kind, period, clock_s, author) values (gid, si, p_in, 'in', coalesce(g.clock_period, 1), c, null);
+  end if;
+  return 'ok';
+end $$;
+
+-- +điểm: p_pts = 1 (ném phạt), 2 hoặc 3. Pha 2 / 3 điểm chờ người bấm stats bổ sung vị trí và kiến tạo (pending).
+create or replace function cam_score(p_token text, p_player uuid, p_pts int) returns text
+language plpgsql security definer set search_path = public as $$
+declare gid uuid; g games; ps text; t text;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return 'Mã QR không hợp lệ hoặc đã hết hạn.'; end if;
+  select side into ps from game_players where id = p_player and game_id = gid;
+  if ps is null then return 'Cầu thủ không thuộc trận này.'; end if;
+  t := case p_pts when 1 then 'FTM' when 2 then '2PM' when 3 then '3PM' else null end;
+  if t is null then return 'Chỉ +1, +2 hoặc +3.'; end if;
+  select * into g from games where id = gid for update;
+  insert into stat_events (game_id, side, game_player_id, type, period, clock_s, via_remote, author, pending)
+    values (gid, ps, p_player, t, coalesce(g.clock_period, 1), game_clock_now(g), true, null, p_pts in (2, 3));
+  return 'ok';
+end $$;
+
+-- Đánh dấu bắt đầu trận (chỉ khi đồng hồ đang chạy) hoặc xoá dấu (p_on = false).
+create or replace function cam_mark_start(p_token text, p_on boolean default true) returns text
+language plpgsql security definer set search_path = public as $$
+declare gid uuid; g games;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return 'Mã QR không hợp lệ hoặc đã hết hạn.'; end if;
+  select * into g from games where id = gid for update;
+  if not coalesce(p_on, true) then
+    update games set start_marked_at = null, start_mark_clock = null where id = gid;
+    return 'ok';
+  end if;
+  if not g.clock_running then return 'Hãy chạy đồng hồ rồi mới đánh dấu bắt đầu trận.'; end if;
+  update games set start_marked_at = now(), start_mark_clock = game_clock_now(g) where id = gid;
+  return 'ok';
+end $$;
+
+-- Hoàn tác thao tác gần nhất của máy quay (một pha +điểm, hoặc một lần thay người), trong 10 phút.
+create or replace function cam_undo(p_token text) returns text
+language plpgsql security definer set search_path = public as $$
+declare gid uuid; se stat_events; le timestamptz;
+begin
+  gid := remote_game_of(p_token);
+  if gid is null then return 'Mã QR không hợp lệ hoặc đã hết hạn.'; end if;
+  select * into se from stat_events where game_id = gid and via_remote and type in ('FTM','2PM','3PM') and created_at > now() - interval '10 minutes' order by created_at desc limit 1;
+  select max(created_at) into le from lineup_events where game_id = gid and author is null and created_at > now() - interval '10 minutes';
+  if se.id is null and le is null then return 'Không có thao tác nào để hoàn tác.'; end if;
+  if le is not null and (se.id is null or le > se.created_at) then
+    delete from lineup_events where game_id = gid and author is null and created_at = le;
+  else
+    delete from stat_events where id = se.id;
+  end if;
+  return 'ok';
+end $$;
+
+grant execute on function cam_state(text), cam_clock(text, text, int), cam_sub(text, uuid, uuid), cam_score(text, uuid, int), cam_mark_start(text, boolean), cam_undo(text) to anon, authenticated;
+
 notify pgrst, 'reload schema';

@@ -23,6 +23,9 @@ export interface Game {
   clockRemaining?: number | null
   clockRunning?: boolean
   clockStartedAt?: number | null
+  /** Máy quay đánh dấu bắt đầu trận: giờ thật (ms) và số giây còn lại trên đồng hồ lúc đó. */
+  startMarkedAt?: number | null
+  startMarkClock?: number | null
 }
 /** Một video (một hiệp / OT) của trận. Mốc thời gian của mark tính theo video này. */
 export interface GameVideo {

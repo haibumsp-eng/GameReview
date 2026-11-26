@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { configError } from './supabase'
 import { RemotePad } from './components/Remote'
+import { CamPad } from './components/Cam'
 import { BoardOverlay } from './components/Board'
 import { ScorePad } from './components/ScorePad'
 import { DialogHost } from './components/DialogHost'
@@ -16,6 +17,8 @@ import '@fontsource/be-vietnam-pro/700.css'
 import './styles.css'
 
 // Điện thoại quét QR: #remote=<token> → chỉ hiện bảng bấm, không cần đăng nhập.
+// Điện thoại máy quay: #cam=<token> → chỉ đồng hồ, thay người, +điểm, đánh dấu bắt đầu trận.
+const camToken = location.hash.match(/cam=([0-9a-f]{16,64})/)?.[1]
 const remoteToken = location.hash.match(/remote=([0-9a-f]{16,64})/)?.[1]
 // OBS: #board=<token>&pos=top|bottom&scale=1 → bảng tỉ số nền trong suốt.
 // Điện thoại điều khiển bảng tỉ số: #scorepad=<control_token> (không đăng nhập).
@@ -29,6 +32,7 @@ createRoot(document.getElementById('root')!).render(
     {configError ? <div className="login"><div className="card err" style={{ maxWidth: 480 }}>{configError}</div></div>
       : padToken ? <ScorePad token={padToken} />
       : boardToken ? <BoardOverlay token={boardToken} pos={boardPos} scale={boardScale} />
+      : camToken ? <CamPad token={camToken} />
       : remoteToken ? <RemotePad token={remoteToken} /> : <><App /><DialogHost /></>}
   </StrictMode>,
 )

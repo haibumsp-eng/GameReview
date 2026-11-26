@@ -483,6 +483,7 @@ export function StatsPage() {
                   <button className={`btn sm ${running ? '' : 'primary'}`} disabled={!canEdit || (!running && remaining <= 0)} onClick={toggleClock}>
                     {running ? '❚❚ Dừng' : '▶ Chạy'} <kbd>Space</kbd>
                   </button>
+                  {game?.startMarkedAt && <span className="sp-flag" title="Máy quay đã đánh dấu bắt đầu trận (giờ thật)">🏁 {new Date(game.startMarkedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}
                 </div>
                 <span className="sp-num away">{score('away')}</span>
                 <span className="sp-sname">{awayName}</span>

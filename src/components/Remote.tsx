@@ -11,29 +11,41 @@ export function RemoteModal(props: { gameId: string; onClose: () => void }) {
   const [err, setErr] = useState('')
   const [copied, setCopied] = useState(false)
   const [state, setState] = useState<'loading' | 'ready' | 'revoked'>('loading')
+  const [kind, setKind] = useState<'stats' | 'cam'>('stats') // stats = bấm stats, cam = máy quay (đồng hồ, thay người, +điểm)
+  const [token, setToken] = useState('')
 
   const make = async () => {
     setErr(''); setQr(''); setState('loading')
     const { data, error } = await supabase.rpc('create_remote_token', { p_game: props.gameId })
     if (error) return setErr(error.message)
-    const u = `${location.origin}${location.pathname}#remote=${data as string}`
-    setUrl(u)
-    setQr(await QRCode.toDataURL(u, { width: 320, margin: 1, errorCorrectionLevel: 'M' }))
+    setToken(data as string)
     setState('ready')
   }
   useEffect(() => { void make() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Cùng một mã, hai đường link: #remote (bấm stats) và #cam (máy quay).
+  useEffect(() => {
+    if (!token) return
+    const u = `${location.origin}${location.pathname}#${kind === 'cam' ? 'cam' : 'remote'}=${token}`
+    setUrl(u)
+    void QRCode.toDataURL(u, { width: 320, margin: 1, errorCorrectionLevel: 'M' }).then(setQr)
+  }, [token, kind])
 
   const revoke = async () => {
     if (!(await confirmDialog({ title: 'Thu hồi mã?', message: 'Mọi điện thoại đang dùng mã này sẽ không bấm được nữa.', okText: 'Thu hồi', danger: true }))) return
     const { error } = await supabase.from('remote_tokens').delete().eq('game_id', props.gameId)
     if (error) return setErr(error.message)
-    setQr(''); setUrl(''); setState('revoked')
+    setQr(''); setUrl(''); setToken(''); setState('revoked')
   }
 
   return (
     <div className="modal-back" onClick={props.onClose}>
       <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
-        <div className="row"><b className="grow">📱 Bấm stats trên điện thoại</b><button className="icon-btn" onClick={props.onClose}>×</button></div>
+        <div className="row"><b className="grow">📱 Điện thoại</b><button className="icon-btn" onClick={props.onClose}>×</button></div>
+        <div className="seg-toggle">
+          <button className={kind === 'stats' ? 'on' : ''} onClick={() => setKind('stats')}>Bấm stats</button>
+          <button className={kind === 'cam' ? 'on' : ''} onClick={() => setKind('cam')}>Máy quay</button>
+        </div>
+        {kind === 'cam' && <div className="muted small-note">Link riêng cho người cầm máy quay: chỉ có <b>đồng hồ, thay người, +điểm</b> và nút <b>đánh dấu bắt đầu trận</b> (bấm lúc đồng hồ đang chạy). Không bấm được stats khác.</div>}
         <div className="muted small-note">Quét mã bằng camera điện thoại để mở bảng bấm của trận này. Không cần đăng nhập. Mỗi pha bấm trên điện thoại hiện ngay trên máy tính.</div>
         {err && <div className="err">{err}</div>}
         {qr ? (
