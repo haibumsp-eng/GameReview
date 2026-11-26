@@ -1145,7 +1145,7 @@ update squads set jet_legacy = true
 -- Biên bản điện tử: pha do bàn thư ký ghi, chờ người bấm stats bổ sung.
 alter table stat_events add column if not exists pending boolean not null default false;
 
--- Hàng đợi ném phạt lưu theo trận: lỗi còn nợ ném phạt (ft_open) và số quả phải ném (ft_count). Các quả phạt đã ném nối với lỗi qua linked_id.
+-- Hàng đợi ném phạt lưu theo trận: lỗi chưa ném phạt (ft_open) và số quả phải ném (ft_count). Các quả phạt đã ném nối với lỗi qua linked_id.
 alter table stat_events add column if not exists ft_open boolean not null default false;
 alter table stat_events add column if not exists ft_count int;
 

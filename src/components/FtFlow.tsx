@@ -18,7 +18,7 @@ const opp = (s: TeamSide): TeamSide => (s === 'home' ? 'away' : 'home')
 const PRIORITY: Record<FoulKind, number> = { PFT: 0, PFU: 0, PFD: 0, PFS: 1, PF: 1 }
 
 /**
- * Hàng đợi ném phạt LƯU THEO TRẬN: lỗi còn nợ ném phạt có cờ ftOpen trong bảng thống kê (kèm số quả ftCount),
+ * Hàng đợi ném phạt LƯU THEO TRẬN: lỗi chưa ném phạt có cờ ftOpen trong bảng thống kê (kèm số quả ftCount),
  * các quả đã ném nối với lỗi qua linkedId. Tải lại trang hay mở trên máy khác vẫn thấy đúng quả đang ném dở.
  * Quy tắc: lỗi kỹ thuật, không thể thể thao, truất quyền được ném TRƯỚC các lỗi thường; cùng nhóm thì theo thứ tự xảy ra.
  * Khung nằm ngay trên sân (cùng chỗ các câu hỏi rebound, kiến tạo), không bật cửa sổ riêng.
@@ -39,7 +39,7 @@ export function FtQueue({ canEdit }: { canEdit: boolean }) {
     <div className="ft-queue">
       {waiting.length > 0 && (
         <div className="row wrap muted small-note">
-          <b>Ném phạt đang chờ ({items.length} lỗi):</b>
+          <b>Chưa ném phạt ({items.length} lỗi):</b>
           {waiting.map((w) => (
             <span key={w.id} className="es-tag">{FOUL_TITLE[kind(w)]} · {nm(w.side)} <button className="icon-btn" title="Bỏ ném phạt này" onClick={() => close(w.id)}>×</button></span>
           ))}
