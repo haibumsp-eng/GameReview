@@ -5,6 +5,7 @@ import { lineOf, periodLabel, STAT_LABEL } from '../lib/boxscore'
 import { BONUS_AT, isThreeZone, teamFouls, timeouts, zoneOf, ZONE_LABEL } from '../lib/analytics'
 import { confirmDialog } from '../lib/dialog'
 import { Court } from './Court'
+import { FtFlow, type FoulKind, type FtStart } from './FtFlow'
 import type { GamePlayer, StatEvent, StatType, TeamSide } from '../types'
 
 const opp = (s: TeamSide): TeamSide => (s === 'home' ? 'away' : 'home')
@@ -14,17 +15,6 @@ const shotName = (t: StatType) => (t.startsWith('2') ? '2 điểm' : '3 điểm'
 
 /** Thông tin người bấm stats bổ sung cho một pha đang chờ. */
 interface Draft { loc?: { x: number; y: number }; fb?: boolean; ast?: string | null; blk?: string | null; rebs?: string[]; stl?: string }
-
-/** Lỗi dẫn tới ném phạt (FIBA): số quả, và quả cuối trượt có tranh bóng (rebound) hay không. */
-type FoulKind = 'PF' | 'PFS' | 'PFT' | 'PFU' | 'PFD'
-const FT_RULE: Record<FoulKind, { count: number; ask: boolean; live: boolean; note: string }> = {
-  PF: { count: 2, ask: false, live: true, note: 'Đội đối phương đã vào bonus (từ lỗi đồng đội thứ 5 trong hiệp): ném phạt 2 quả.' },
-  PFS: { count: 2, ask: true, live: true, note: 'Lỗi khi đang ném rổ: ném không vào thì 2 hoặc 3 quả phạt; ném vào thì tính điểm và 1 quả phạt (and-one).' },
-  PFT: { count: 1, ask: false, live: false, note: 'Lỗi kỹ thuật: 1 quả phạt. Trượt thì bóng luân phiên (không có rebound).' },
-  PFU: { count: 2, ask: false, live: false, note: 'Không thể thể thao: 2 quả phạt, sau đó bóng thuộc đội bị phạm lỗi (không có rebound).' },
-  PFD: { count: 2, ask: false, live: false, note: 'Truất quyền: 2 quả phạt, sau đó bóng thuộc đội bị phạm lỗi (không có rebound).' },
-}
-interface Flow { and1: 0 | 2 | 3; kind: FoulKind; foulId: string; foulerSide: TeamSide; stage: 'setup' | 'shots' | 'miss' | 'reb'; shooter: string | null; count: number; i: number; picks: string[] }
 
 /**
  * Biên bản điện tử: ba người cùng làm một trận.
@@ -41,7 +31,7 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
   const [side, setSide] = useState<TeamSide>('home')
   const [sel, setSel] = useState<string | null>(null)
   const [subOut, setSubOut] = useState<string | null>(null)
-  const [flow, setFlow] = useState<Flow | null>(null)
+  const [flow, setFlow] = useState<FtStart | null>(null)
   const [draft, setDraft] = useState<Record<string, Draft>>({})
   const [, tick] = useState(0)
 
@@ -81,39 +71,7 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
     toast(`#${me.number} ${me.name} · ${STAT_LABEL[type]} (lỗi đồng đội ${n})`)
     setSel(null)
     if (type === 'PF' && !bonus) return toast(`Lỗi cá nhân #${me.number}: bóng cho ${name(opp(me.side))} (chưa bonus, ${name(me.side)} có ${n} lỗi)`)
-    setFlow({ and1: 0, kind: type, foulId: id, foulerSide: me.side, stage: 'setup', shooter: null, count: FT_RULE[type].count, i: 1, picks: [] })
-  }
-  const shooterGp = flow?.shooter ? byId.get(flow.shooter) : undefined
-  const nextShot = (f: Flow) => setFlow(f.i >= f.count ? null : { ...f, i: f.i + 1, stage: 'shots' })
-  const startFt = () => {
-    if (!flow?.shooter) return
-    updateStat(flow.foulId, { drawnBy: flow.shooter })
-    // Bị phạm lỗi lúc đang ghi điểm (and-one): ghi luôn cú ném vào (chờ bấm stats bổ sung vị trí), sau đó 1 quả phạt.
-    if (flow.and1 && shooterGp) {
-      rec(flow.and1 === 2 ? '2PM' : '3PM', shooterGp, { pending: true })
-      toast(`#${shooterGp.number} ${shooterGp.name} · ghi ${flow.and1} điểm và bị phạm lỗi: 1 quả phạt`)
-    }
-    setFlow({ ...flow, count: flow.and1 ? 1 : flow.count, stage: 'shots' })
-  }
-  const ftShot = (made: boolean) => {
-    if (!flow || !shooterGp) return
-    const last = flow.i === flow.count
-    if (made) { rec('FTM', shooterGp); return nextShot(flow) }
-    if (!last) { rec('FTX', shooterGp); return nextShot(flow) }
-    if (!FT_RULE[flow.kind].live) { rec('FTX', shooterGp); toast(FT_RULE[flow.kind].note); return setFlow(null) }
-    setFlow({ ...flow, stage: 'miss' })
-  }
-  const ftAir = () => { if (!shooterGp) return; rec('FTX', shooterGp); toast('Air ball: bóng thuộc quyền kiểm soát của đội phòng thủ'); setFlow(null) }
-  const ftRebound = (later: boolean) => {
-    if (!flow || !shooterGp) return
-    const fx = rec('FTX', shooterGp, { pending: later })
-    if (!later) {
-      for (const id of flow.picks) {
-        const r = byId.get(id)
-        if (r) rec(r.side === shooterGp.side ? 'OREB' : 'DREB', r, { linkedId: fx })
-      }
-    }
-    setFlow(null)
+    setFlow({ kind: type, foulId: id, foulerSide: me.side })
   }
   const timeout = (s: TeamSide) => {
     const t = timeouts(stats, s, period)
@@ -287,62 +245,9 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
       </div>
 
       <div className="card stack es-panel">
-        {role === 1 && (flow ? (() => {
-          const rule = FT_RULE[flow.kind], o = opp(flow.foulerSide)
-          const title = { PF: 'Lỗi cá nhân (bonus)', PFS: 'Lỗi khi đang ném rổ', PFT: 'Lỗi kỹ thuật', PFU: 'Lỗi không thể thể thao', PFD: 'Lỗi truất quyền' }[flow.kind]
-          const pickShooter = (p: GamePlayer) => setFlow({ ...flow, shooter: p.id })
-          return (
-            <div className="es-card">
-              <div className="es-ttl">{title} · {name(flow.foulerSide)} phạm lỗi, <span className={o === 'home' ? 'home' : 'away'}>{name(o)}</span> ném phạt</div>
-              <div className="muted small-note">{rule.note}</div>
-              {flow.stage === 'setup' && (
-                <>
-                  {rule.ask && (
-                    <>
-                      <div className="row wrap"><b>Cú ném của người bị phạm lỗi:</b>
-                        <button className={`btn ${flow.and1 === 0 ? 'primary' : ''}`} onClick={() => setFlow({ ...flow, and1: 0, count: Math.max(2, flow.count) })}>Không vào</button>
-                        <button className={`btn ${flow.and1 === 2 ? 'primary' : ''}`} onClick={() => setFlow({ ...flow, and1: 2, count: 1 })}>Vào 2 điểm (+1 phạt)</button>
-                        <button className={`btn ${flow.and1 === 3 ? 'primary' : ''}`} onClick={() => setFlow({ ...flow, and1: 3, count: 1 })}>Vào 3 điểm (+1 phạt)</button></div>
-                      {flow.and1 === 0
-                        ? <div className="row"><b>Số quả phạt:</b>{[2, 3].map((n) => <button key={n} className={`btn ${flow.count === n ? 'primary' : ''}`} onClick={() => setFlow({ ...flow, count: n })}>{n}</button>)}</div>
-                        : <div><b>Số quả phạt:</b> 1 (bàn thắng được tính, kèm 1 quả phạt)</div>}
-                    </>
-                  )}
-                  {!rule.ask && <div><b>Số quả phạt:</b> {rule.count}</div>}
-                  <div className="sp-group-label">Ai bị phạm lỗi và ném phạt? (bắt buộc)</div>
-                  {grid(onList(o), flow.shooter, pickShooter)}
-                  <div className="row"><button className="btn primary" disabled={!canEdit || !flow.shooter} onClick={startFt}>Bắt đầu ném phạt</button>
-                    <button className="btn ghost" onClick={() => setFlow(null)}>Không có ném phạt</button></div>
-                </>
-              )}
-              {flow.stage === 'shots' && (
-                <>
-                  <div className="es-ttl">Quả {flow.i}/{flow.count} · <span className={o === 'home' ? 'home' : 'away'}>#{shooterGp?.number} {shooterGp?.name}</span></div>
-                  <div className="row"><button className="btn primary es-big" disabled={!canEdit} onClick={() => ftShot(true)}>Vào</button><button className="btn es-big" disabled={!canEdit} onClick={() => ftShot(false)}>Trượt</button></div>
-                  {flow.i === flow.count && !rule.live && <div className="muted small-note">Quả cuối trượt: không có rebound.</div>}
-                </>
-              )}
-              {flow.stage === 'miss' && (
-                <>
-                  <div className="es-ttl">Quả phạt cuối trượt: bóng chạm vành hay air ball?</div>
-                  <div className="row"><button className="btn primary" disabled={!canEdit} onClick={() => setFlow({ ...flow, stage: 'reb', picks: [] })}>Chạm vành (tranh bóng)</button>
-                    <button className="btn" disabled={!canEdit} onClick={ftAir}>Air ball: bóng của đội phòng thủ</button></div>
-                </>
-              )}
-              {flow.stage === 'reb' && (
-                <>
-                  <div className="sp-group-label">Ai bắt bóng bật bảng? Chọn một hoặc nhiều người (có thể cả OR và DR)</div>
-                  <div className="es-two">
-                    <div><div className="muted small-note">{name(o)} · rebound tấn công (OR)</div>{grid(onList(o), flow.picks, (p) => setFlow({ ...flow, picks: flow.picks.includes(p.id) ? flow.picks.filter((x) => x !== p.id) : [...flow.picks, p.id] }))}</div>
-                    <div><div className="muted small-note">{name(flow.foulerSide)} · rebound phòng thủ (DR)</div>{grid(onList(flow.foulerSide), flow.picks, (p) => setFlow({ ...flow, picks: flow.picks.includes(p.id) ? flow.picks.filter((x) => x !== p.id) : [...flow.picks, p.id] }))}</div>
-                  </div>
-                  <div className="row"><button className="btn primary" disabled={!canEdit || !flow.picks.length} onClick={() => ftRebound(false)}>Lưu rebound</button>
-                    <button className="btn" disabled={!canEdit} onClick={() => ftRebound(true)}>Để người bấm stats chọn sau</button></div>
-                </>
-              )}
-            </div>
-          )
-        })() : (
+        {role === 1 && (flow ? (
+          <FtFlow key={flow.foulId} start={flow} canEdit={canEdit} onClose={() => setFlow(null)} />
+        ) : (
           <>
             {sideTabs}
             {onList(side).length === 0 && <div className="muted">Chưa có ai trên sân. Máy quay đưa đội hình vào sân ở vai trò 2 (hoặc dùng “Thay người” ở tab Record).</div>}

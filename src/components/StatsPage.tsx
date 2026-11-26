@@ -18,6 +18,7 @@ import { Analysis } from './Analysis'
 import { BONUS_AT, foulStatus, isThreeZone, teamFouls, timeouts, turnoverInfo, zoneOf } from '../lib/analytics'
 import { Court } from './Court'
 import { ESheet } from './ESheet'
+import { FtFlow, FOUL_KINDS, type FoulKind, type FtStart } from './FtFlow'
 import { GameRosterModal } from './GameRoster'
 import { StatEditor } from './StatEditor'
 import { SubEditor, SubForm } from './SubEditor'
@@ -61,6 +62,8 @@ export function StatsPage() {
   // Hỏi tiếp sau một pha: ai bị phạm lỗi / ai kiến tạo.
   const [fu, setFu] = useState<{ kind: 'drawn' | 'assist' | 'steal'; eventId: string; side: TeamSide; exclude?: string } | null>(null)
   const [sel, setSel] = useState<GamePlayer | null>(null)
+  // Bảng ném phạt mở sau lỗi dẫn tới ném phạt (lỗi khi ném rổ, kỹ thuật, không thể thể thao, truất quyền, lỗi cá nhân khi đã bonus).
+  const [ftStart, setFtStart] = useState<FtStart | null>(null)
   const [, tick] = useState(0)
   const [newGame, setNewGame] = useState<{ title: string; home: string; away: string; date: string; len: number } | null>(null)
   // Giải JET là mục riêng: không lẫn vào tuyến đội / trận thường (trừ khi đang mở đúng trận JET đó).
@@ -178,8 +181,11 @@ export function StatsPage() {
     if (shot && loc && type.startsWith('2') && isThreeZone(zoneOf(loc.x, loc.y))) toast('Lưu ý: vị trí chọn nằm ngoài vạch 3 điểm mà ghi 2PT')
     else toast(`#${sel.number} ${sel.name} · ${STAT_LABEL[type]}${tags ? ` (${tags})` : ''}`)
     if (shot) { setMods({ paint: false, fb: false }); setLoc(null) }
+    // Lỗi dẫn tới ném phạt: mở bảng ném phạt (hỏi ai ném, từng quả vào / trượt, rebound).
+    const foulFt = FOUL_KINDS.includes(type) && (type !== 'PF' || teamFouls(stats, sel.side, period) + 1 > BONUS_AT)
+    if (foulFt) { setFtStart({ kind: type as FoulKind, foulId: id, foulerSide: sel.side }); setFu(null) }
     // Hỏi tiếp: lỗi → ai bị phạm lỗi; ghi điểm → ai kiến tạo.
-    if (sel && DRAWN_TYPES.includes(type)) setFu({ kind: 'drawn', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
+    else if (sel && DRAWN_TYPES.includes(type)) setFu({ kind: 'drawn', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
     else if (sel && (type === '2PM' || type === '3PM')) setFu({ kind: 'assist', eventId: id, side: sel.side, exclude: sel.id })
     else if (type === 'TOV' && tov === 'stolen') setFu({ kind: 'steal', eventId: id, side: sel.side === 'home' ? 'away' : 'home' })
     else setFu(null)
@@ -487,6 +493,13 @@ export function StatsPage() {
         )}
       </div>
 
+      {ftStart && game && (
+        <div className="modal-back" onClick={() => setFtStart(null)}>
+          <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
+            <FtFlow key={ftStart.foulId} start={ftStart} canEdit={canEdit} onClose={() => setFtStart(null)} />
+          </div>
+        </div>
+      )}
       {rosterOpen && game && <GameRosterModal side={rosterOpen} onClose={() => setRosterOpen(null)} />}
       {remoteOpen && game && <RemoteModal gameId={game.id} onClose={() => setRemoteOpen(false)} />}
       {newGame && (
