@@ -56,7 +56,7 @@ export function FtQueue({ canEdit }: { canEdit: boolean }) {
   )
 }
 
-interface Local { put?: 'made' | 'miss' | 'none'; and1: 0 | 2 | 3; shooter: string | null; count: number; sub: 'miss' | 'reb' | null; picks: string[] }
+interface Local { put?: 'made' | 'miss' | 'none'; and1: 0 | 2 | 3; shooter: string | null; count: number; sub: 'reb' | null; picks: string[] }
 
 /**
  * Bảng ném phạt sau một lỗi: ai bị phạm lỗi và ném, bị phạm lỗi lúc đang ghi điểm (and-one) hay không,
@@ -81,7 +81,7 @@ function FtFlow({ foul, canEdit, onClose }: { foul: StatEvent; canEdit: boolean;
   const count = foul.ftCount ?? loc.count
   const done = stats.filter((e) => e.linkedId === foul.id && (e.type === 'FTM' || e.type === 'FTX')).length
   const i = done + 1
-  const stage: 'setup' | 'shots' | 'miss' | 'reb' = !started ? 'setup' : loc.sub ?? 'shots'
+  const stage: 'setup' | 'shots' | 'reb' = !started ? 'setup' : loc.sub ?? 'shots'
   const rec = (type: StatType, gp: GamePlayer, extra: Partial<Parameters<typeof addStat>[0]> = {}) =>
     addStat({ gameId: game.id, side: gp.side, gamePlayerId: gp.id, type, period: game.clockPeriod ?? 1, videoId: null, videoT: null, clockS: clockNow(game), ...extra })
 
@@ -110,7 +110,7 @@ function FtFlow({ foul, canEdit, onClose }: { foul: StatEvent; canEdit: boolean;
     const last = i >= count
     if (made || !last) { rec(made ? 'FTM' : 'FTX', shooterGp, { linkedId: foul.id }); return last ? onClose() : undefined }
     if (!rule.live) { rec('FTX', shooterGp, { linkedId: foul.id }); toast(rule.note); return onClose() }
-    setLoc({ ...loc, sub: 'miss' })
+    setLoc({ ...loc, sub: 'reb', picks: [] }) // quả cuối trượt: hỏi ngay ai rebound
   }
   const ftAir = () => { if (!shooterGp) return; rec('FTX', shooterGp, { linkedId: foul.id }); toast('Air ball: bóng thuộc quyền kiểm soát của đội phòng thủ'); onClose() }
   const ftRebound = (later: boolean) => {
@@ -163,20 +163,14 @@ function FtFlow({ foul, canEdit, onClose }: { foul: StatEvent; canEdit: boolean;
             <div className="es-ttl">Quả {i}/{count} · <span className={o === 'home' ? 'home' : 'away'}>#{shooterGp?.number} {shooterGp?.name}</span></div>
             <div className="row"><button className="btn primary es-big" disabled={!canEdit} onClick={() => ftShot(true)}>Vào</button><button className="btn es-big" disabled={!canEdit} onClick={() => ftShot(false)}>Trượt</button>
               <button className="btn ghost" title="Bỏ phần ném phạt còn lại" onClick={onClose}>Bỏ phần còn lại</button></div>
-            {i === count && !rule.live && <div className="muted small-note">Quả cuối trượt: không có rebound.</div>}
+            <div className="muted small-note">{i < count ? 'Quả chưa phải quả cuối: trượt thì không có rebound.' : rule.live ? 'Quả cuối trượt: sẽ hỏi ai bắt bóng bật bảng (hoặc air ball).' : 'Quả cuối trượt: không có rebound.'}</div>
           </>
         )
       )}
-      {stage === 'miss' && (
-        <>
-          <div className="es-ttl">Quả phạt cuối trượt: bóng chạm vành hay air ball?</div>
-          <div className="row"><button className="btn primary" disabled={!canEdit} onClick={() => setLoc({ ...loc, sub: 'reb', picks: [] })}>Chạm vành (tranh bóng)</button>
-            <button className="btn" disabled={!canEdit} onClick={ftAir}>Air ball: bóng của đội phòng thủ</button></div>
-        </>
-      )}
       {stage === 'reb' && (
         <>
-          <div className="sp-group-label">Ai bắt bóng bật bảng? Chọn một hoặc nhiều người (có thể cả OR và DR)</div>
+          <div className="es-ttl">Quả phạt cuối trượt: ai bắt bóng bật bảng?</div>
+          <div className="muted small-note">Chọn một hoặc nhiều người (có thể cả OR và DR). Nếu bóng không chạm vành (air ball) thì bấm “Air ball”.</div>
           <div className="es-two">
             <div><div className="muted small-note">{name(o)} · rebound tấn công (OR)</div>{grid(onList(o), loc.picks, togglePick)}</div>
             <div><div className="muted small-note">{name(foul.side)} · rebound phòng thủ (DR)</div>{grid(onList(foul.side), loc.picks, togglePick)}</div>
@@ -186,6 +180,7 @@ function FtFlow({ foul, canEdit, onClose }: { foul: StatEvent; canEdit: boolean;
               {([['made', 'Vào (+2)'], ['miss', 'Trượt'], ['none', 'Không dứt điểm']] as const).map(([k, l]) => <button key={k} className={`btn ${loc.put === k ? 'primary' : ''}`} onClick={() => setLoc({ ...loc, put: k })}>{l}</button>)}</div>
           )}
           <div className="row"><button className="btn primary" disabled={!canEdit || !loc.picks.length || (!!putter && !loc.put)} onClick={() => ftRebound(false)}>Lưu rebound</button>
+            <button className="btn" disabled={!canEdit} onClick={ftAir}>Air ball: bóng của đội phòng thủ</button>
             <button className="btn" disabled={!canEdit} onClick={() => ftRebound(true)}>Để người bấm stats chọn sau</button></div>
         </>
       )}
