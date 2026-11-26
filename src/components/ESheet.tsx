@@ -19,12 +19,12 @@ interface Draft { loc?: { x: number; y: number }; fb?: boolean; ast?: string | n
 type FoulKind = 'PF' | 'PFS' | 'PFT' | 'PFU' | 'PFD'
 const FT_RULE: Record<FoulKind, { count: number; ask: boolean; live: boolean; note: string }> = {
   PF: { count: 2, ask: false, live: true, note: 'Đội đối phương đã vào bonus (từ lỗi đồng đội thứ 5 trong hiệp): ném phạt 2 quả.' },
-  PFS: { count: 2, ask: true, live: true, note: 'Lỗi khi đang ném rổ: chọn 1, 2 hoặc 3 quả phạt.' },
+  PFS: { count: 2, ask: true, live: true, note: 'Lỗi khi đang ném rổ: ném không vào thì 2 hoặc 3 quả phạt; ném vào thì tính điểm và 1 quả phạt (and-one).' },
   PFT: { count: 1, ask: false, live: false, note: 'Lỗi kỹ thuật: 1 quả phạt. Trượt thì bóng luân phiên (không có rebound).' },
   PFU: { count: 2, ask: false, live: false, note: 'Không thể thể thao: 2 quả phạt, sau đó bóng thuộc đội bị phạm lỗi (không có rebound).' },
   PFD: { count: 2, ask: false, live: false, note: 'Truất quyền: 2 quả phạt, sau đó bóng thuộc đội bị phạm lỗi (không có rebound).' },
 }
-interface Flow { kind: FoulKind; foulId: string; foulerSide: TeamSide; stage: 'setup' | 'shots' | 'miss' | 'reb'; shooter: string | null; count: number; i: number; picks: string[] }
+interface Flow { and1: 0 | 2 | 3; kind: FoulKind; foulId: string; foulerSide: TeamSide; stage: 'setup' | 'shots' | 'miss' | 'reb'; shooter: string | null; count: number; i: number; picks: string[] }
 
 /**
  * Biên bản điện tử: ba người cùng làm một trận.
@@ -81,14 +81,19 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
     toast(`#${me.number} ${me.name} · ${STAT_LABEL[type]} (lỗi đồng đội ${n})`)
     setSel(null)
     if (type === 'PF' && !bonus) return toast(`Lỗi cá nhân #${me.number}: bóng cho ${name(opp(me.side))} (chưa bonus, ${name(me.side)} có ${n} lỗi)`)
-    setFlow({ kind: type, foulId: id, foulerSide: me.side, stage: 'setup', shooter: null, count: FT_RULE[type].count, i: 1, picks: [] })
+    setFlow({ and1: 0, kind: type, foulId: id, foulerSide: me.side, stage: 'setup', shooter: null, count: FT_RULE[type].count, i: 1, picks: [] })
   }
   const shooterGp = flow?.shooter ? byId.get(flow.shooter) : undefined
   const nextShot = (f: Flow) => setFlow(f.i >= f.count ? null : { ...f, i: f.i + 1, stage: 'shots' })
   const startFt = () => {
     if (!flow?.shooter) return
     updateStat(flow.foulId, { drawnBy: flow.shooter })
-    setFlow({ ...flow, stage: 'shots' })
+    // Bị phạm lỗi lúc đang ghi điểm (and-one): ghi luôn cú ném vào (chờ bấm stats bổ sung vị trí), sau đó 1 quả phạt.
+    if (flow.and1 && shooterGp) {
+      rec(flow.and1 === 2 ? '2PM' : '3PM', shooterGp, { pending: true })
+      toast(`#${shooterGp.number} ${shooterGp.name} · ghi ${flow.and1} điểm và bị phạm lỗi: 1 quả phạt`)
+    }
+    setFlow({ ...flow, count: flow.and1 ? 1 : flow.count, stage: 'shots' })
   }
   const ftShot = (made: boolean) => {
     if (!flow || !shooterGp) return
@@ -292,8 +297,17 @@ export function ESheet({ canEdit }: { canEdit: boolean }) {
               <div className="muted small-note">{rule.note}</div>
               {flow.stage === 'setup' && (
                 <>
-                  {rule.ask && <div className="row"><b>Số quả phạt:</b>{[1, 2, 3].map((n) => <button key={n} className={`btn ${flow.count === n ? 'primary' : ''}`} onClick={() => setFlow({ ...flow, count: n })}>{n}</button>)}</div>
-                  }
+                  {rule.ask && (
+                    <>
+                      <div className="row wrap"><b>Cú ném của người bị phạm lỗi:</b>
+                        <button className={`btn ${flow.and1 === 0 ? 'primary' : ''}`} onClick={() => setFlow({ ...flow, and1: 0, count: Math.max(2, flow.count) })}>Không vào</button>
+                        <button className={`btn ${flow.and1 === 2 ? 'primary' : ''}`} onClick={() => setFlow({ ...flow, and1: 2, count: 1 })}>Vào 2 điểm (+1 phạt)</button>
+                        <button className={`btn ${flow.and1 === 3 ? 'primary' : ''}`} onClick={() => setFlow({ ...flow, and1: 3, count: 1 })}>Vào 3 điểm (+1 phạt)</button></div>
+                      {flow.and1 === 0
+                        ? <div className="row"><b>Số quả phạt:</b>{[2, 3].map((n) => <button key={n} className={`btn ${flow.count === n ? 'primary' : ''}`} onClick={() => setFlow({ ...flow, count: n })}>{n}</button>)}</div>
+                        : <div><b>Số quả phạt:</b> 1 (bàn thắng được tính, kèm 1 quả phạt)</div>}
+                    </>
+                  )}
                   {!rule.ask && <div><b>Số quả phạt:</b> {rule.count}</div>}
                   <div className="sp-group-label">Ai bị phạm lỗi và ném phạt? (bắt buộc)</div>
                   {grid(onList(o), flow.shooter, pickShooter)}
