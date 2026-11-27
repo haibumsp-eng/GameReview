@@ -11,7 +11,7 @@ export function RemoteModal(props: { gameId: string; onClose: () => void }) {
   const [err, setErr] = useState('')
   const [copied, setCopied] = useState(false)
   const [state, setState] = useState<'loading' | 'ready' | 'revoked'>('loading')
-  const [kind, setKind] = useState<'stats' | 'cam'>('stats') // stats = bấm stats, cam = máy quay (đồng hồ, thay người, +điểm)
+  const [kind, setKind] = useState<'stats' | 'cam' | 'rec'>('stats') // stats = bấm stats, cam = máy quay (đồng hồ, thay người, +điểm)
   const [token, setToken] = useState('')
 
   const make = async () => {
@@ -25,7 +25,7 @@ export function RemoteModal(props: { gameId: string; onClose: () => void }) {
   // Cùng một mã, hai đường link: #remote (bấm stats) và #cam (máy quay).
   useEffect(() => {
     if (!token) return
-    const u = `${location.origin}${location.pathname}#${kind === 'cam' ? 'cam' : 'remote'}=${token}`
+    const u = `${location.origin}${location.pathname}#${kind === 'cam' ? 'cam' : kind === 'rec' ? 'rec' : 'remote'}=${token}`
     setUrl(u)
     void QRCode.toDataURL(u, { width: 320, margin: 1, errorCorrectionLevel: 'M' }).then(setQr)
   }, [token, kind])
@@ -44,7 +44,9 @@ export function RemoteModal(props: { gameId: string; onClose: () => void }) {
         <div className="seg-toggle">
           <button className={kind === 'stats' ? 'on' : ''} onClick={() => setKind('stats')}>Bấm stats</button>
           <button className={kind === 'cam' ? 'on' : ''} onClick={() => setKind('cam')}>Máy quay</button>
+          <button className={kind === 'rec' ? 'on' : ''} onClick={() => setKind('rec')}>Quay hình</button>
         </div>
+        {kind === 'rec' && <div className="muted small-note">Link cho <b>điện thoại đứng quay</b> (iPhone dùng Safari): mở camera, <b>gắn bảng tỉ số lên hình</b> theo trận này và quay <b>mỗi hiệp một file</b>, lưu về máy. Để màn hình sáng, cắm sạc, đặt điện thoại nằm ngang.</div>}
         {kind === 'cam' && <div className="muted small-note">Link riêng cho người cầm máy quay: chỉ có <b>đồng hồ, thay người, +điểm</b> và nút <b>đánh dấu bắt đầu trận</b> (bấm lúc đồng hồ đang chạy). Không bấm được stats khác.</div>}
         <div className="muted small-note">Quét mã bằng camera điện thoại để mở bảng bấm của trận này. Không cần đăng nhập. Mỗi pha bấm trên điện thoại hiện ngay trên máy tính.</div>
         {err && <div className="err">{err}</div>}

@@ -1312,3 +1312,27 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .cam .rp-sel { font-size: 12px; }
 .cam .cam-score button:not(.cam-subbtn) { height: 60px; font-size: 26px; }
 .cam .sp-group-label { font-size: 10.5px; }
+
+/* ---------- Điện thoại quay hình có bảng tỉ số ---------- */
+.rc { position: fixed; inset: 0; background: #000; color: #fff; display: flex; flex-direction: column; font-family: var(--font-ui); }
+.rc-src { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.rc-view { flex: 1; min-height: 0; width: 100%; object-fit: contain; background: #000; }
+.rc-top { position: absolute; top: max(8px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
+.rc-idle, .rc-live { background: #000a; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; }
+.rc-live { color: #ff6b4a; display: inline-flex; align-items: center; gap: 6px; }
+.rc-live i { width: 9px; height: 9px; border-radius: 50%; background: #ff3b30; animation: rcblink 1s infinite; }
+@keyframes rcblink { 50% { opacity: .25; } }
+.rc-err { background: #ff6b4acc; color: #1a0600; padding: 3px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; }
+.rc-camerr { position: absolute; top: 40%; left: 16px; right: 16px; text-align: center; background: #000c; padding: 12px; border-radius: 12px; border: 1px solid #ff6b4a; }
+.rc-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 10px max(14px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-bottom)); background: #000; }
+.rc-side { display: flex; gap: 8px; }
+.rc-side.right { justify-content: flex-end; font-size: 12px; color: #ccc; }
+.rc-side button { height: 44px; padding: 0 12px; border-radius: 10px; background: #222; border: 1px solid #444; color: #fff; font-weight: 600; }
+.rc-rec { height: 60px; min-width: 190px; padding: 0 22px; border-radius: 30px; border: 3px solid #fff; background: #e5322b; color: #fff; font-weight: 800; font-size: 17px; }
+.rc-rec.stop { background: #222; }
+.rc-rec:disabled { opacity: .4; }
+.rc-takes { position: absolute; left: 12px; right: 12px; bottom: 90px; max-height: 45%; overflow: auto; background: #000d; border: 1px solid #444; border-radius: 14px; padding: 10px; display: grid; gap: 8px; }
+.rc-take { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+.rc-take button { height: 44px; padding: 0 12px; border-radius: 10px; background: #222; border: 1px solid #444; color: #fff; font-weight: 600; }
+.rc-take button.save { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.rc-takes small { color: #bbb; font-size: 11px; }
