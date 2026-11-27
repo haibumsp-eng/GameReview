@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { exportVideo, mergeSegs } from '../lib/exportVideo'
 import { canRecord, pickFormat, runRecording, startCapture } from '../lib/recordScreen'
 import { useUi, setCaption, introSeconds, type Corner } from '../store'
+import { yt, Q_LABEL, Q_ORDER } from '../youtube'
 import { CaptionOptions } from './CaptionOptions'
 import { fmt } from '../util'
 import type { Clip, GameVideo } from '../types'
@@ -54,6 +55,22 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
       .map((c) => ({ t: c.start, clipId: c.id, sec: introSeconds(c, caption) })).filter((i) => i.sec > 0),
   })))
   const holdTotal = recClips.reduce((a, c) => a + c.spots.reduce((x, s) => x + s.hold, 0) + c.intros.reduce((x, i) => x + i.sec, 0), 0)
+
+  // Chất lượng YouTube đang phát (file quay ra đúng chất lượng này, không cao hơn).
+  const [yq, setYq] = useState<{ cur: string; have: string[] }>({ cur: '', have: [] })
+  useEffect(() => {
+    if (mode !== 'record') return
+    const f = () => setYq({ cur: yt.quality(), have: yt.qualities() })
+    f()
+    const iv = setInterval(f, 700)
+    return () => clearInterval(iv)
+  }, [mode])
+  const lowQ = !!yq.cur && Q_ORDER.indexOf(yq.cur) < Q_ORDER.indexOf('hd720')
+  const boost = () => {
+    const was = yt.playing()
+    yt.forceBest(); yt.play()
+    if (!was) setTimeout(() => { if (yt.reached()) yt.pause() }, 8000)
+  }
 
   // Chế độ quay màn hình: tự phóng to khung video (ẩn các module khác) trong lúc mở cửa sổ này và suốt lúc quay.
   useEffect(() => {
@@ -132,6 +149,12 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
               )}
               <CaptionOptions />
             </div>
+            </div>
+            <div className={`card stack rec-q ${lowQ ? 'low' : ''}`}>
+              <div className="row wrap"><b className="grow">Chất lượng video YouTube đang phát: {yq.cur ? (Q_LABEL[yq.cur] ?? yq.cur) : 'chưa biết (bấm phát video vài giây)'}</b>
+                <button className="btn sm" onClick={boost}>Ép lên cao nhất</button></div>
+              <div className="muted small-note">Video có các mức: {yq.have.length ? yq.have.map((q) => Q_LABEL[q] ?? q).join(', ') : 'chưa đọc được (cần phát video vài giây)'}. File quay ra đúng bằng chất lượng YouTube đang phát. Khi bấm quay, app tự nâng lên mức cao nhất có (tối đa 1080p) trước khi ghi.</div>
+              {lowQ && <div className="err">Đang là {Q_LABEL[yq.cur] ?? yq.cur}: file quay sẽ mờ. {yq.have.length && Q_ORDER.indexOf(yq.have[0]) < Q_ORDER.indexOf('hd720') ? 'Video này trên YouTube chỉ có bản thấp (thường do YouTube chưa xử lý xong bản HD sau khi đăng). Chờ vài giờ rồi thử lại.' : 'Bấm “Ép lên cao nhất” rồi chờ vài giây.'}</div>}
             </div>
             {recErr && <div className="err">{recErr}</div>}
             <button className="btn primary rec-start" disabled={!canRecord() || !count} onClick={startRec}>● Bắt đầu quay</button>

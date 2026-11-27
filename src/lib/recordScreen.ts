@@ -110,6 +110,20 @@ export async function runRecording(stream: MediaStream, clips: RecClip[], title:
   const resumeRec = () => { if (rec.state === 'paused') rec.resume() }
 
   try {
+    // Nâng chất lượng YouTube lên mức cao nhất có TRƯỚC khi ghi (đang tạm dừng ghi nên chưa vào file): tránh quay ra 360p.
+    if (clips.length && !cancelled) {
+      setRec({ phase: 'waiting', index: 0, remain: remainFrom(0, clips[0].start), msg: 'Đang nâng chất lượng video lên cao nhất…' })
+      goToClip({ ...clips[0], start: Math.max(0, clips[0].start - 1) }, true)
+      const tq = Date.now()
+      while (!cancelled && !userStopped && Date.now() - tq < 14000) {
+        if (yt.ready() && !ui().pending) {
+          yt.forceBest()
+          if (yt.state() !== 1 && yt.state() !== 3) yt.play()
+          if (yt.reached()) { await sleep(1500); break } // đã lên mức cao nhất: chờ thêm chút cho ổn định
+        }
+        await sleep(250)
+      }
+    }
     for (let i = 0; i < clips.length && !cancelled && !userStopped; i++) {
       const c = clips[i]
       setRec({ phase: 'waiting', index: i + 1, remain: remainFrom(i, c.start), msg: 'Đang tua tới đoạn tiếp theo…' })

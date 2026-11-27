@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useData, useUi, videosOf } from '../store'
-import { yt } from '../youtube'
+import { yt, Q_LABEL } from '../youtube'
 import { defaultLabel, fmt, parseYouTubeId } from '../util'
 import { Panel } from './Panel'
 import { CaptionOverlay } from './CaptionOverlay'
@@ -130,6 +130,7 @@ export function PlayerPanel() {
             <button className="btn primary" onClick={() => yt.toggle()} title="Space">{playing ? '❚❚ Dừng' : '▶ Phát'}</button>
             <button className="btn" onClick={() => yt.seek(time + 5)} title="L">5s ⟳</button>
             <span className="timecode">{fmt(time)} / {fmt(duration)}</span>
+            {playing && Q_LABEL[yt.quality()] && <span className="pill" title="Chất lượng YouTube đang phát">{Q_LABEL[yt.quality()]}</span>}
             <span className="spacer" />
             {playlist && <span className="pill live">PLAYLIST ĐANG PHÁT</span>}
           </div>

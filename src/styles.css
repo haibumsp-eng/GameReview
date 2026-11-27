@@ -1376,3 +1376,7 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .rc-ctl .rc-per button { width: 20px; height: 26px; font-size: 16px; padding: 0; }
 .rc-ctl { width: 76px; }
 .cmt-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .cmt-acts { margin-left: auto; display: inline-flex; gap: 2px; }
+
+/* Tải video: khung video đúng 16:9, to nhất có thể (không viền đen thừa, mỗi điểm ảnh của file quay đều là hình) */
+.workspace.focus .video-wrap { flex: 1 1 0; min-height: 0; aspect-ratio: 16 / 9; align-self: center; width: auto; max-width: 100%; }
+.rec-q.low { border-color: #ff6b4a; }

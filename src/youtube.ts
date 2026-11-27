@@ -20,6 +20,11 @@ function loadApi(): Promise<void> {
 
 let player: any = null
 
+/** Các mức chất lượng của YouTube, từ thấp tới cao. */
+export const Q_ORDER = ['tiny', 'small', 'medium', 'large', 'hd720', 'hd1080', 'hd1440', 'hd2160', 'highres']
+export const Q_LABEL: Record<string, string> = { tiny: '144p', small: '240p', medium: '360p', large: '480p', hd720: '720p', hd1080: '1080p', hd1440: '1440p', hd2160: '2160p', highres: '4K+' }
+const rank = (q: string) => Q_ORDER.indexOf(q)
+
 export const yt = {
   async mount(el: HTMLElement, videoId: string, onReady: () => void) {
     await loadApi()
@@ -31,7 +36,11 @@ export const yt = {
       width: '100%',
       height: '100%',
       playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
-      events: { onReady },
+      events: {
+        onReady: () => { onReady(); setTimeout(() => yt.forceBest(), 1500) },
+        // Khi bắt đầu phát, lại đề nghị chất lượng cao nhất (danh sách mức chất lượng chỉ có sau khi video bắt đầu chạy).
+        onStateChange: (e: any) => { if (e?.data === 1) setTimeout(() => yt.forceBest(), 600) },
+      },
     })
   },
   destroy() { try { player?.destroy() } catch { /* noop */ } player = null },
@@ -46,4 +55,19 @@ export const yt = {
   play() { if (yt.ready()) player.playVideo() },
   pause() { if (yt.ready()) player.pauseVideo() },
   toggle() { yt.playing() ? yt.pause() : yt.play() },
+  /** Chất lượng YouTube đang phát ('hd720'…) hoặc '' nếu chưa biết. */
+  quality: (): string => { try { return yt.ready() ? String(player.getPlaybackQuality?.() ?? '') : '' } catch { return '' } },
+  /** Các mức chất lượng video này có (cao xuống thấp). */
+  qualities: (): string[] => { try { return ((player?.getAvailableQualityLevels?.() as string[] | undefined) ?? []).filter((q) => rank(q) >= 0).sort((a, b) => rank(b) - rank(a)) } catch { return [] } },
+  /** Mức cao nhất video có, tối đa 1080p (file quay ra tối đa 1080p). */
+  target: (): string => { const a = yt.qualities().filter((q) => rank(q) <= rank('hd1080')); return a[0] ?? '' },
+  /** Đã đạt mức cao nhất có thể chưa. */
+  reached: (): boolean => { const t = yt.target(), q = yt.quality(); return !!t && rank(q) >= rank(t) },
+  /** Đề nghị YouTube phát mức cao nhất có (tối đa 1080p). YouTube coi đây là gợi ý, không phải lệnh, nên cần phát một lúc để đổi thật. */
+  forceBest() {
+    const q = yt.target()
+    if (!q || !yt.ready()) return
+    try { player.setPlaybackQualityRange?.(q, q) } catch { /* bản API không có */ }
+    try { player.setPlaybackQuality?.(q) } catch { /* bản API không có */ }
+  },
 }
