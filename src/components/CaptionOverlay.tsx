@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useData, useUi, matches, playerLabel } from '../store'
 import type { Clip } from '../types'
@@ -14,6 +15,37 @@ function Head({ c }: { c: Clip }) {
       <span className={`caption-side ${c.side}`}>{c.side === 'ATK' ? 'TẤN CÔNG' : 'PHÒNG THỦ'}</span>
       {who && <span className="caption-who">{who}</span>}
       {c.playType && <span className="caption-type">{c.playType}</span>}
+    </div>
+  )
+}
+
+/** Thẻ nhận xét đầy đủ lúc dừng hình: chữ tự co đến cỡ lớn nhất mà vẫn hiện hết trong khung video (đo thật, mọi tỉ lệ khung). */
+function IntroCard({ c }: { c: Clip }) {
+  const box = useRef<HTMLDivElement>(null)
+  const note = useRef<HTMLDivElement>(null)
+  const text = c.note.trim()
+  useLayoutEffect(() => {
+    const b = box.current, n = note.current, host = b?.parentElement
+    if (!b || !n || !host) return
+    const fit = () => {
+      let lo = 7, hi = Math.min(host.clientWidth * 0.019, host.clientHeight * 0.055, 30)
+      if (hi <= lo) { n.style.fontSize = `${lo}px`; return }
+      for (let i = 0; i < 14; i++) {
+        const mid = (lo + hi) / 2
+        n.style.fontSize = `${mid}px`
+        if (b.scrollHeight <= b.clientHeight + 1) lo = mid; else hi = mid
+      }
+      n.style.fontSize = `${lo}px`
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(host)
+    return () => ro.disconnect()
+  }, [text])
+  return (
+    <div className="caption-intro" ref={box}>
+      <Head c={c} />
+      {text && <div className="caption-intro-note" ref={note}>{text}</div>}
     </div>
   )
 }
@@ -36,13 +68,7 @@ export function CaptionOverlay() {
   if (hold) {
     const c = clips.find((x) => x.id === hold.clipId)
     if (c) {
-      const note = c.note.trim()
-      return (
-        <div className="caption-intro">
-          <Head c={c} />
-          {note && <div className="caption-intro-note" style={{ fontSize: `${introFontCqw(note.length)}cqw` }}>{note}</div>}
-        </div>
-      )
+      return <IntroCard c={c} />
     }
   }
 

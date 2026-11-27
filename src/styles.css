@@ -367,7 +367,7 @@ a.btn { text-decoration: none; text-align: center; }
   padding: .6em .85em; border-radius: .55em;
   background: #0000006b; border: 1px solid #ffffff14;
   backdrop-filter: blur(8px) saturate(1.2); -webkit-backdrop-filter: blur(8px) saturate(1.2);
-  font-size: clamp(13px, 1.75cqw, 30px); line-height: 1.35; color: #fff;
+  font-size: clamp(9px, min(1.75cqw, 3.3cqh), 30px); line-height: 1.35; color: #fff;
   text-shadow: 0 1px 2px #000c;
 }
 .caption-tl { top: 3cqh; left: 2cqw; }
@@ -990,15 +990,15 @@ html.obs, html.obs body, html.obs #root { background: transparent !important; ov
 .caption-intro {
   position: absolute; z-index: 6; pointer-events: none; left: 50%; top: 50%; transform: translate(-50%, -50%);
   width: 93cqw; max-height: 90cqh; box-sizing: border-box; overflow: hidden;
-  display: flex; flex-direction: column; gap: 1.2cqw; padding: 2cqw 2.6cqw; border-radius: 1.2cqw;
+  display: flex; flex-direction: column; gap: 1.2cqmin; padding: 2cqmin 2.6cqmin; border-radius: 1.2cqmin;
   background: #000000c4; border: 1px solid #ffffff22; box-shadow: 0 1cqw 4cqw #000a;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; text-shadow: 0 1px 2px #000c;
   animation: introin .18s ease-out;
 }
 @keyframes introin { from { opacity: 0; transform: translate(-50%, -48%); } to { opacity: 1; transform: translate(-50%, -50%); } }
-.caption-intro .caption-head { font-size: 1.9cqw; gap: .5em; }
+.caption-intro .caption-head { font-size: min(1.9cqw, 3.6cqh); gap: .5em; }
 .caption-intro .caption-head .caption-side { font-size: .8em; }
-.caption-intro-note { line-height: 1.38; white-space: pre-wrap; overflow-wrap: anywhere; border-left: .3cqw solid var(--accent); padding-left: 1.4cqw; font-weight: 400; }
+.caption-intro-note { line-height: 1.38; white-space: pre-wrap; overflow-wrap: anywhere; border-left: .3cqmin solid var(--accent); padding-left: 1.4cqmin; font-weight: 400; }
 .cap-opts { padding: 2px 0; }
 .cap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .cap-grid.off { opacity: .5; }
