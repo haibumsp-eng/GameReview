@@ -89,7 +89,9 @@ function PlaylistRunner() {
 
 export default function App() {
   const { ready, session, error, squads, games, playlists, isSuper, orgs, orgMembers, baseLoaded, init, signOut, loadGame, profiles } = useData()
-  const { orgId, squadId, gameId, overview, inPoint, toastMsg, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, overview: s.overview, inPoint: s.inPoint, toastMsg: s.toast, set: s.set })))
+  const { orgId, squadId, gameId, overview, inPoint, toastMsg, focusPlayer, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, overview: s.overview, inPoint: s.inPoint, toastMsg: s.toast,
+    // Tải video (quay màn hình): ẩn các module khác để khung video to nhất có thể, trả lại như cũ khi xong.
+    focusPlayer: s.exportOpen || (!!s.rec && s.rec.phase !== 'done' && s.rec.phase !== 'error'), set: s.set })))
   const [modal, setModal] = useState<'' | 'members' | 'orgs'>('')
   // Hai trang: Mổ băng (video) và Live Stats (thống kê). Nhớ trang đang mở; link #stats mở thẳng trang stats.
   const [view, setViewState] = useState<'review' | 'stats' | 'board' | 'jet'>(() => {
@@ -213,7 +215,7 @@ export default function App() {
       {toastMsg && inPoint == null && <div className="toast">{toastMsg}</div>}
       {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}
       {cur === 'stats' ? <StatsPage /> : cur === 'board' && !jetOnly ? <ScoreboardPage /> : cur === 'jet' && org?.jetEnabled ? <JetPage onOpenStats={() => setView('stats')} /> : (
-      <div className="workspace">
+      <div className={`workspace ${focusPlayer ? 'focus' : ''}`}>
         <div className="col" style={{ width: `min(${L.left}px, 21vw)` }}>
           <SplitV frac={L.leftSplit} setFrac={(f) => L.set({ leftSplit: f })} top={<Library />} bottom={<Roster />} />
         </div>

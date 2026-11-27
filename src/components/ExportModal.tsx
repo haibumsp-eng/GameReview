@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { exportVideo, mergeSegs } from '../lib/exportVideo'
 import { canRecord, pickFormat, runRecording, startCapture } from '../lib/recordScreen'
 import { useUi, setCaption, introSeconds, type Corner } from '../store'
@@ -54,8 +55,17 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
   })))
   const holdTotal = recClips.reduce((a, c) => a + c.spots.reduce((x, s) => x + s.hold, 0) + c.intros.reduce((x, i) => x + i.sec, 0), 0)
 
+  // Chế độ quay màn hình: tự phóng to khung video (ẩn các module khác) trong lúc mở cửa sổ này và suốt lúc quay.
+  useEffect(() => {
+    if (mode !== 'record') return
+    useUi.getState().set({ exportOpen: true })
+    return () => useUi.getState().set({ exportOpen: false })
+  }, [mode])
+
   const startRec = async () => {
     setRecErr('')
+    // Khung video đã được phóng to khi mở cửa sổ; chờ bố cục ổn định rồi mới bắt đầu ghi để video ra đúng kích thước lớn.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))))
     const el = document.querySelector('.video-wrap') as HTMLElement | null
     if (!el) return setRecErr('Không tìm thấy khung video. Hãy mở trận trước.')
     try {
@@ -70,7 +80,8 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
 
   const safe = props.title.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'playlist'
 
-  return (
+  // Hiện qua portal: cửa sổ phải còn thấy được khi các module (kể cả danh sách tình huống chứa nó) đang bị ẩn lúc phóng to video.
+  return createPortal(
     <div className="modal-back" onClick={() => !busy && props.onClose()}>
       <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
         <div className="row">
@@ -159,5 +170,5 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
         )}
       </div>
     </div>
-  )
+    , document.body)
 }

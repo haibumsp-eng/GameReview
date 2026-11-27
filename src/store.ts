@@ -592,6 +592,7 @@ interface UiState {
   toast: string // thông báo xanh ngắn (tự ẩn)
   caption: Caption // thẻ nhận xét trên video khi quay / phát playlist
   rec: RecState | null // trạng thái quay màn hình
+  exportOpen: boolean // cửa sổ "Tải video" (chế độ quay màn hình) đang mở: mổ băng tự phóng to khung video
   set: (p: Partial<UiState>) => void
 }
 export const useUi = create<UiState>((set) => ({
@@ -620,6 +621,7 @@ export const useUi = create<UiState>((set) => ({
   toast: '',
   caption: loadCaption(),
   rec: null,
+  exportOpen: false,
   set: (p) => set(p),
 }))
 

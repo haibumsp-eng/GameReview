@@ -1243,3 +1243,8 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .cam-panel .rp-player { min-height: 78px; padding: 8px 2px; }
 .cam-panel .rp-player b { font-size: 26px; }
 .cam-phead button { white-space: nowrap; }
+
+/* Tải video (quay màn hình): chỉ giữ khung video, ẩn thư viện, danh sách cầu thủ, đánh dấu, timeline, tình huống */
+.workspace.focus > .col:not(.center), .workspace.focus > .gutter { display: none; }
+.workspace.focus .col.center > .gutter, .workspace.focus .col.center > .slot:not(.grow) { display: none; }
+.workspace.focus .col.center { flex: 1; }
