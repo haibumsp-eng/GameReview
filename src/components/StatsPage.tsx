@@ -77,6 +77,13 @@ export function StatsPage() {
 
   // Đổi trận thì bỏ chọn cầu thủ.
   useEffect(() => { setSel(null) }, [gameId])
+  // Dự phòng khi kênh cập nhật tức thì bị gián đoạn: mỗi 12 giây (khi tab đang mở) tải lại stats của trận,
+  // để pha mới từ máy quay / bàn thư ký / máy khác luôn hiện ra, kể cả ở tài khoản Trọng tài, HLV JET.
+  useEffect(() => {
+    if (!gameId) return
+    const iv = setInterval(() => { if (document.visibilityState === 'visible') void useData.getState().loadGame(gameId) }, 12000)
+    return () => clearInterval(iv)
+  }, [gameId])
 
   // Pha bấm từ điện thoại: nếu máy này đang mở video thì gắn giây video cho pha đó (để bấm vào xem lại được).
   const attached = useRef(new Set<string>())
