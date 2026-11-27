@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useData, useUi, videosOf } from '../store'
 import { yt, Q_LABEL } from '../youtube'
+import { toggleFullscreen, toggleTheater } from '../nav'
 import { defaultLabel, fmt, parseYouTubeId } from '../util'
 import { Panel } from './Panel'
 import { CaptionOverlay } from './CaptionOverlay'
@@ -8,7 +9,7 @@ import { SpotlightLayer } from './Spotlight'
 import { confirmDialog, promptDialog, formDialog } from '../lib/dialog'
 
 export function PlayerPanel() {
-  const { gameId, videoId, time, duration, playing, pre, post, playlist, autoNext, set } = useUi()
+  const { gameId, videoId, time, duration, playing, pre, post, playlist, autoNext, theater, set } = useUi()
   const game = useData((s) => s.games.find((g) => g.id === gameId))
   const allVideos = useData((s) => s.videos)
   const { addVideo, removeVideo, renameVideo } = useData()
@@ -132,6 +133,8 @@ export function PlayerPanel() {
             <span className="timecode">{fmt(time)} / {fmt(duration)}</span>
             {playing && Q_LABEL[yt.quality()] && <span className="pill" title="Chất lượng YouTube đang phát">{Q_LABEL[yt.quality()]}</span>}
             <span className="spacer" />
+            <button className={`btn sm ${theater ? 'primary' : ''}`} title="Xem rộng: ẩn Timeline và danh sách tình huống để video to hơn (phím T)" onClick={toggleTheater}>▭ Xem rộng</button>
+            <button className="btn sm" title="Toàn màn hình, nét hơn (phím F, Esc để thoát)" onClick={toggleFullscreen}>⛶ Toàn màn hình</button>
             {playlist && <span className="pill live">PLAYLIST ĐANG PHÁT</span>}
           </div>
         </>

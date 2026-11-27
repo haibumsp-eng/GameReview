@@ -58,3 +58,18 @@ export function seekVideo(videoId: string, t: number, play = false) {
   if (videoId === ui.videoId) { yt.seek(t); if (play) yt.play() }
   else ui.set({ videoId, clipId: null, pending: { t, play }, time: t })
 }
+
+/** Toàn màn hình cho khung video (YouTube chọn chất lượng cao hơn khi khung to; nhận xét và điểm khoanh vẫn hiện). Esc để thoát. */
+export function toggleFullscreen() {
+  const el = document.querySelector('.video-wrap') as HTMLElement | null
+  if (!el) return
+  if (document.fullscreenElement) void document.exitFullscreen()
+  else void el.requestFullscreen?.().catch(() => {})
+}
+/** Chế độ xem rộng: ẩn Timeline và danh sách tình huống để khung video to hơn. */
+export function toggleTheater() {
+  const ui = useUi.getState()
+  const v = !ui.theater
+  ui.set({ theater: v })
+  try { localStorage.setItem('gr-theater', v ? '1' : '0') } catch { /* bỏ qua */ }
+}

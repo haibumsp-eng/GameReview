@@ -1378,5 +1378,10 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .cmt-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .cmt-acts { margin-left: auto; display: inline-flex; gap: 2px; }
 
 /* Tải video: khung video đúng 16:9, to nhất có thể (không viền đen thừa, mỗi điểm ảnh của file quay đều là hình) */
-.workspace.focus .video-wrap { flex: 1 1 0; min-height: 0; aspect-ratio: 16 / 9; align-self: center; width: auto; max-width: 100%; }
+.workspace.focus .video-wrap { flex: none; min-height: 0; aspect-ratio: 16 / 9; align-self: center; width: min(100%, calc((100vh - 235px) * 16 / 9)); }
 .rec-q.low { border-color: #ff6b4a; }
+
+/* Xem rộng: ẩn Timeline và danh sách tình huống, video to hơn và đúng 16:9 */
+.workspace.theater .col.center > .gutter, .workspace.theater .col.center > .slot:not(.grow) { display: none; }
+.workspace.theater .video-wrap { flex: none; min-height: 0; aspect-ratio: 16 / 9; align-self: center; width: min(100%, calc((100vh - 235px) * 16 / 9)); }
+.video-wrap:fullscreen { background: #000; border-radius: 0; aspect-ratio: auto; width: 100vw; height: 100vh; }

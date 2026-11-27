@@ -604,6 +604,7 @@ interface UiState {
   toast: string // thông báo xanh ngắn (tự ẩn)
   caption: Caption // thẻ nhận xét trên video khi quay / phát playlist
   rec: RecState | null // trạng thái quay màn hình
+  theater: boolean // chế độ xem rộng: ẩn Timeline và danh sách tình huống để khung video to hơn (nhớ lại giữa các lần mở)
   exportOpen: boolean // cửa sổ "Tải video" (chế độ quay màn hình) đang mở: mổ băng tự phóng to khung video
   set: (p: Partial<UiState>) => void
 }
@@ -634,6 +635,7 @@ export const useUi = create<UiState>((set) => ({
   caption: loadCaption(),
   rec: null,
   exportOpen: false,
+  theater: (() => { try { return localStorage.getItem('gr-theater') === '1' } catch { return false } })(),
   set: (p) => set(p),
 }))
 

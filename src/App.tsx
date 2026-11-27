@@ -4,7 +4,7 @@ import { Logo } from './components/Logo'
 import { useEffect, useRef, useState } from 'react'
 import { useData, useUi, selectGame, myOrgRole, orgExpired, isJetSquad } from './store'
 import { OrgAdminModal, OrgMembersModal } from './components/Orgs'
-import { playClip, cancelIntro } from './nav'
+import { playClip, cancelIntro, toggleFullscreen, toggleTheater } from './nav'
 import { yt } from './youtube'
 import { Library } from './components/Library'
 import { Roster } from './components/Roster'
@@ -39,6 +39,8 @@ function Hotkeys() {
       if (k === ' ') { e.preventDefault(); yt.toggle() }
       else if (k === 'j' || k === 'arrowleft') yt.seek(yt.time() - 5)
       else if (k === 'l' || k === 'arrowright') yt.seek(yt.time() + 5)
+      else if (k === 'f') toggleFullscreen()
+      else if (k === 't') toggleTheater()
       else if (k === 'a') markNow('ATK')
       else if (k === 'd') markNow('DEF')
       else if (k === 'i') (e.shiftKey ? setSelectedIn : markIn)()
@@ -89,9 +91,9 @@ function PlaylistRunner() {
 
 export default function App() {
   const { ready, session, error, squads, games, playlists, isSuper, orgs, orgMembers, baseLoaded, init, signOut, loadGame, profiles } = useData()
-  const { orgId, squadId, gameId, overview, inPoint, toastMsg, focusPlayer, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, overview: s.overview, inPoint: s.inPoint, toastMsg: s.toast,
+  const { orgId, squadId, gameId, overview, inPoint, toastMsg, focusPlayer, theater, set } = useUi(useShallow((s) => ({ orgId: s.orgId, squadId: s.squadId, gameId: s.gameId, overview: s.overview, inPoint: s.inPoint, toastMsg: s.toast,
     // Tải video (quay màn hình): ẩn các module khác để khung video to nhất có thể, trả lại như cũ khi xong.
-    focusPlayer: s.exportOpen || (!!s.rec && s.rec.phase !== 'done' && s.rec.phase !== 'error'), set: s.set })))
+    focusPlayer: s.exportOpen || (!!s.rec && s.rec.phase !== 'done' && s.rec.phase !== 'error'), theater: s.theater, set: s.set })))
   const [modal, setModal] = useState<'' | 'members' | 'orgs'>('')
   // Hai trang: Mổ băng (video) và Live Stats (thống kê). Nhớ trang đang mở; link #stats mở thẳng trang stats.
   const [view, setViewState] = useState<'review' | 'stats' | 'board' | 'jet'>(() => {
@@ -215,7 +217,7 @@ export default function App() {
       {toastMsg && inPoint == null && <div className="toast">{toastMsg}</div>}
       {inPoint != null && <div className="inpoint-flag">Đang chờ điểm Ra… bấm <kbd>O</kbd> để kết thúc, <kbd>Esc</kbd> để huỷ</div>}
       {cur === 'stats' ? <StatsPage /> : cur === 'board' && !jetOnly ? <ScoreboardPage /> : cur === 'jet' && org?.jetEnabled ? <JetPage onOpenStats={() => setView('stats')} /> : (
-      <div className={`workspace ${focusPlayer ? 'focus' : ''}`}>
+      <div className={`workspace ${focusPlayer ? 'focus' : ''} ${theater ? 'theater' : ''}`}>
         <div className="col" style={{ width: `min(${L.left}px, 21vw)` }}>
           <SplitV frac={L.leftSplit} setFrac={(f) => L.set({ leftSplit: f })} top={<Library />} bottom={<Roster />} />
         </div>
