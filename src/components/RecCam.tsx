@@ -126,6 +126,8 @@ export function RecCam({ token }: { token: string }) {
   const [facing, setFacing] = useState<'environment' | 'user'>('environment')
   const [q, setQ] = useState<Q>('bal')
   const [showTakes, setShowTakes] = useState(false)
+  const [periodAdj, setPeriodAdj] = useState(0) // chỉnh tay số hiệp (lệch so với đồng hồ trận); tự về 0 khi đồng hồ trận đổi hiệp
+  const lastGamePeriod = useRef<number | null>(null)
   const board = useRef<{ c: HTMLCanvasElement; key: string }>({ c: document.createElement('canvas'), key: '' })
   const [camErr, setCamErr] = useState('')
   const [rec, setRec] = useState<{ since: number; label: string } | null>(null)
@@ -160,7 +162,7 @@ export function RecCam({ token }: { token: string }) {
       setErr(''); fetchedAt.current = (t0 + t1) / 2; stRef.current = data as RState; setSt(data as RState)
     }
     void load()
-    const iv = setInterval(() => { void load() }, 1500)
+    const iv = setInterval(() => { void load() }, 3000) // đồng hồ chạy theo giờ máy giữa hai lần tải nên không cần tải dày
     const t = setInterval(() => tick((n) => n + 1), 500)
     return () => { live = false; clearInterval(iv); clearInterval(t) }
   }, [token])
@@ -246,11 +248,14 @@ export function RecCam({ token }: { token: string }) {
     return () => document.removeEventListener('visibilitychange', f)
   }, [])
 
+  const gamePeriod = st?.game.period ?? 1
+  useEffect(() => { if (lastGamePeriod.current !== null && lastGamePeriod.current !== gamePeriod) setPeriodAdj(0); lastGamePeriod.current = gamePeriod }, [gamePeriod])
+  const periodNum = Math.max(1, gamePeriod + periodAdj)
   const baseName = () => slug(st?.game.title ?? 'tran-dau') || 'tran-dau'
   const start = async () => {
     const c = canvas.current, s = stream.current
     if (!c || !s || !st) return
-    const label = `Hiệp ${qLabel(st.game.period).replace('Q', '')}`
+    const label = `Hiệp ${qLabel(periodNum).replace('Q', '')}`
     const out = new MediaStream([...c.captureStream(PRESETS[q].fps).getVideoTracks(), ...s.getAudioTracks()])
     const mr = new MediaRecorder(out, { ...(fmt.current.mime ? { mimeType: fmt.current.mime } : {}), videoBitsPerSecond: PRESETS[q].bps, audioBitsPerSecond: 96_000, bitsPerSecond: PRESETS[q].bps + 96_000 })
     // Ưu tiên ghi thẳng xuống ổ lưu trữ của điện thoại (quay được hiệp dài 30 phút, không đầy RAM); không được thì giữ trong bộ nhớ.
@@ -310,12 +315,20 @@ export function RecCam({ token }: { token: string }) {
     return last.t > first.t ? ((last.b - first.b) * 8) / 1e6 / ((last.t - first.t) / 1000) : 0
   })()
   const target = PRESETS[q].bps / 1e6
-  const period = st ? qLabel(st.game.period) : '…'
+  const period = st ? qLabel(periodNum) : '…'
 
   return (
     <div className="rc">
+      {/* Xem trước bằng chính luồng camera (nhẹ cho máy); canvas bên dưới chỉ để ghép bảng tỉ số khi quay. */}
       <video ref={video} className="rc-src" playsInline muted autoPlay />
-      <canvas ref={canvas} className="rc-view" width={1280} height={720} />
+      <canvas ref={canvas} className="rc-hide" width={1280} height={720} />
+      {st && (
+        <div className="rc-pvboard" aria-hidden>
+          <span className="t h">{st.game.home}</span><b className="s h">{st.score.home}</b>
+          <span className="m"><small>{qLabel(st.game.period)}</small>{mmss(Math.floor(st.game.running ? Math.max(0, st.game.clock - (Date.now() - fetchedAt.current) / 1000) : st.game.clock))}</span>
+          <b className="s a">{st.score.away}</b><span className="t a">{st.game.away}</span>
+        </div>
+      )}
       <div className="rc-top">
         {rec ? <span className="rc-live"><i /> ĐANG QUAY {rec.label} · {mmss(elapsed)} · {recMB.toFixed(0)} MB{mbps > 0 ? ` · ${mbps.toFixed(1)} Mb/s (${(mbps * 7.5).toFixed(0)} MB/phút)` : ''} · {diskMode ? 'ổ lưu trữ' : 'RAM'}</span> : <span className="rc-idle">Sẵn sàng · {period}</span>}
         {rec && mbps > target * 1.6 && <span className="rc-err">Máy đang quay nặng gấp {(mbps / target).toFixed(1)} lần mức đặt ({target} Mb/s). Chọn mức “Gọn” để nhẹ hơn.</span>}
@@ -328,7 +341,13 @@ export function RecCam({ token }: { token: string }) {
         {rec
           ? <button className="rc-rec stop" onClick={stop} aria-label="Dừng quay"><i /></button>
           : <button className="rc-rec" disabled={!stream.current || !st || !!camErr} onClick={() => void start()} aria-label="Bắt đầu quay"><i /></button>}
-        <small className="rc-recl">{rec ? 'DỪNG' : period.replace('Q', 'HIỆP ')}</small>
+        {rec ? <small className="rc-recl">DỪNG</small> : (
+          <div className="rc-per">
+            <button onClick={() => setPeriodAdj(periodAdj - 1)} disabled={periodNum <= 1} aria-label="Hiệp trước">‹</button>
+            <small className="rc-recl">{period.replace('Q', 'HIỆP ').replace('OT', 'OT ')}</small>
+            <button onClick={() => setPeriodAdj(periodAdj + 1)} aria-label="Hiệp sau">›</button>
+          </div>
+        )}
         <button disabled={!!rec} onClick={() => setFacing(facing === 'environment' ? 'user' : 'environment')} title="Đổi camera trước / sau">⟲</button>
         <button className="rc-q" disabled={!!rec} onClick={() => setQ(q === 'eco' ? 'bal' : q === 'bal' ? 'hi' : 'eco')} title="Đổi chất lượng">{PRESETS[q].short}</button>
         {takes.length > 0 && <button className={showTakes ? 'on' : ''} onClick={() => setShowTakes(!showTakes)}>📁 {takes.length}</button>}
