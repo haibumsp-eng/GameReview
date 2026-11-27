@@ -1292,4 +1292,13 @@ end $$;
 
 grant execute on function cam_state(text), cam_clock(text, text, int, int), cam_sub(text, uuid, uuid), cam_score(text, uuid, int), cam_mark_start(text, boolean), cam_undo(text) to anon, authenticated;
 
+-- Sửa / xoá bình luận: tác giả hoặc người sửa được tuyến (HLV, chủ trung tâm). edited_at = lần sửa gần nhất.
+alter table comments add column if not exists edited_at timestamptz;
+drop policy if exists comments_update on comments;
+drop policy if exists comments_delete on comments;
+create policy comments_update on comments for update to authenticated
+  using (author = auth.uid() or is_editor(squad_of_clip(clip_id))) with check (author = auth.uid() or is_editor(squad_of_clip(clip_id)));
+create policy comments_delete on comments for delete to authenticated
+  using (author = auth.uid() or is_editor(squad_of_clip(clip_id)));
+
 notify pgrst, 'reload schema';

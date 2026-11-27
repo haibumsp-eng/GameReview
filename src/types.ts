@@ -59,6 +59,8 @@ export interface Comment {
   author: string
   text: string
   createdAt: number
+  /** Lần sửa gần nhất (nếu đã sửa). */
+  editedAt?: number | null
 }
 
 export const PLAY_TYPES = [

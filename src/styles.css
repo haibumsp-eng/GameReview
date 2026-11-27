@@ -1375,3 +1375,4 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .rc-per .rc-recl { white-space: nowrap; font-size: 9px; text-align: center; }
 .rc-ctl .rc-per button { width: 20px; height: 26px; font-size: 16px; padding: 0; }
 .rc-ctl { width: 76px; }
+.cmt-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .cmt-acts { margin-left: auto; display: inline-flex; gap: 2px; }

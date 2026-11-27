@@ -54,6 +54,8 @@ interface DataState {
   updateClip: (id: string, patch: Partial<Clip>) => void
   removeClip: (id: string) => void
   addComment: (clipId: string, text: string) => void
+  updateComment: (id: string, text: string) => void
+  removeComment: (id: string) => void
   addPlaylist: (gameId: string, name: string, f: Filter) => string
   removePlaylist: (id: string) => void
   setTeamNames: (gameId: string, home: string, away: string) => void
@@ -266,7 +268,7 @@ export const useData = create<DataState>((set, get) => {
           playType: r.play_type ?? '', playerIds: r.player_ids ?? [],
         })),
         clips,
-        comments: (cm ?? []).map((r: any) => ({ id: r.id, clipId: r.clip_id, author: r.author ?? '', text: r.body, createdAt: new Date(r.created_at).getTime() })),
+        comments: (cm ?? []).map((r: any) => ({ id: r.id, clipId: r.clip_id, author: r.author ?? '', text: r.body, createdAt: new Date(r.created_at).getTime(), editedAt: r.edited_at ? new Date(r.edited_at).getTime() : null })),
       })
     },
 
@@ -516,6 +518,16 @@ export const useData = create<DataState>((set, get) => {
     removePlaylist: (id) => {
       set((s) => ({ playlists: s.playlists.filter((p) => p.id !== id) }))
       supabase.from('playlists').delete().eq('id', id).then(({ error }) => fail(error))
+    },
+    updateComment: (id, text) => {
+      const at = Date.now()
+      set((s) => ({ comments: s.comments.map((c) => (c.id === id ? { ...c, text, editedAt: at } : c)) }))
+      supabase.from('comments').update({ body: text, edited_at: new Date(at).toISOString() }).eq('id', id)
+        .then(({ error }) => { if (fail(error)) get().loadGame(useUi.getState().gameId) })
+    },
+    removeComment: (id) => {
+      set((s) => ({ comments: s.comments.filter((c) => c.id !== id) }))
+      supabase.from('comments').delete().eq('id', id).then(({ error }) => { if (fail(error)) get().loadGame(useUi.getState().gameId) })
     },
     addComment: (clipId, text) => {
       const id = uid()
