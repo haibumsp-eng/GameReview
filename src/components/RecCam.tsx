@@ -61,7 +61,45 @@ function drawBoard(ctx: CanvasRenderingContext2D, W: number, H: number, d: { hom
   ctx.beginPath(); ctx.roundRect?.((W - total) / 2, y, total, barH, r); ctx.stroke()
 }
 
-interface Take { id: number; label: string; url: string; size: number; ext: string; blob: Blob }
+interface Take { id: number; label: string; url: string; size: number; ext: string; blob: Blob; name?: string }
+
+/** Tên file chỉ dùng chữ không dấu (ổ lưu trữ của trình duyệt không nhận chữ có dấu ổn định). */
+const slug = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
+/* ---- Ghi xuống ổ lưu trữ (OPFS) qua worker ---- */
+const hasOpfs = () => typeof Worker !== 'undefined' && !!(navigator as unknown as { storage?: { getDirectory?: unknown } }).storage?.getDirectory
+interface Disk { write: (buf: ArrayBuffer) => Promise<void>; close: () => Promise<void>; q: Promise<void> }
+function openDisk(name: string): Promise<Disk> {
+  return new Promise((resolve, reject) => {
+    const w = new Worker(new URL('./recWriter.worker.ts', import.meta.url), { type: 'module' })
+    let n = 0
+    const waits = new Map<number, { ok: () => void; bad: (e: Error) => void }>()
+    w.onmessage = (e) => {
+      const m = e.data, h = waits.get(m.id)
+      if (!h) return
+      waits.delete(m.id)
+      if (m.t === 'error') h.bad(new Error(m.msg)); else h.ok()
+    }
+    w.onerror = () => reject(new Error('worker lỗi'))
+    const call = (msg: Record<string, unknown>, tr: Transferable[] = []) => new Promise<void>((ok, bad) => { const id = ++n; waits.set(id, { ok, bad }); w.postMessage({ ...msg, id }, tr) })
+    const timer = setTimeout(() => reject(new Error('quá thời gian mở ổ lưu trữ')), 4000)
+    call({ t: 'open', name }).then(() => {
+      clearTimeout(timer)
+      resolve({ q: Promise.resolve(), write: (buf) => call({ t: 'write', buf }, [buf]), close: () => call({ t: 'close' }).finally(() => w.terminate()) })
+    }, (e) => { clearTimeout(timer); w.terminate(); reject(e) })
+  })
+}
+async function opfsDir() { const root = await (navigator as unknown as { storage: { getDirectory: () => Promise<any> } }).storage.getDirectory(); return root.getDirectoryHandle('rec', { create: true }) }
+async function opfsFile(name: string): Promise<File> { return (await (await opfsDir()).getFileHandle(name)).getFile() }
+async function opfsRemove(name: string) { try { await (await opfsDir()).removeEntry(name) } catch { /* đã xoá */ } }
+async function opfsList(): Promise<File[]> {
+  if (!hasOpfs()) return []
+  try {
+    const out: File[] = []
+    for await (const [, h] of (await opfsDir()).entries()) if (h.kind === 'file') out.push(await h.getFile())
+    return out
+  } catch { return [] }
+}
 
 /**
  * Điện thoại quay hình (iPhone): dùng camera sau, vẽ bảng tỉ số lên hình rồi quay luôn thành file, mỗi hiệp một file.
@@ -84,6 +122,8 @@ export function RecCam({ token }: { token: string }) {
   const fetchedAt = useRef(Date.now())
   const recorder = useRef<MediaRecorder | null>(null)
   const chunks = useRef<Blob[]>([])
+  const recBytes = useRef(0)
+  const [diskMode, setDiskMode] = useState(false)
   const wake = useRef<{ release: () => Promise<void> } | null>(null)
   const seq = useRef(0)
   const fmt = useRef(pickFormat())
@@ -152,6 +192,17 @@ export function RecCam({ token }: { token: string }) {
     return () => { live = false; cancelAnimationFrame(raf) }
   }, [res])
 
+  // Video đã quay nhưng chưa lưu (tải lại trang, treo, đóng nhầm): còn nằm trong ổ lưu trữ nên khôi phục lại để lưu.
+  useEffect(() => {
+    void opfsList().then((files) => {
+      if (!files.length) return
+      setTakes((cur) => [...cur, ...files.filter((f) => !cur.some((t) => t.name === f.name)).map((f) => {
+        const m = f.name.match(/_(Hiep-[^_]+)_/)
+        return { id: ++seq.current, label: m ? m[1].replace('Hiep-', 'Hiệp ') : 'Video cũ', url: URL.createObjectURL(f), size: f.size, ext: f.name.split('.').pop() ?? 'mp4', blob: f, name: f.name }
+      })])
+    })
+  }, [])
+
   // Cảnh báo khi màn hình bị che / app chuyển nền (iPhone sẽ dừng quay).
   useEffect(() => {
     const f = () => setHidden(document.visibilityState === 'hidden')
@@ -159,19 +210,37 @@ export function RecCam({ token }: { token: string }) {
     return () => document.removeEventListener('visibilitychange', f)
   }, [])
 
+  const baseName = () => slug(st?.game.title ?? 'tran-dau') || 'tran-dau'
   const start = async () => {
     const c = canvas.current, s = stream.current
     if (!c || !s || !st) return
-    const label = `Hiệp ${qLabel(st.game.period).replace('Q', '').replace('OT', 'OT')}`
+    const label = `Hiệp ${qLabel(st.game.period).replace('Q', '')}`
     const out = new MediaStream([...c.captureStream(30).getVideoTracks(), ...s.getAudioTracks()])
     const mr = new MediaRecorder(out, { ...(fmt.current.mime ? { mimeType: fmt.current.mime } : {}), videoBitsPerSecond: res === '1080' ? 10_000_000 : 5_000_000 })
-    chunks.current = []
-    mr.ondataavailable = (e) => { if (e.data.size) chunks.current.push(e.data) }
-    mr.onstop = () => {
-      const blob = new Blob(chunks.current, { type: fmt.current.mime || 'video/webm' })
-      chunks.current = []
-      const url = URL.createObjectURL(blob)
-      setTakes((t) => [{ id: ++seq.current, label, url, size: blob.size, ext: fmt.current.ext, blob }, ...t])
+    // Ưu tiên ghi thẳng xuống ổ lưu trữ của điện thoại (quay được hiệp dài 30 phút, không đầy RAM); không được thì giữ trong bộ nhớ.
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')
+    const name = `${baseName()}_${slug(label)}_${stamp}.${fmt.current.ext}`
+    let disk: Disk | null = null
+    if (hasOpfs()) { try { disk = await openDisk(name) } catch (e) { console.warn('Không ghi được xuống ổ lưu trữ, dùng RAM:', e); disk = null } }
+    setDiskMode(!!disk)
+    chunks.current = []; recBytes.current = 0
+    mr.ondataavailable = (e) => {
+      if (!e.data.size) return
+      recBytes.current += e.data.size
+      if (disk) { const d = disk; d.q = d.q.then(async () => d.write(await e.data.arrayBuffer())) } else chunks.current.push(e.data)
+    }
+    mr.onstop = async () => {
+      let take: Take
+      if (disk) {
+        try { await disk.q; await disk.close() } catch { /* sẽ báo ở dưới nếu file lỗi */ }
+        const file = await opfsFile(name)
+        take = { id: ++seq.current, label, url: URL.createObjectURL(file), size: file.size, ext: fmt.current.ext, blob: file, name }
+      } else {
+        const blob = new Blob(chunks.current, { type: fmt.current.mime || 'video/webm' })
+        chunks.current = []
+        take = { id: ++seq.current, label, url: URL.createObjectURL(blob), size: blob.size, ext: fmt.current.ext, blob }
+      }
+      setTakes((t) => [take, ...t])
       void wake.current?.release().catch(() => {}); wake.current = null
     }
     mr.start(2000)
@@ -181,19 +250,20 @@ export function RecCam({ token }: { token: string }) {
   }
   const stop = () => { recorder.current?.stop(); recorder.current = null; setRec(null) }
 
-  const fileName = (t: Take) => `${(st?.game.title ?? 'tran-dau').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '')}-${t.label.replace(/\s+/g, '-')}.${t.ext}`
+  const fileName = (t: Take) => t.name ?? `${baseName()}_${slug(t.label)}.${t.ext}`
   const save = async (t: Take) => {
-    const file = new File([t.blob], fileName(t), { type: t.blob.type })
+    // File lấy từ ổ lưu trữ thì dùng thẳng (không nạp vào RAM); file trong bộ nhớ thì bọc lại để có tên đẹp.
+    const file = t.name ? (t.blob as File) : new File([t.blob], fileName(t), { type: t.blob.type })
     const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean }
     if (nav.canShare?.({ files: [file] })) {
       try { await nav.share({ files: [file], title: t.label }); return } catch (e) { if ((e as Error).name === 'AbortError') return }
     }
     const a = document.createElement('a'); a.href = t.url; a.download = fileName(t); document.body.appendChild(a); a.click(); a.remove()
   }
-  const drop = (t: Take) => { URL.revokeObjectURL(t.url); setTakes((l) => l.filter((x) => x.id !== t.id)) }
+  const drop = (t: Take) => { URL.revokeObjectURL(t.url); if (t.name) void opfsRemove(t.name); setTakes((l) => l.filter((x) => x.id !== t.id)) }
 
   const elapsed = rec ? Math.floor((Date.now() - rec.since) / 1000) : 0
-  const recMB = rec ? chunks.current.reduce((a, c) => a + c.size, 0) / 1e6 : 0
+  const recMB = rec ? recBytes.current / 1e6 : 0
   const period = st ? qLabel(st.game.period) : '…'
 
   return (
@@ -201,7 +271,7 @@ export function RecCam({ token }: { token: string }) {
       <video ref={video} className="rc-src" playsInline muted autoPlay />
       <canvas ref={canvas} className="rc-view" width={1280} height={720} />
       <div className="rc-top">
-        {rec ? <span className="rc-live"><i /> ĐANG QUAY {rec.label} · {mmss(elapsed)} · {recMB.toFixed(0)} MB</span> : <span className="rc-idle">Sẵn sàng · {period}</span>}
+        {rec ? <span className="rc-live"><i /> ĐANG QUAY {rec.label} · {mmss(elapsed)} · {recMB.toFixed(1)} MB · {diskMode ? 'ghi xuống ổ lưu trữ' : 'giữ trong RAM'}</span> : <span className="rc-idle">Sẵn sàng · {period}</span>}
         {err && <span className="rc-err">{err}</span>}
         {rec && hidden && <span className="rc-err">Màn hình đang bị che: iPhone có thể dừng quay!</span>}
       </div>
@@ -218,7 +288,7 @@ export function RecCam({ token }: { token: string }) {
       </div>
       {takes.length > 0 && (
         <div className="rc-takes">
-          <b>Video đã quay (nhớ lưu về máy)</b>
+          <b>Video đã quay (nhớ lưu về máy)</b>{diskMode && <small> · đang ghi thẳng xuống ổ lưu trữ</small>}
           {takes.map((t) => (
             <div key={t.id} className="rc-take">
               <span>{t.label} · {(t.size / 1e6).toFixed(1)} MB</span>
