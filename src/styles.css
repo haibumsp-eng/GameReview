@@ -1336,3 +1336,8 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .rc-take button { height: 44px; padding: 0 12px; border-radius: 10px; background: #222; border: 1px solid #444; color: #fff; font-weight: 600; }
 .rc-take button.save { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .rc-takes small { color: #bbb; font-size: 11px; }
+
+.rc-dark { position: absolute; inset: 0; z-index: 20; background: #000; display: grid; place-content: center; gap: 8px; text-align: center; color: #555; }
+.rc-dark span { font-size: 15px; font-weight: 700; color: #7a2a24; } .rc-dark small { font-size: 11px; color: #444; }
+.rc-side { flex-wrap: wrap; }
+.rc-view.off { visibility: hidden; }

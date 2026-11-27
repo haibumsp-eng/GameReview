@@ -17,12 +17,20 @@ function pickFormat(): { mime: string; ext: string } {
   return { mime: '', ext: 'webm' }
 }
 
-/** Vẽ bảng tỉ số (kiểu bảng OBS, không hiệu ứng) lên canvas, ở cạnh dưới chính giữa. */
-function drawBoard(ctx: CanvasRenderingContext2D, W: number, H: number, d: { home: string; away: string; hs: number; as: number; period: number; clock: number; running: boolean }) {
+type BoardData = { home: string; away: string; hs: number; as: number; period: number; clock: number; running: boolean }
+/**
+ * Vẽ bảng tỉ số (kiểu bảng OBS, không hiệu ứng) vào một canvas NHỎ riêng. Chỉ vẽ lại khi số liệu đổi (mỗi giây một lần),
+ * còn mỗi khung hình chỉ dán canvas nhỏ này lên hình: nhẹ hơn nhiều, máy đỡ nóng.
+ */
+function renderBoard(c: HTMLCanvasElement, W: number, d: BoardData) {
   const s = W / 1920
-  const barH = 84 * s, y = H - 84 * s - 28 * s, nameW = 290 * s, scoreW = 96 * s, midW = 170 * s
+  const pad = Math.ceil(3 * s), barH = 84 * s, nameW = 290 * s, scoreW = 96 * s, midW = 170 * s
   const total = nameW * 2 + scoreW * 2 + midW
-  let x = (W - total) / 2
+  c.width = Math.ceil(total + pad * 2); c.height = Math.ceil(barH + pad * 2)
+  const ctx = c.getContext('2d')!
+  ctx.clearRect(0, 0, c.width, c.height)
+  const y = pad
+  let x = pad
   const rr = (px: number, w: number, fill: string, r: [number, number, number, number]) => {
     ctx.fillStyle = fill; ctx.beginPath()
     ctx.moveTo(px + r[0], y); ctx.lineTo(px + w - r[1], y); ctx.quadraticCurveTo(px + w, y, px + w, y + r[1])
@@ -44,9 +52,9 @@ function drawBoard(ctx: CanvasRenderingContext2D, W: number, H: number, d: { hom
     ctx.fillStyle = '#fff'; fit(t.toUpperCase(), nameW - 40 * s, 30 * s, 800)
     ctx.fillText(t.toUpperCase(), px + nameW / 2, y + barH / 2 + 3 * s)
   }
-  const score = (px: number, n: number, c: { bg: string; ink: string }) => {
-    rr(px, scoreW, c.bg, [0, 0, 0, 0])
-    ctx.fillStyle = c.ink; ctx.font = font(60 * s, 900); ctx.fillText(String(n), px + scoreW / 2, y + barH / 2 + 3 * s)
+  const score = (px: number, n: number, c2: { bg: string; ink: string }) => {
+    rr(px, scoreW, c2.bg, [0, 0, 0, 0])
+    ctx.fillStyle = c2.ink; ctx.font = font(60 * s, 900); ctx.fillText(String(n), px + scoreW / 2, y + barH / 2 + 3 * s)
   }
   name(x, d.home, HOME.bg, true); x += nameW
   score(x, d.hs, HOME); x += scoreW
@@ -56,10 +64,17 @@ function drawBoard(ctx: CanvasRenderingContext2D, W: number, H: number, d: { hom
   x += midW
   score(x, d.as, AWAY); x += scoreW
   name(x, d.away, AWAY.bg, false)
-  // viền ngoài mảnh cho giống bảng OBS
   ctx.strokeStyle = '#ffffff22'; ctx.lineWidth = 2 * s
-  ctx.beginPath(); ctx.roundRect?.((W - total) / 2, y, total, barH, r); ctx.stroke()
+  ctx.beginPath(); ctx.roundRect?.(pad, y, total, barH, r); ctx.stroke()
 }
+
+/** Ba mức chất lượng: tiết kiệm máy (ít nóng) / cân bằng / nét (số áo rõ nhất, máy nóng hơn). */
+const PRESETS = {
+  eco: { label: 'Tiết kiệm · 720p', w: 1280, h: 720, bps: 4_000_000 },
+  bal: { label: 'Cân bằng · 1080p', w: 1920, h: 1080, bps: 6_000_000 },
+  hi: { label: 'Nét · 1080p', w: 1920, h: 1080, bps: 10_000_000 },
+} as const
+type Q = keyof typeof PRESETS
 
 interface Take { id: number; label: string; url: string; size: number; ext: string; blob: Blob; name?: string }
 
@@ -109,7 +124,9 @@ export function RecCam({ token }: { token: string }) {
   const [st, setSt] = useState<RState | null>(null)
   const [err, setErr] = useState('')
   const [facing, setFacing] = useState<'environment' | 'user'>('environment')
-  const [res, setRes] = useState<'720' | '1080'>('1080')
+  const [q, setQ] = useState<Q>('bal')
+  const [dark, setDark] = useState(false) // tối màn hình (OLED đen = đỡ nóng, đỡ hao pin), chạm để bật lại
+  const board = useRef<{ c: HTMLCanvasElement; key: string }>({ c: document.createElement('canvas'), key: '' })
   const [camErr, setCamErr] = useState('')
   const [rec, setRec] = useState<{ since: number; label: string } | null>(null)
   const [takes, setTakes] = useState<Take[]>([])
@@ -153,8 +170,9 @@ export function RecCam({ token }: { token: string }) {
       stream.current?.getTracks().forEach((t) => t.stop())
       setCamErr('')
       try {
-        const [w, h] = res === '1080' ? [1920, 1080] : [1280, 720]
-        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } }, audio: true })
+        const { w, h } = PRESETS[q]
+        // 30 khung hình/giây là đủ xem số áo; không xin 60 để máy đỡ nóng.
+        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30, max: 30 } }, audio: true })
         if (cancelled) return s.getTracks().forEach((t) => t.stop())
         stream.current = s
         if (video.current) { video.current.srcObject = s; await video.current.play().catch(() => {}) }
@@ -163,34 +181,44 @@ export function RecCam({ token }: { token: string }) {
       }
     })()
     return () => { cancelled = true }
-  }, [facing, res])
+  }, [facing, q])
 
-  // Vòng vẽ: hình camera + bảng tỉ số.
+  // Vòng vẽ: chỉ vẽ khi camera có khung hình MỚI (tối đa 30 lần/giây, không theo tần số quét màn hình 60-120Hz),
+  // bảng tỉ số là một canvas nhỏ vẽ sẵn, mỗi khung chỉ dán lên.
   useEffect(() => {
-    let raf = 0, live = true
-    const loop = () => {
-      if (!live) return
+    let live = true, timer = 0
+    const draw = () => {
       const c = canvas.current, v = video.current
-      if (c && v && v.videoWidth) {
-        const W = res === '1080' ? 1920 : 1280, H = res === '1080' ? 1080 : 720
-        if (c.width !== W) { c.width = W; c.height = H }
-        const ctx = c.getContext('2d')!
-        // phủ kín khung 16:9 (cắt phần thừa nếu camera khác tỉ lệ)
-        const sr = v.videoWidth / v.videoHeight, dr = W / H
-        let sw = v.videoWidth, sh = v.videoHeight, sx = 0, sy = 0
-        if (sr > dr) { sw = sh * dr; sx = (v.videoWidth - sw) / 2 } else { sh = sw / dr; sy = (v.videoHeight - sh) / 2 }
-        ctx.drawImage(v, sx, sy, sw, sh, 0, 0, W, H)
-        const g = stRef.current
-        if (g) {
-          const clk = g.game.running ? Math.max(0, g.game.clock - (Date.now() - fetchedAt.current) / 1000) : g.game.clock
-          drawBoard(ctx, W, H, { home: g.game.home, away: g.game.away, hs: g.score.home, as: g.score.away, period: g.game.period, clock: clk, running: g.game.running })
-        }
+      if (!c || !v || !v.videoWidth) return
+      const { w: W, h: H } = PRESETS[q]
+      if (c.width !== W) { c.width = W; c.height = H }
+      const ctx = c.getContext('2d', { alpha: false })!
+      // phủ kín khung 16:9 (cắt phần thừa nếu camera khác tỉ lệ)
+      const sr = v.videoWidth / v.videoHeight, dr = W / H
+      let sw = v.videoWidth, sh = v.videoHeight, sx = 0, sy = 0
+      if (sr > dr) { sw = sh * dr; sx = (v.videoWidth - sw) / 2 } else { sh = sw / dr; sy = (v.videoHeight - sh) / 2 }
+      ctx.drawImage(v, sx, sy, sw, sh, 0, 0, W, H)
+      const g = stRef.current
+      if (g) {
+        const clk = g.game.running ? Math.max(0, g.game.clock - (Date.now() - fetchedAt.current) / 1000) : g.game.clock
+        const d: BoardData = { home: g.game.home, away: g.game.away, hs: g.score.home, as: g.score.away, period: g.game.period, clock: Math.floor(clk), running: g.game.running }
+        const key = `${W}|${d.home}|${d.away}|${d.hs}|${d.as}|${d.period}|${d.clock}|${d.running}`
+        if (key !== board.current.key) { renderBoard(board.current.c, W, d); board.current.key = key }
+        const bc = board.current.c
+        ctx.drawImage(bc, (W - bc.width) / 2, H - bc.height - (28 * W) / 1920)
       }
-      raf = requestAnimationFrame(loop)
     }
-    raf = requestAnimationFrame(loop)
-    return () => { live = false; cancelAnimationFrame(raf) }
-  }, [res])
+    type V = HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number }
+    const tickLoop = () => {
+      if (!live) return
+      draw()
+      const v = video.current as V | null
+      if (v?.requestVideoFrameCallback) v.requestVideoFrameCallback(tickLoop)
+      else timer = window.setTimeout(tickLoop, 33)
+    }
+    tickLoop()
+    return () => { live = false; clearTimeout(timer) }
+  }, [q])
 
   // Video đã quay nhưng chưa lưu (tải lại trang, treo, đóng nhầm): còn nằm trong ổ lưu trữ nên khôi phục lại để lưu.
   useEffect(() => {
@@ -216,7 +244,7 @@ export function RecCam({ token }: { token: string }) {
     if (!c || !s || !st) return
     const label = `Hiệp ${qLabel(st.game.period).replace('Q', '')}`
     const out = new MediaStream([...c.captureStream(30).getVideoTracks(), ...s.getAudioTracks()])
-    const mr = new MediaRecorder(out, { ...(fmt.current.mime ? { mimeType: fmt.current.mime } : {}), videoBitsPerSecond: res === '1080' ? 10_000_000 : 5_000_000 })
+    const mr = new MediaRecorder(out, { ...(fmt.current.mime ? { mimeType: fmt.current.mime } : {}), videoBitsPerSecond: PRESETS[q].bps })
     // Ưu tiên ghi thẳng xuống ổ lưu trữ của điện thoại (quay được hiệp dài 30 phút, không đầy RAM); không được thì giữ trong bộ nhớ.
     const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')
     const name = `${baseName()}_${slug(label)}_${stamp}.${fmt.current.ext}`
@@ -269,17 +297,23 @@ export function RecCam({ token }: { token: string }) {
   return (
     <div className="rc">
       <video ref={video} className="rc-src" playsInline muted autoPlay />
-      <canvas ref={canvas} className="rc-view" width={1280} height={720} />
+      <canvas ref={canvas} className={`rc-view ${dark ? 'off' : ''}`} width={1280} height={720} />
       <div className="rc-top">
         {rec ? <span className="rc-live"><i /> ĐANG QUAY {rec.label} · {mmss(elapsed)} · {recMB.toFixed(1)} MB · {diskMode ? 'ghi xuống ổ lưu trữ' : 'giữ trong RAM'}</span> : <span className="rc-idle">Sẵn sàng · {period}</span>}
         {err && <span className="rc-err">{err}</span>}
         {rec && hidden && <span className="rc-err">Màn hình đang bị che: iPhone có thể dừng quay!</span>}
       </div>
       {camErr && <div className="rc-camerr">{camErr}</div>}
+      {dark && (
+        <div className="rc-dark" onClick={() => setDark(false)}>
+          <span>{rec ? `● ĐANG QUAY ${rec.label} · ${mmss(elapsed)}` : 'Chạm để bật màn hình'}</span><small>Màn hình tối giúp máy đỡ nóng. Chạm bất kỳ đâu để bật lại.</small>
+        </div>
+      )}
       <div className="rc-bar">
         <div className="rc-side">
           <button disabled={!!rec} onClick={() => setFacing(facing === 'environment' ? 'user' : 'environment')}>⟲ Đổi camera</button>
-          <button disabled={!!rec} onClick={() => setRes(res === '720' ? '1080' : '720')}>{res === '720' ? '720p' : '1080p'}</button>
+          <button disabled={!!rec} onClick={() => setQ(q === 'eco' ? 'bal' : q === 'bal' ? 'hi' : 'eco')}>{PRESETS[q].label}</button>
+          <button onClick={() => setDark(true)}>🌙 Tối màn hình</button>
         </div>
         {rec
           ? <button className="rc-rec stop" onClick={stop}>■ DỪNG · {rec.label}</button>
