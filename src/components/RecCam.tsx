@@ -17,10 +17,10 @@ function pickFormat(): { mime: string; ext: string } {
   return { mime: '', ext: 'webm' }
 }
 
-/** Vẽ bảng tỉ số (kiểu bảng OBS, không hiệu ứng) lên canvas ở giữa phía trên. */
-function drawBoard(ctx: CanvasRenderingContext2D, W: number, d: { home: string; away: string; hs: number; as: number; period: number; clock: number; running: boolean }) {
+/** Vẽ bảng tỉ số (kiểu bảng OBS, không hiệu ứng) lên canvas, ở cạnh dưới chính giữa. */
+function drawBoard(ctx: CanvasRenderingContext2D, W: number, H: number, d: { home: string; away: string; hs: number; as: number; period: number; clock: number; running: boolean }) {
   const s = W / 1920
-  const barH = 84 * s, y = 24 * s, nameW = 290 * s, scoreW = 96 * s, midW = 170 * s
+  const barH = 84 * s, y = H - 84 * s - 28 * s, nameW = 290 * s, scoreW = 96 * s, midW = 170 * s
   const total = nameW * 2 + scoreW * 2 + midW
   let x = (W - total) / 2
   const rr = (px: number, w: number, fill: string, r: [number, number, number, number]) => {
@@ -143,7 +143,7 @@ export function RecCam({ token }: { token: string }) {
         const g = stRef.current
         if (g) {
           const clk = g.game.running ? Math.max(0, g.game.clock - (Date.now() - fetchedAt.current) / 1000) : g.game.clock
-          drawBoard(ctx, W, { home: g.game.home, away: g.game.away, hs: g.score.home, as: g.score.away, period: g.game.period, clock: clk, running: g.game.running })
+          drawBoard(ctx, W, H, { home: g.game.home, away: g.game.away, hs: g.score.home, as: g.score.away, period: g.game.period, clock: clk, running: g.game.running })
         }
       }
       raf = requestAnimationFrame(loop)
