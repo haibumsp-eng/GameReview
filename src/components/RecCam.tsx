@@ -68,11 +68,11 @@ function renderBoard(c: HTMLCanvasElement, W: number, d: BoardData) {
   ctx.beginPath(); ctx.roundRect?.(pad, y, total, barH, r); ctx.stroke()
 }
 
-/** Ba mức chất lượng: tiết kiệm máy (ít nóng) / cân bằng / nét (số áo rõ nhất, máy nóng hơn). */
+/** Ba mức chất lượng: gọn (file nhẹ, ít nóng) / cân bằng / nét (số áo rõ nhất, file nặng và máy nóng hơn). bps = tốc độ dữ liệu mục tiêu. */
 const PRESETS = {
-  eco: { label: 'Tiết kiệm · 720p', w: 1280, h: 720, bps: 4_000_000 },
-  bal: { label: 'Cân bằng · 1080p', w: 1920, h: 1080, bps: 6_000_000 },
-  hi: { label: 'Nét · 1080p', w: 1920, h: 1080, bps: 10_000_000 },
+  eco: { label: 'Gọn · 720p', w: 1280, h: 720, fps: 25, bps: 2_500_000 },
+  bal: { label: 'Cân bằng · 1080p', w: 1920, h: 1080, fps: 30, bps: 5_000_000 },
+  hi: { label: 'Nét · 1080p', w: 1920, h: 1080, fps: 30, bps: 8_000_000 },
 } as const
 type Q = keyof typeof PRESETS
 
@@ -140,6 +140,7 @@ export function RecCam({ token }: { token: string }) {
   const recorder = useRef<MediaRecorder | null>(null)
   const chunks = useRef<Blob[]>([])
   const recBytes = useRef(0)
+  const rate = useRef<{ t: number; b: number }[]>([]) // dung lượng theo thời gian, để hiện tốc độ dữ liệu thực tế
   const [diskMode, setDiskMode] = useState(false)
   const wake = useRef<{ release: () => Promise<void> } | null>(null)
   const seq = useRef(0)
@@ -172,7 +173,7 @@ export function RecCam({ token }: { token: string }) {
       try {
         const { w, h } = PRESETS[q]
         // 30 khung hình/giây là đủ xem số áo; không xin 60 để máy đỡ nóng.
-        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30, max: 30 } }, audio: true })
+        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: PRESETS[q].fps, max: PRESETS[q].fps } }, audio: true })
         if (cancelled) return s.getTracks().forEach((t) => t.stop())
         stream.current = s
         if (video.current) { video.current.srcObject = s; await video.current.play().catch(() => {}) }
@@ -243,18 +244,19 @@ export function RecCam({ token }: { token: string }) {
     const c = canvas.current, s = stream.current
     if (!c || !s || !st) return
     const label = `Hiệp ${qLabel(st.game.period).replace('Q', '')}`
-    const out = new MediaStream([...c.captureStream(30).getVideoTracks(), ...s.getAudioTracks()])
-    const mr = new MediaRecorder(out, { ...(fmt.current.mime ? { mimeType: fmt.current.mime } : {}), videoBitsPerSecond: PRESETS[q].bps })
+    const out = new MediaStream([...c.captureStream(PRESETS[q].fps).getVideoTracks(), ...s.getAudioTracks()])
+    const mr = new MediaRecorder(out, { ...(fmt.current.mime ? { mimeType: fmt.current.mime } : {}), videoBitsPerSecond: PRESETS[q].bps, audioBitsPerSecond: 96_000, bitsPerSecond: PRESETS[q].bps + 96_000 })
     // Ưu tiên ghi thẳng xuống ổ lưu trữ của điện thoại (quay được hiệp dài 30 phút, không đầy RAM); không được thì giữ trong bộ nhớ.
     const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')
     const name = `${baseName()}_${slug(label)}_${stamp}.${fmt.current.ext}`
     let disk: Disk | null = null
     if (hasOpfs()) { try { disk = await openDisk(name) } catch (e) { console.warn('Không ghi được xuống ổ lưu trữ, dùng RAM:', e); disk = null } }
     setDiskMode(!!disk)
-    chunks.current = []; recBytes.current = 0
+    chunks.current = []; recBytes.current = 0; rate.current = []
     mr.ondataavailable = (e) => {
       if (!e.data.size) return
       recBytes.current += e.data.size
+      rate.current.push({ t: Date.now(), b: recBytes.current })
       if (disk) { const d = disk; d.q = d.q.then(async () => d.write(await e.data.arrayBuffer())) } else chunks.current.push(e.data)
     }
     mr.onstop = async () => {
@@ -292,6 +294,14 @@ export function RecCam({ token }: { token: string }) {
 
   const elapsed = rec ? Math.floor((Date.now() - rec.since) / 1000) : 0
   const recMB = rec ? recBytes.current / 1e6 : 0
+  // Tốc độ dữ liệu thực tế trong ~20 giây gần nhất (Mb/giây) so với mức đã đặt.
+  const mbps = (() => {
+    const r = rate.current
+    if (!rec || r.length < 3) return 0
+    const last = r[r.length - 1], first = r.find((x) => last.t - x.t <= 20000) ?? r[0]
+    return last.t > first.t ? ((last.b - first.b) * 8) / 1e6 / ((last.t - first.t) / 1000) : 0
+  })()
+  const target = PRESETS[q].bps / 1e6
   const period = st ? qLabel(st.game.period) : '…'
 
   return (
@@ -299,7 +309,8 @@ export function RecCam({ token }: { token: string }) {
       <video ref={video} className="rc-src" playsInline muted autoPlay />
       <canvas ref={canvas} className={`rc-view ${dark ? 'off' : ''}`} width={1280} height={720} />
       <div className="rc-top">
-        {rec ? <span className="rc-live"><i /> ĐANG QUAY {rec.label} · {mmss(elapsed)} · {recMB.toFixed(1)} MB · {diskMode ? 'ghi xuống ổ lưu trữ' : 'giữ trong RAM'}</span> : <span className="rc-idle">Sẵn sàng · {period}</span>}
+        {rec ? <span className="rc-live"><i /> ĐANG QUAY {rec.label} · {mmss(elapsed)} · {recMB.toFixed(0)} MB{mbps > 0 ? ` · ${mbps.toFixed(1)} Mb/s (${(mbps * 7.5).toFixed(0)} MB/phút)` : ''} · {diskMode ? 'ổ lưu trữ' : 'RAM'}</span> : <span className="rc-idle">Sẵn sàng · {period}</span>}
+        {rec && mbps > target * 1.6 && <span className="rc-err">Máy đang quay nặng gấp {(mbps / target).toFixed(1)} lần mức đặt ({target} Mb/s). Chọn mức “Gọn” để nhẹ hơn.</span>}
         {err && <span className="rc-err">{err}</span>}
         {rec && hidden && <span className="rc-err">Màn hình đang bị che: iPhone có thể dừng quay!</span>}
       </div>
