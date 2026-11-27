@@ -70,9 +70,9 @@ function renderBoard(c: HTMLCanvasElement, W: number, d: BoardData) {
 
 /** Ba mức chất lượng: gọn (file nhẹ, ít nóng) / cân bằng / nét (số áo rõ nhất, file nặng và máy nóng hơn). bps = tốc độ dữ liệu mục tiêu. */
 const PRESETS = {
-  eco: { label: 'Gọn · 720p', w: 1280, h: 720, fps: 25, bps: 2_500_000 },
-  bal: { label: 'Cân bằng · 1080p', w: 1920, h: 1080, fps: 30, bps: 5_000_000 },
-  hi: { label: 'Nét · 1080p', w: 1920, h: 1080, fps: 30, bps: 8_000_000 },
+  eco: { label: 'Gọn · 720p', short: 'Gọn\n720p', w: 1280, h: 720, fps: 25, bps: 2_500_000 },
+  bal: { label: 'Cân bằng · 1080p', short: 'Vừa\n1080p', w: 1920, h: 1080, fps: 30, bps: 5_000_000 },
+  hi: { label: 'Nét · 1080p', short: 'Nét\n1080p', w: 1920, h: 1080, fps: 30, bps: 8_000_000 },
 } as const
 type Q = keyof typeof PRESETS
 
@@ -125,13 +125,14 @@ export function RecCam({ token }: { token: string }) {
   const [err, setErr] = useState('')
   const [facing, setFacing] = useState<'environment' | 'user'>('environment')
   const [q, setQ] = useState<Q>('bal')
-  const [dark, setDark] = useState(false) // tối màn hình (OLED đen = đỡ nóng, đỡ hao pin), chạm để bật lại
+  const [showTakes, setShowTakes] = useState(false)
   const board = useRef<{ c: HTMLCanvasElement; key: string }>({ c: document.createElement('canvas'), key: '' })
   const [camErr, setCamErr] = useState('')
   const [rec, setRec] = useState<{ since: number; label: string } | null>(null)
   const [takes, setTakes] = useState<Take[]>([])
   const [hidden, setHidden] = useState(false)
   const [, tick] = useState(0)
+  const [portrait, setPortrait] = useState(() => window.innerHeight > window.innerWidth)
   const video = useRef<HTMLVideoElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const stream = useRef<MediaStream | null>(null)
@@ -232,6 +233,12 @@ export function RecCam({ token }: { token: string }) {
     })
   }, [])
 
+  useEffect(() => {
+    const f = () => setPortrait(window.innerHeight > window.innerWidth)
+    window.addEventListener('resize', f)
+    return () => window.removeEventListener('resize', f)
+  }, [])
+
   // Cảnh báo khi màn hình bị che / app chuyển nền (iPhone sẽ dừng quay).
   useEffect(() => {
     const f = () => setHidden(document.visibilityState === 'hidden')
@@ -271,6 +278,7 @@ export function RecCam({ token }: { token: string }) {
         take = { id: ++seq.current, label, url: URL.createObjectURL(blob), size: blob.size, ext: fmt.current.ext, blob }
       }
       setTakes((t) => [take, ...t])
+      setShowTakes(true)
       void wake.current?.release().catch(() => {}); wake.current = null
     }
     mr.start(2000)
@@ -307,7 +315,7 @@ export function RecCam({ token }: { token: string }) {
   return (
     <div className="rc">
       <video ref={video} className="rc-src" playsInline muted autoPlay />
-      <canvas ref={canvas} className={`rc-view ${dark ? 'off' : ''}`} width={1280} height={720} />
+      <canvas ref={canvas} className="rc-view" width={1280} height={720} />
       <div className="rc-top">
         {rec ? <span className="rc-live"><i /> ĐANG QUAY {rec.label} · {mmss(elapsed)} · {recMB.toFixed(0)} MB{mbps > 0 ? ` · ${mbps.toFixed(1)} Mb/s (${(mbps * 7.5).toFixed(0)} MB/phút)` : ''} · {diskMode ? 'ổ lưu trữ' : 'RAM'}</span> : <span className="rc-idle">Sẵn sàng · {period}</span>}
         {rec && mbps > target * 1.6 && <span className="rc-err">Máy đang quay nặng gấp {(mbps / target).toFixed(1)} lần mức đặt ({target} Mb/s). Chọn mức “Gọn” để nhẹ hơn.</span>}
@@ -315,28 +323,23 @@ export function RecCam({ token }: { token: string }) {
         {rec && hidden && <span className="rc-err">Màn hình đang bị che: iPhone có thể dừng quay!</span>}
       </div>
       {camErr && <div className="rc-camerr">{camErr}</div>}
-      {dark && (
-        <div className="rc-dark" onClick={() => setDark(false)}>
-          <span>{rec ? `● ĐANG QUAY ${rec.label} · ${mmss(elapsed)}` : 'Chạm để bật màn hình'}</span><small>Màn hình tối giúp máy đỡ nóng. Chạm bất kỳ đâu để bật lại.</small>
-        </div>
-      )}
-      <div className="rc-bar">
-        <div className="rc-side">
-          <button disabled={!!rec} onClick={() => setFacing(facing === 'environment' ? 'user' : 'environment')}>⟲ Đổi camera</button>
-          <button disabled={!!rec} onClick={() => setQ(q === 'eco' ? 'bal' : q === 'bal' ? 'hi' : 'eco')}>{PRESETS[q].label}</button>
-          <button onClick={() => setDark(true)}>🌙 Tối màn hình</button>
-        </div>
+      {/* Điều khiển nằm sát mép (phần đen hai bên khi nằm ngang), không chiếm chỗ của khung xem trước. */}
+      <div className="rc-ctl">
         {rec
-          ? <button className="rc-rec stop" onClick={stop}>■ DỪNG · {rec.label}</button>
-          : <button className="rc-rec" disabled={!stream.current || !st || !!camErr} onClick={() => void start()}>● QUAY {period.replace('Q', 'HIỆP ')}</button>}
-        <div className="rc-side right">{takes.length > 0 && <span>{takes.length} file</span>}</div>
+          ? <button className="rc-rec stop" onClick={stop} aria-label="Dừng quay"><i /></button>
+          : <button className="rc-rec" disabled={!stream.current || !st || !!camErr} onClick={() => void start()} aria-label="Bắt đầu quay"><i /></button>}
+        <small className="rc-recl">{rec ? 'DỪNG' : period.replace('Q', 'HIỆP ')}</small>
+        <button disabled={!!rec} onClick={() => setFacing(facing === 'environment' ? 'user' : 'environment')} title="Đổi camera trước / sau">⟲</button>
+        <button className="rc-q" disabled={!!rec} onClick={() => setQ(q === 'eco' ? 'bal' : q === 'bal' ? 'hi' : 'eco')} title="Đổi chất lượng">{PRESETS[q].short}</button>
+        {takes.length > 0 && <button className={showTakes ? 'on' : ''} onClick={() => setShowTakes(!showTakes)}>📁 {takes.length}</button>}
       </div>
-      {takes.length > 0 && (
+      {portrait && <div className="rc-rotate">↻ Xoay điện thoại nằm ngang để quay</div>}
+      {takes.length > 0 && showTakes && (
         <div className="rc-takes">
-          <b>Video đã quay (nhớ lưu về máy)</b>{diskMode && <small> · đang ghi thẳng xuống ổ lưu trữ</small>}
+          <div className="row"><b className="grow">Video đã quay (nhớ lưu về máy)</b><button onClick={() => setShowTakes(false)}>✕</button></div>
           {takes.map((t) => (
             <div key={t.id} className="rc-take">
-              <span>{t.label} · {(t.size / 1e6).toFixed(1)} MB</span>
+              <span>{t.label} · {(t.size / 1e6).toFixed(0)} MB</span>
               <button className="save" onClick={() => void save(t)}>⬇ Lưu video</button>
               <button onClick={() => drop(t)}>Xoá</button>
             </div>

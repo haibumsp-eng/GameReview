@@ -1337,7 +1337,26 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .rc-take button.save { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .rc-takes small { color: #bbb; font-size: 11px; }
 
-.rc-dark { position: absolute; inset: 0; z-index: 20; background: #000; display: grid; place-content: center; gap: 8px; text-align: center; color: #555; }
-.rc-dark span { font-size: 15px; font-weight: 700; color: #7a2a24; } .rc-dark small { font-size: 11px; color: #444; }
 .rc-side { flex-wrap: wrap; }
-.rc-view.off { visibility: hidden; }
+
+/* Quay hình: khung xem trước chiếm toàn màn hình, các nút nằm đè lên mép (phần đen hai bên khi nằm ngang) */
+.rc-view { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.rc-ctl { position: absolute; z-index: 5; right: max(8px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.rc-ctl button:not(.rc-rec) { width: 54px; height: 44px; border-radius: 12px; background: #000a; border: 1px solid #555; color: #fff; font-weight: 700; font-size: 13px; white-space: pre-line; line-height: 1.1; padding: 0; }
+.rc-ctl button.on { background: var(--accent); color: var(--accent-ink); }
+.rc-ctl button:disabled { opacity: .4; }
+.rc-rec { width: 66px; height: 66px; padding: 0; border-radius: 50%; border: 4px solid #fff; background: transparent; display: grid; place-items: center; }
+.rc-rec i { width: 46px; height: 46px; border-radius: 50%; background: #e5322b; display: block; }
+.rc-rec.stop i { width: 26px; height: 26px; border-radius: 6px; }
+.rc-rec:disabled { opacity: .4; }
+.rc-recl { font-size: 10px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px #000; letter-spacing: .04em; }
+.rc-rotate { position: absolute; z-index: 6; left: 12px; right: 12px; bottom: max(16px, env(safe-area-inset-bottom)); text-align: center; background: #e5322bdd; padding: 10px; border-radius: 12px; font-weight: 800; }
+.rc-takes { left: max(10px, env(safe-area-inset-left)); right: 90px; bottom: 10px; max-width: 420px; z-index: 7; }
+@media (orientation: portrait) {
+  .rc-ctl { top: auto; bottom: max(14px, env(safe-area-inset-bottom)); left: 0; right: 0; transform: none; flex-direction: row; justify-content: center; }
+}
+.rc-ctl .rc-rec { min-width: 0; width: 66px; height: 66px; padding: 0; border-radius: 50%; border: 4px solid #fff; background: transparent; font-size: 0; }
+.rc-ctl .rc-rec.stop { background: transparent; }
+.rc-ctl { width: 66px; }
+@media (orientation: portrait) { .rc-ctl { width: auto; } }
+.rc-rotate { top: 52px; bottom: auto; }
