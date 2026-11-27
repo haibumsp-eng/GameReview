@@ -71,7 +71,7 @@ export function RecCam({ token }: { token: string }) {
   const [st, setSt] = useState<RState | null>(null)
   const [err, setErr] = useState('')
   const [facing, setFacing] = useState<'environment' | 'user'>('environment')
-  const [res, setRes] = useState<'720' | '1080'>('720')
+  const [res, setRes] = useState<'720' | '1080'>('1080')
   const [camErr, setCamErr] = useState('')
   const [rec, setRec] = useState<{ since: number; label: string } | null>(null)
   const [takes, setTakes] = useState<Take[]>([])
@@ -164,7 +164,7 @@ export function RecCam({ token }: { token: string }) {
     if (!c || !s || !st) return
     const label = `Hiệp ${qLabel(st.game.period).replace('Q', '').replace('OT', 'OT')}`
     const out = new MediaStream([...c.captureStream(30).getVideoTracks(), ...s.getAudioTracks()])
-    const mr = new MediaRecorder(out, { ...(fmt.current.mime ? { mimeType: fmt.current.mime } : {}), videoBitsPerSecond: res === '1080' ? 8_000_000 : 4_000_000 })
+    const mr = new MediaRecorder(out, { ...(fmt.current.mime ? { mimeType: fmt.current.mime } : {}), videoBitsPerSecond: res === '1080' ? 10_000_000 : 5_000_000 })
     chunks.current = []
     mr.ondataavailable = (e) => { if (e.data.size) chunks.current.push(e.data) }
     mr.onstop = () => {
@@ -193,6 +193,7 @@ export function RecCam({ token }: { token: string }) {
   const drop = (t: Take) => { URL.revokeObjectURL(t.url); setTakes((l) => l.filter((x) => x.id !== t.id)) }
 
   const elapsed = rec ? Math.floor((Date.now() - rec.since) / 1000) : 0
+  const recMB = rec ? chunks.current.reduce((a, c) => a + c.size, 0) / 1e6 : 0
   const period = st ? qLabel(st.game.period) : '…'
 
   return (
@@ -200,7 +201,7 @@ export function RecCam({ token }: { token: string }) {
       <video ref={video} className="rc-src" playsInline muted autoPlay />
       <canvas ref={canvas} className="rc-view" width={1280} height={720} />
       <div className="rc-top">
-        {rec ? <span className="rc-live"><i /> ĐANG QUAY {rec.label} · {mmss(elapsed)}</span> : <span className="rc-idle">Sẵn sàng · {period}</span>}
+        {rec ? <span className="rc-live"><i /> ĐANG QUAY {rec.label} · {mmss(elapsed)} · {recMB.toFixed(0)} MB</span> : <span className="rc-idle">Sẵn sàng · {period}</span>}
         {err && <span className="rc-err">{err}</span>}
         {rec && hidden && <span className="rc-err">Màn hình đang bị che: iPhone có thể dừng quay!</span>}
       </div>
