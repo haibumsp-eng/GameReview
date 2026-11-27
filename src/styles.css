@@ -1248,3 +1248,19 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 .workspace.focus > .col:not(.center), .workspace.focus > .gutter { display: none; }
 .workspace.focus .col.center > .gutter, .workspace.focus .col.center > .slot:not(.grow) { display: none; }
 .workspace.focus .col.center { flex: 1; }
+
+/* ================= Chữ vừa màn hình laptop: cỡ chữ nhỏ hơn, cửa sổ gọn và luôn thấy nút chính ================= */
+@media (max-width: 1440px), (max-height: 820px) {
+  body { font-size: 13px; }
+  .modal { padding: 12px; max-height: 94vh; }
+  .modal.stack { gap: 8px; }
+  .modal .muted, .modal .small-note { font-size: 12px; }
+  .rec-notes { font-size: 12.5px; }
+  .rec-notes ol { gap: 3px; }
+  .btn { padding-top: 6px; padding-bottom: 6px; }
+}
+.modal.export-modal { width: min(960px, 95vw); }
+.rec-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+@media (max-width: 860px) { .rec-grid { grid-template-columns: 1fr; } }
+.export-modal .rec-start { position: sticky; bottom: 0; z-index: 2; box-shadow: 0 -10px 14px -8px var(--panel); }
+.export-modal .caption-frame { max-width: 270px; margin: 0 auto; }

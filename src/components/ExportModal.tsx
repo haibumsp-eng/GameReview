@@ -83,7 +83,7 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
   // Hiện qua portal: cửa sổ phải còn thấy được khi các module (kể cả danh sách tình huống chứa nó) đang bị ẩn lúc phóng to video.
   return createPortal(
     <div className="modal-back" onClick={() => !busy && props.onClose()}>
-      <div className="modal card stack" onClick={(e) => e.stopPropagation()}>
+      <div className="modal card stack export-modal" onClick={(e) => e.stopPropagation()}>
         <div className="row">
           <b className="grow">Tải video: {props.title}</b>
           <button className="icon-btn" disabled={busy} onClick={props.onClose}>×</button>
@@ -100,6 +100,7 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
         {mode === 'record' ? (
           <div className="stack">
             {!canRecord() && <div className="err">Trình duyệt này không quay được. Hãy dùng Chrome hoặc Edge trên máy tính.</div>}
+            <div className="rec-grid">
             <div className="card stack rec-notes">
               <b>Trước khi quay, hãy kiểm tra:</b>
               <ol>
@@ -131,8 +132,9 @@ export function ExportModal(props: { clips: Clip[]; videos: GameVideo[]; title: 
               )}
               <CaptionOptions />
             </div>
+            </div>
             {recErr && <div className="err">{recErr}</div>}
-            <button className="btn primary" disabled={!canRecord() || !count} onClick={startRec}>● Bắt đầu quay</button>
+            <button className="btn primary rec-start" disabled={!canRecord() || !count} onClick={startRec}>● Bắt đầu quay</button>
           </div>
         ) : (
           <div className="stack">
