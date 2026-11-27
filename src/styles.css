@@ -1282,3 +1282,33 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
   white-space: normal; overflow: hidden; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.15; text-align: center;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
+
+/* Máy quay: cầu thủ trên sân và nút +điểm luôn hiện; dự bị chỉ hiện sau khi chạm 2 lần cho một người ra */
+.cam-tools { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; }
+.cam-tools button { height: 52px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--text); font-weight: 700; font-size: 14px; padding: 0 6px; }
+.cam-tools button.done { border-color: var(--accent-line); background: var(--accent-soft); }
+.cam-tools button.arm { background: #ff6b4a33; border-color: #ff6b4a; }
+.cam-tools button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.cam .cam-bench { grid-template-columns: repeat(4, 1fr); }
+.cam .cam-bench .rp-player { min-height: 78px; padding: 8px 2px; }
+.cam .cam-bench .rp-player b { font-size: 26px; }
+.cam .rp-players { grid-template-columns: repeat(3, 1fr); }
+/* Máy quay: gọn để cả đồng hồ, cầu thủ trên sân và +điểm nằm trong một màn hình điện thoại */
+.cam.rp { gap: 8px; padding-top: 8px; }
+.cam .rp-head .logo-word { font-size: 15px; }
+.cam .rp-score { padding: 6px 10px; }
+.cam .rp-score b { font-size: 28px; }
+.cam .cam-clock { padding: 6px 10px; }
+.cam .cam-time { font-size: 46px; }
+.cam .cam-time small { font-size: 10px; }
+.cam .cam-go { height: 56px; min-width: 116px; font-size: 18px; }
+.cam .cam-tools button { height: 44px; font-size: 13px; }
+.cam .rp-sides button { padding: 8px; }
+.cam .rp-players:not(.cam-bench) { grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.cam .rp-players:not(.cam-bench) .rp-player { min-height: 66px; padding: 6px 1px; }
+.cam .rp-players:not(.cam-bench) .rp-player b { font-size: 22px; }
+.cam .rp-players:not(.cam-bench) .rp-player span { font-size: 10.5px; }
+.cam .rp-players:not(.cam-bench) .rp-player small { font-size: 9.5px; }
+.cam .rp-sel { font-size: 12px; }
+.cam .cam-score button:not(.cam-subbtn) { height: 60px; font-size: 26px; }
+.cam .sp-group-label { font-size: 10.5px; }

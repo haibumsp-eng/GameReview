@@ -27,7 +27,8 @@ export function CamPad({ token }: { token: string }) {
   const [outId, setOutId] = useState<string | null>(null)       // người đã chạm 2 lần để ra sân, chờ chọn người vào
   const [editing, setEditing] = useState<string | null>(null) // đang nhập giờ (chuỗi người dùng gõ)
   const [armReset, setArmReset] = useState(false)
-  const [panel, setPanel] = useState<null | 'sub' | 'score' | 'time'>(null) // mở khi bấm nút tương ứng, mặc định chỉ hiện đồng hồ
+  const [panel, setPanel] = useState<null | 'time'>(null) // bảng chỉnh giờ (±1s, ±10s, reset, hiệp) chỉ hiện khi bấm
+  const lastTap = useRef<{ id: string; at: number } | null>(null)
   const [armMark, setArmMark] = useState(false)
   const fetchedAt = useRef(Date.now())
   const stRef = useRef<CState | null>(null)
@@ -120,31 +121,35 @@ export function CamPad({ token }: { token: string }) {
   }
   const setOn = (c: CState, out: string | null, inn: string | null): CState => ({ ...c, players: c.players.map((p) => (p.id === out ? { ...p, on: false } : p.id === inn ? { ...p, on: true } : p)) })
   const outP = st.players.find((p) => p.id === outId)
-  const closePanel = () => { setPanel(null); setSel(null); setOutId(null) }
-  // Thay người: chạm người trên sân = người RA, rồi chạm người dự bị = người VÀO (hoặc chỉ cho ra / chỉ cho vào).
+  // Người trên sân luôn hiện: chạm 1 lần = chọn (để +điểm); chạm 2 lần liên tiếp = cho ra sân, lúc đó mới hiện dự bị để chọn người vào.
+  const tapCourt = (p: CPlayer) => {
+    const t = Date.now(), last = lastTap.current
+    if (last && last.id === p.id && t - last.at < 450) {
+      lastTap.current = null
+      navigator.vibrate?.(40)
+      setSel(null); setOutId(p.id)
+      return
+    }
+    lastTap.current = { id: p.id, at: t }
+    setOutId(null)
+    setSel(sel === p.id ? null : p.id)
+  }
   const pickBench = (p: CPlayer) => {
     if (outP) {
-      const o = outP
-      closePanel()
+      const o = outP; setOutId(null)
       void call('cam_sub', { p_token: token, p_out: o.id, p_in: p.id }, `✓ #${o.number} ra, #${p.number} vào`, (c) => setOn(c, o.id, p.id))
     } else if (on.length < 5) {
       void call('cam_sub', { p_token: token, p_out: null, p_in: p.id }, `✓ #${p.number} vào sân`, (c) => setOn(c, null, p.id))
-    } else flash('Chạm người ra sân trước, rồi chạm người vào')
+    }
   }
-  const outOnly = () => { if (!outP) return; const o = outP; closePanel(); void call('cam_sub', { p_token: token, p_out: o.id, p_in: null }, `✓ #${o.number} ra sân`, (c) => setOn(c, o.id, null)) }
+  const outOnly = () => { if (!outP) return; const o = outP; setOutId(null); void call('cam_sub', { p_token: token, p_out: o.id, p_in: null }, `✓ #${o.number} ra sân`, (c) => setOn(c, o.id, null)) }
   const doMark = () => {
     if (st.mark.at && !armMark) { setArmMark(true); setTimeout(() => setArmMark(false), 3000); return }
     setArmMark(false)
     const n = shownClock()
     void call('cam_mark_start', { p_token: token, p_on: true }, st.mark.at ? '🏁 Đã đánh dấu lại' : '🏁 Đã đánh dấu bắt đầu trận', (c) => ({ ...c, mark: { at: new Date().toISOString(), clock: n } }))
   }
-  const sideTabs = (
-    <div className="seg-toggle rp-sides">
-      <button className={side === 'home' ? 'on atk' : ''} onClick={() => { setSide('home'); setSel(null); setOutId(null) }}>{name('home')}</button>
-      <button className={side === 'away' ? 'on' : ''} onClick={() => { setSide('away'); setSel(null); setOutId(null) }}>{name('away')}</button>
-    </div>
-  )
-  const head2 = (t: string) => <div className="cam-phead"><b>{t}</b><button onClick={closePanel}>✕ Đóng</button></div>
+  const showBench = !!outP || on.length < 5
 
   return (
     <div className="rp cam">
@@ -175,26 +180,16 @@ export function CamPad({ token }: { token: string }) {
       </div>
       {err && <div className="err">{err}</div>}
 
-      {panel === null && (
-        <>
-          <div className="cam-tiles">
-            <button className={`tile ${st.mark.at ? 'done' : ''} ${armMark ? 'arm' : ''}`} onClick={doMark}>
-              <span className="ico">🏁</span>
-              <b>{armMark ? 'Bấm lần nữa để đánh dấu lại' : st.mark.at ? `Bắt đầu ${hms(st.mark.at)}` : 'Đánh dấu bắt đầu trận'}</b>
-              {st.mark.at && !armMark && <small>chạm để đánh dấu lại</small>}
-            </button>
-            <button className="tile" onClick={() => { setPanel('sub'); setSel(null); setOutId(null) }}><span className="ico">⇄</span><b>Thay người</b></button>
-            <button className="tile" onClick={() => { setPanel('score'); setSel(null) }}><span className="ico">＋</span><b>Ghi điểm</b></button>
-            <button className="tile" onClick={() => setPanel('time')}><span className="ico">⏱</span><b>Chỉnh giờ</b><small>±1s, ±10s, reset, hiệp</small></button>
-          </div>
-          <div className="row"><span className="grow muted small-note">Pha +2 / +3 chờ người bấm stats xác nhận ở tab Record.</span>
-            <button className="btn sm" onClick={() => call('cam_undo', { p_token: token }, '↶ Đã hoàn tác')}>↶ Hoàn tác</button></div>
-        </>
-      )}
+      <div className="cam-tools">
+        <button className={`${st.mark.at ? 'done' : ''} ${armMark ? 'arm' : ''}`} onClick={doMark}>
+          🏁 {armMark ? 'Bấm lần nữa' : st.mark.at ? `BĐ ${hms(st.mark.at)}` : 'Đánh dấu BĐ trận'}
+        </button>
+        <button className={panel === 'time' ? 'on' : ''} onClick={() => setPanel(panel === 'time' ? null : 'time')}>⏱ Chỉnh giờ</button>
+        <button onClick={() => call('cam_undo', { p_token: token }, '↶ Đã hoàn tác')}>↶ Hoàn tác</button>
+      </div>
 
       {panel === 'time' && (
         <div className="cam-panel">
-          {head2('Chỉnh giờ')}
           <div className="cam-adj">
             <button onClick={() => adj(-10)}>−10s</button>
             <button onClick={() => adj(-1)}>−1s</button>
@@ -205,60 +200,49 @@ export function CamPad({ token }: { token: string }) {
             <button onClick={() => per(1)}>Hiệp ›</button>
           </div>
           {st.mark.at && <button className="cam-link" onClick={() => call('cam_mark_start', { p_token: token, p_on: false }, 'Đã xoá mốc', (c) => ({ ...c, mark: { at: null, clock: null } }))}>Xoá mốc bắt đầu trận ({hms(st.mark.at)})</button>}
-          <div className="muted small-note">Muốn nhập giờ bằng bàn phím: chạm vào số đồng hồ ở trên.</div>
         </div>
       )}
 
-      {panel === 'score' && (
-        <div className="cam-panel">
-          {head2('Ghi điểm: chọn người ghi, rồi +1 / +2 / +3')}
-          {sideTabs}
-          <div className="rp-players">
-            {on.map((p) => (
-              <button key={p.id} className={`rp-player oncourt ${sel === p.id ? 'sel' : ''}`} onClick={() => setSel(sel === p.id ? null : p.id)}>
-                <b>{p.number}</b><span>{p.name}</span><small>{p.pts} PTS</small>
-              </button>
-            ))}
-            {on.length === 0 && <div className="rp-empty muted">Chưa có ai trên sân. Dùng nút Thay người để đưa đội hình vào sân.</div>}
-          </div>
-          <div className={`cam-score ${me ? '' : 'idle'}`}>
-            <button disabled={!me} onClick={() => { score(1); setPanel(null) }}>+1</button>
-            <button disabled={!me} onClick={() => { score(2); setPanel(null) }}>+2</button>
-            <button disabled={!me} onClick={() => { score(3); setPanel(null) }}>+3</button>
-          </div>
-          <div className="rp-sel">{me ? <>Đang chọn <b>#{me.number} {me.name}</b></> : 'Chạm một cầu thủ trên sân'}</div>
-        </div>
-      )}
+      <div className="seg-toggle rp-sides">
+        <button className={side === 'home' ? 'on atk' : ''} onClick={() => { setSide('home'); setSel(null); setOutId(null) }}>{name('home')}</button>
+        <button className={side === 'away' ? 'on' : ''} onClick={() => { setSide('away'); setSel(null); setOutId(null) }}>{name('away')}</button>
+      </div>
 
-      {panel === 'sub' && (
-        <div className="cam-panel">
-          {head2('Thay người: chọn người RA, rồi người VÀO')}
-          {sideTabs}
-          <div className="sp-group-label">TRÊN SÂN {on.length}/5 · chạm người RA SÂN</div>
-          <div className="rp-players">
-            {on.map((p) => (
-              <button key={p.id} className={`rp-player oncourt ${outId === p.id ? 'going' : ''}`} onClick={() => setOutId(outId === p.id ? null : p.id)}>
-                <b>{p.number}</b><span>{p.name}</span><small>{outId === p.id ? 'RA SÂN' : `${p.pts} PTS`}</small>
-              </button>
-            ))}
-            {on.length === 0 && <div className="rp-empty muted">Chưa có ai trên sân: chạm người ở mục Dự bị để đưa vào sân.</div>}
-          </div>
-          {outP && (
+      <div className="sp-group-label">TRÊN SÂN {on.length}/5 · chạm 1 lần để chọn, <b>chạm 2 lần để cho ra</b></div>
+      <div className="rp-players">
+        {on.map((p) => (
+          <button key={p.id} className={`rp-player oncourt ${sel === p.id ? 'sel' : ''} ${outId === p.id ? 'going' : ''}`} onClick={() => tapCourt(p)}>
+            <b>{p.number}</b><span>{p.name}</span><small>{outId === p.id ? 'RA SÂN' : `${p.pts} PTS`}</small>
+          </button>
+        ))}
+        {on.length === 0 && <div className="rp-empty muted">Chưa có ai trên sân: chạm người ở mục Dự bị bên dưới để đưa vào sân.</div>}
+      </div>
+
+      <div className="rp-sel">{me ? <>Đang chọn <b>#{me.number} {me.name}</b></> : 'Chạm một cầu thủ để +điểm'}</div>
+      <div className={`cam-score ${me ? '' : 'idle'}`}>
+        <button disabled={!me} onClick={() => score(1)}>+1</button>
+        <button disabled={!me} onClick={() => score(2)}>+2</button>
+        <button disabled={!me} onClick={() => score(3)}>+3</button>
+      </div>
+
+      {showBench && (
+        <>
+          {outP ? (
             <div className="cam-out">
-              <span><b>#{outP.number} {outP.name}</b> ra. Chạm người dự bị để vào.</span>
+              <span><b>#{outP.number} {outP.name}</b> ra sân. Chạm người dự bị để vào.</span>
               <button onClick={outOnly}>Chỉ cho ra</button>
+              <button onClick={() => setOutId(null)}>Huỷ</button>
             </div>
-          )}
-          <div className="sp-group-label">{outP ? `DỰ BỊ · chạm người VÀO thay #${outP.number}` : on.length < 5 ? 'DỰ BỊ · chạm để vào sân' : 'DỰ BỊ · chọn người ra sân trước'}</div>
-          <div className={`rp-players ${on.length >= 5 && !outP ? 'dim' : ''}`}>
+          ) : <div className="sp-group-label">DỰ BỊ · chạm để vào sân (sân chưa đủ 5 người)</div>}
+          <div className="rp-players cam-bench">
             {bench.map((p) => (
-              <button key={p.id} className={`rp-player bench ${outP || on.length < 5 ? 'ready' : ''}`} onClick={() => pickBench(p)}>
+              <button key={p.id} className="rp-player bench ready" onClick={() => pickBench(p)}>
                 <b>{p.number}</b><span>{p.name}</span>
               </button>
             ))}
             {bench.length === 0 && <div className="rp-empty muted">Không có dự bị.</div>}
           </div>
-        </div>
+        </>
       )}
       {msg && <div className="toast">{msg}</div>}
     </div>
