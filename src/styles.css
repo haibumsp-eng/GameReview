@@ -1264,3 +1264,21 @@ details.cap-details[open] > summary { margin-bottom: 8px; }
 @media (max-width: 860px) { .rec-grid { grid-template-columns: 1fr; } }
 .export-modal .rec-start { position: sticky; bottom: 0; z-index: 2; box-shadow: 0 -10px 14px -8px var(--panel); }
 .export-modal .caption-frame { max-width: 270px; margin: 0 auto; }
+
+/* Tên cầu thủ không bị cắt "…": cho xuống 2 dòng; tiêu đề cột play-by-play được xuống dòng */
+.sp-pname, .sp-deck .sp-pname, .sp-roster .sp-pname {
+  white-space: normal; overflow: hidden; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.15;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: center;
+}
+.sp-player, .sp-deck .sp-player { min-height: 58px; }
+.sp-log-title { white-space: nowrap; flex: 1 0 auto; }
+.sp-log > .row.wrap { gap: 6px; }
+@media (max-width: 1440px), (max-height: 820px) {
+  .sp-deck .sp-roster, .sp-roster { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
+  .sp-pname, .sp-deck .sp-pname { font-size: 10.5px; }
+  .rp-title { font-size: 11px; }
+}
+.es-p span, .rp-player span {
+  white-space: normal; overflow: hidden; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.15; text-align: center;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}

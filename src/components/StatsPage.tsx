@@ -379,8 +379,8 @@ export function StatsPage() {
 
   const logEl = (
   <div className="sp-log">
-    <div className="row">
-      <b className="grow">Play-by-play ({stats.length + lineups.length})</b>
+    <div className="row wrap">
+      <b className="grow sp-log-title">Play-by-play ({stats.length + lineups.length})</b>
       {canEdit && <button className={`btn sm ${subForm ? 'primary' : ''}`} title="Bổ sung một lần thay người đã quên ghi, ở giờ tuỳ chọn" onClick={() => setSubForm(!subForm)}>+ Thay người</button>}
       <button className="btn sm" disabled={!(stats.length + lineups.length) || !canEdit} title="Hoàn tác pha vừa ghi (Ctrl + Z)" onClick={undo}>↶ Undo</button>
     </div>
